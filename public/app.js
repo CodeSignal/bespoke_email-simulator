@@ -64,8 +64,6 @@ const state = {
 const els = {
   bootError: document.getElementById('bootError'),
   appTitle: document.getElementById('appTitle'),
-  scenarioHeading: document.getElementById('scenarioHeading'),
-  scenarioBrief: document.getElementById('scenarioBrief'),
   threadList: document.getElementById('threadList'),
   threadListEmpty: document.getElementById('threadListEmpty'),
   readingPane: document.getElementById('readingPane'),
@@ -220,8 +218,6 @@ function applyScenarioChrome() {
   const title = state.config?.title || 'CosmoMail';
   document.title = title;
   if (els.appTitle) els.appTitle.textContent = title;
-  if (els.scenarioHeading) els.scenarioHeading.textContent = state.config?.ui?.heading || title;
-  if (els.scenarioBrief) els.scenarioBrief.textContent = state.scenario?.brief || '';
   if (els.assistantHint && state.config?.assistant?.initialMessage) {
     els.assistantHint.textContent = state.config.assistant.initialMessage;
   }

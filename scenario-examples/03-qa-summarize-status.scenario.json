@@ -31,7 +31,6 @@
     "language": "English"
   },
   "attachments": { "enabled": false },
-  "ui": { "heading": "Summarize the Atlas migration for leadership" },
   "rubricHints": {
     "notes": "Reward accurate use of thread facts: 7/12 services migrated, auth service blocked by a deprecated token signing scheme (Sam building a shim, ~5 business days), August 14 go-live at risk, budget $85k approved / $22k spent. Reward a scannable, bullet-form summary and effective use of Cosmo for Q&A. Penalize invented facts."
   }

@@ -34,7 +34,6 @@
     "enabled": true,
     "allowedTypes": [".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".txt", ".doc", ".docx"]
   },
-  "ui": { "heading": "Reply to Dana's proposal" },
   "rubricHints": {
     "notes": "Reward: acknowledges the proposal, counters the price with a clear rationale, proposes a 24-month term, maintains a professional and firm-but-friendly tone."
   }

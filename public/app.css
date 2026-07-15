@@ -127,16 +127,6 @@ body {
   background: var(--Colors-Backgrounds-Main-Default);
 }
 
-.mail-main__header {
-  padding: var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-ml);
-  border-bottom: 1px solid var(--Colors-Stroke-Light);
-}
-
-.mail-main__brief {
-  margin: var(--UI-Spacing-spacing-xxs) 0 0;
-  color: var(--Colors-Text-Body-Light);
-}
-
 .reading-pane {
   flex: 1 1 auto;
   min-height: 0;

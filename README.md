@@ -96,7 +96,7 @@ string path to a fixture file relative to the project root.
 | --- | --- | --- |
 | `id` | string | **Required.** Unique scenario id. |
 | `title` | string | App title. |
-| `brief` | string | The task shown to the learner. |
+| `brief` | string | The exercise task/prompt. Presented by the host harness; CosmoMail no longer renders it in-app. |
 | `primarySkill` | `writing` \| `prompting` \| `both` | What the exercise assesses. |
 | `scenarioType` | `compose_new` \| `reply` \| `reply_chain` | Drives composer prefill. |
 | `learner` | `{ displayName, email }` | Who the learner is in the thread. |
@@ -116,7 +116,7 @@ string path to a fixture file relative to the project root.
 | `simulatedRecipient.scriptedBeats` | string[] | Fixed replies for `scripted`. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
 | `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support. |
-| `ui` | `{ heading, hideAssistant, hideHistory, strings }` | UI overrides + i18n strings. |
+| `ui` | `{ hideAssistant, hideHistory, strings }` | UI overrides + i18n strings. |
 | `rubricHints` | object \| string | Notes surfaced in the extraction report. |
 
 ### Example scenarios
