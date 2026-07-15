@@ -1,0 +1,39 @@
+{
+  "id": "qa-summarize-atlas-status",
+  "title": "CosmoMail",
+  "brief": "Priya needs a crisp, leadership-ready summary of the Atlas migration before Thursday's review. Use Cosmo to read the thread and answer questions (status, blockers, budget, timeline risk), then reply to Priya with a scannable bullet summary.",
+  "primarySkill": "prompting",
+  "scenarioType": "reply",
+  "learner": { "displayName": "You", "email": "you@brightlabs.io" },
+  "seed": {
+    "inbox": "scenario-examples/fixtures/project-status-thread.json",
+    "activeThreadId": "thread-1",
+    "focusedEmailId": "email-3"
+  },
+  "initialDraft": {
+    "to": ["priya@brightlabs.io"],
+    "cc": ["sam@brightlabs.io"],
+    "subject": "Re: Atlas migration — weekly status",
+    "body": ""
+  },
+  "assistant": {
+    "enabled": true,
+    "capabilities": ["qa_search", "summarize", "extract", "compose"],
+    "systemPromptExtra": "Help the learner interrogate the thread for facts (dates, owners, budget, blockers) and produce a concise, executive-ready summary. Encourage them to verify details against the emails.",
+    "initialMessage": "Ask me anything about this thread — status, the blocker, budget, or whether Aug 14 still holds.",
+    "allowCustomInstructions": true
+  },
+  "simulatedRecipient": { "enabled": false },
+  "generation": {
+    "model": "anthropic/claude-opus-4-7",
+    "temperature": 0.4,
+    "thinking": "off",
+    "language": "English"
+  },
+  "attachments": { "enabled": false },
+  "submission": { "label": "Submit summary", "maxSubmissions": 1 },
+  "ui": { "heading": "Summarize the Atlas migration for leadership" },
+  "rubricHints": {
+    "notes": "Reward accurate use of thread facts: 7/12 services migrated, auth service blocked by a deprecated token signing scheme (Sam building a shim, ~5 business days), August 14 go-live at risk, budget $85k approved / $22k spent. Reward a scannable, bullet-form summary and effective use of Cosmo for Q&A. Penalize invented facts."
+  }
+}

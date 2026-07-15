@@ -1,0 +1,40 @@
+{
+  "threads": [
+    {
+      "id": "thread-1",
+      "subject": "Atlas migration — weekly status",
+      "emails": [
+        {
+          "id": "email-1",
+          "from": { "name": "Priya Nair", "email": "priya@brightlabs.io" },
+          "to": [{ "name": "You", "email": "you@brightlabs.io" }],
+          "cc": [{ "name": "Sam Okafor", "email": "sam@brightlabs.io" }],
+          "date": "2026-06-29T15:00:00Z",
+          "subject": "Atlas migration — weekly status",
+          "body": "Team,\n\nKicking off the weekly status for the Atlas migration.\n\n- **Scope:** move 12 services from the legacy cluster to Atlas.\n- **Target go-live:** August 14.\n- **Budget:** $85,000 approved; $22,000 spent to date.\n\nData layer is done. Sam owns the auth service; that's the current critical path.\n\nPriya",
+          "attachments": []
+        },
+        {
+          "id": "email-2",
+          "from": { "name": "Sam Okafor", "email": "sam@brightlabs.io" },
+          "to": [{ "name": "Priya Nair", "email": "priya@brightlabs.io" }],
+          "cc": [{ "name": "You", "email": "you@brightlabs.io" }],
+          "date": "2026-07-06T17:30:00Z",
+          "subject": "Re: Atlas migration — weekly status",
+          "body": "Update from me:\n\nAuth service migration hit a blocker — the legacy tokens use a deprecated signing scheme Atlas doesn't support. I'm building a translation shim; ETA 5 business days.\n\nThis puts the auth service at risk of slipping past August 14. Everything else is on track. 7 of 12 services now migrated.\n\nSam",
+          "attachments": []
+        },
+        {
+          "id": "email-3",
+          "from": { "name": "Priya Nair", "email": "priya@brightlabs.io" },
+          "to": [{ "name": "You", "email": "you@brightlabs.io" }, { "name": "Sam Okafor", "email": "sam@brightlabs.io" }],
+          "cc": [],
+          "date": "2026-07-13T14:10:00Z",
+          "subject": "Re: Atlas migration — weekly status",
+          "body": "Thanks Sam. Leadership is asking for a crisp summary before Thursday's review.\n\nCan you pull together: where we are, what's blocked, the budget position, and whether August 14 still holds? Keep it to a few bullets they can scan.\n\nPriya",
+          "attachments": []
+        }
+      ]
+    }
+  ]
+}

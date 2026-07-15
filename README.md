@@ -122,18 +122,26 @@ string path to a fixture file relative to the project root.
 
 ### Example scenarios
 
-Copy any of these to `scenario.json` to try them:
+Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/) (with
+their seed data under `scenario-examples/fixtures/`). Copy one to `scenario.json`
+to try it:
 
-- **`examples/compose-new.scenario.json`** — write a cold outreach email from
-  scratch (no seed inbox, copilot only).
-- **`examples/reply-chain.scenario.json`** — reply within a seeded vendor
-  negotiation thread (copilot, no simulated recipient).
-- **`examples/simulated-recipient.scenario.json`** — a customer-support thread
-  where the recipient (Marcus) replies in-character over multiple turns.
+- **`01-compose-new-outreach`** — write a cold outreach email from scratch
+  (no seed inbox, copilot only).
+- **`02-reply-vendor-negotiation`** — reply within a seeded vendor negotiation
+  thread (copilot + attachments, no simulated recipient).
+- **`03-qa-summarize-status`** — use Cosmo to interrogate a project thread and
+  write a leadership-ready summary (Q&A / search / extract focus).
+- **`04-simulated-recipient-support`** — a customer-support thread where the
+  recipient replies in-character over multiple turns.
+- **`05-scripted-recipient-scheduling`** — schedule an interview where the
+  candidate returns fixed, scripted replies.
 
 ```bash
-cp examples/simulated-recipient.scenario.json scenario.json && npm run dev
+cp scenario-examples/04-simulated-recipient-support.scenario.json scenario.json && npm run dev
 ```
+
+See [`scenario-examples/README.md`](scenario-examples/README.md) for details.
 
 ## Internationalization
 
@@ -174,8 +182,8 @@ GitHub release (excluding secrets and runtime files).
 ```
 agents/cosmo-mail/     Octavus agent definition (protocol, prompts, settings)
 design-system/         Shared UI submodule
-examples/              Ready-to-run example scenarios
-fixtures/              Seed inbox fixtures referenced by scenarios
+scenario-examples/     Ready-to-run example scenarios (+ their fixtures)
+fixtures/              Seed inbox fixtures referenced by scenario.example.json
 i18n/                  Locale catalogs
 lib/                   Pure logic (scenario, sessions, i18n, helpers)
 public/                Client app (index.html, app.js, app.css)

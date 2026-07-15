@@ -1,0 +1,55 @@
+{
+  "id": "scripted-interview-scheduling",
+  "title": "CosmoMail",
+  "brief": "You are a recruiter at Northwind. Reply to Jordan, who passed the technical screen and is asking about next steps. Lay out the process and propose scheduling the final panel. Jordan will respond — read carefully and keep the thread moving to a booked slot.",
+  "primarySkill": "writing",
+  "scenarioType": "reply_chain",
+  "learner": { "displayName": "You", "email": "recruiting@northwind.co" },
+  "seed": {
+    "inbox": "scenario-examples/fixtures/interview-scheduling.json",
+    "activeThreadId": "thread-1",
+    "focusedEmailId": "email-1"
+  },
+  "initialDraft": {
+    "to": ["jordan.lee@candidatemail.com"],
+    "cc": [],
+    "subject": "Re: Next steps — Senior Engineer interview",
+    "body": ""
+  },
+  "assistant": {
+    "enabled": true,
+    "capabilities": ["compose", "summarize"],
+    "systemPromptExtra": "Coach the learner toward clear, candidate-friendly scheduling communication with concrete options and next steps.",
+    "initialMessage": "Want help laying out the next steps and proposing times?",
+    "allowCustomInstructions": false
+  },
+  "simulatedRecipient": {
+    "enabled": true,
+    "threadBehavior": "scripted",
+    "maxTurns": 2,
+    "personas": [
+      {
+        "id": "jordan",
+        "name": "Jordan Lee",
+        "email": "jordan.lee@candidatemail.com",
+        "role": "Candidate"
+      }
+    ],
+    "scriptedBeats": [
+      "Thanks for the details! Tuesday afternoon works best for me — say 2:00pm ET. Could you send a calendar invite and let me know who I'll be meeting?",
+      "Perfect, 2:00pm ET Tuesday is booked on my end. Looking forward to it — thank you!"
+    ]
+  },
+  "generation": {
+    "model": "anthropic/claude-opus-4-7",
+    "temperature": 0.6,
+    "thinking": "off",
+    "language": "English"
+  },
+  "attachments": { "enabled": false },
+  "submission": { "label": "Submit reply", "maxSubmissions": 2 },
+  "ui": { "heading": "Move Jordan's interview forward" },
+  "rubricHints": {
+    "notes": "Reward: warm confirmation of passing the screen, a clear outline of remaining steps, concrete scheduling options, and a prompt, professional follow-through that lands a booked time. The recipient replies are scripted (fixed beats) regardless of wording."
+  }
+}

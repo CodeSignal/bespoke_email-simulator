@@ -6,7 +6,7 @@
   "scenarioType": "reply_chain",
   "learner": { "displayName": "Support", "email": "support@brightgoods.com" },
   "seed": {
-    "inbox": "fixtures/support-ticket.json",
+    "inbox": "scenario-examples/fixtures/support-ticket.json",
     "activeThreadId": "thread-1",
     "focusedEmailId": "email-1"
   },
