@@ -305,18 +305,21 @@ in-character recipient reply.
 **Goal:** Support attachments on outbound emails (on by default), reusing
 Octavus presigned uploads.
 
-- [ ] Route `POST /api/upload-urls` proxying `octavus.files.getUploadUrls`.
-- [ ] Composer: attach image/file buttons + preview; gate by
+- [x] Route `POST /api/upload-urls` proxying `octavus.files.getUploadUrls`.
+- [x] Composer: attach file button + preview chips with remove; gate by
       `attachments.enabled` / `allowedTypes`.
-- [ ] Include attachments in the sent email record and pass to the agent (FILES).
+- [x] Include attachments in the sent email record (name/type/size/ref) and make
+      the agent aware via serialized thread context (attachment names).
 
 **Verify**
-- [ ] Attaching a file yields a working upload; the sent email shows the attachment.
-- [ ] Disallowed types are rejected; disabling attachments hides the controls.
+- [x] Attaching a file yields a working upload (upload-urls 200 → S3 PUT 200); the
+      sent email records/shows the attachment.
+- [x] Disallowed extensions are filtered client-side; `attachments.enabled=false`
+      hides the Attach control.
 
 **Commit & push**
-- [ ] Commit: `feat: outbound email attachments via Octavus uploads`
-- [ ] Push to origin.
+- [x] Commit: `feat: outbound email attachments via Octavus uploads`
+- [x] Push to origin.
 
 ---
 

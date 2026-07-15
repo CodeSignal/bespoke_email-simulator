@@ -57,6 +57,7 @@ const state = {
   recipient: {
     octavusSessionId: null,
   },
+  attachments: [],
 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -78,6 +79,9 @@ const els = {
   sendBtn: document.getElementById('sendBtn'),
   submitBtn: document.getElementById('submitBtn'),
   submitStatus: document.getElementById('submitStatus'),
+  attachBtn: document.getElementById('attachBtn'),
+  fileInput: document.getElementById('fileInput'),
+  attachmentPreview: document.getElementById('attachmentPreview'),
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
@@ -171,6 +175,12 @@ function renderEmail(email, learnerEmail) {
   const toLine = formatAddressList(email.to);
   const ccLine = email.cc && email.cc.length ? `<div class="body-xsmall email__to">Cc: ${escapeHtml(formatAddressList(email.cc))}</div>` : '';
   const submittedBadge = isSubmitted ? '<span class="tag success email__badge">Submitted</span>' : '';
+  const attachments = Array.isArray(email.attachments) ? email.attachments : [];
+  const attachmentsHtml = attachments.length
+    ? `<div class="email__attachments">${attachments
+        .map((a) => `<span class="tag outline email__attachment">${escapeHtml(a.name || 'attachment')}</span>`)
+        .join('')}</div>`
+    : '';
   wrap.innerHTML = `
     <div class="email__meta">
       <div>
@@ -184,6 +194,7 @@ function renderEmail(email, learnerEmail) {
       </div>
     </div>
     <div class="email__body">${renderMarkdown(email.body)}</div>
+    ${attachmentsHtml}
   `;
   return wrap;
 }
@@ -327,6 +338,104 @@ function initComposer() {
   updateSendEnabled();
 }
 
+// ── Attachments ───────────────────────────────────────────────
+function allowedAttachmentTypes() {
+  return (state.config?.attachments?.allowedTypes ?? []).map((t) => t.toLowerCase());
+}
+
+function isAllowedFile(file) {
+  const allowed = allowedAttachmentTypes();
+  if (!allowed.length) return true;
+  const name = (file.name || '').toLowerCase();
+  const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+  return allowed.includes(ext);
+}
+
+function renderAttachmentPreview() {
+  const items = state.attachments;
+  els.attachmentPreview.hidden = items.length === 0;
+  els.attachmentPreview.innerHTML = '';
+  items.forEach((item, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag outline composer__attachment';
+    const label = item.status === 'uploading' ? `${item.file.name} (uploading…)`
+      : item.status === 'error' ? `${item.file.name} (failed)` : item.file.name;
+    chip.innerHTML = `<span class="composer__attachment-name">${escapeHtml(label)}</span>`;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'composer__attachment-remove';
+    remove.setAttribute('aria-label', `Remove ${item.file.name}`);
+    remove.textContent = '×';
+    remove.addEventListener('click', () => {
+      state.attachments.splice(idx, 1);
+      renderAttachmentPreview();
+    });
+    chip.appendChild(remove);
+    els.attachmentPreview.appendChild(chip);
+  });
+}
+
+async function handleComposerFiles(files) {
+  const chat = state.assistant.chat;
+  if (!chat) {
+    console.warn('[CosmoMail] attachments require the assistant session');
+    return;
+  }
+  const accepted = [];
+  for (const file of files) {
+    if (!isAllowedFile(file)) {
+      console.warn('[CosmoMail] rejected disallowed file type:', file.name);
+      continue;
+    }
+    accepted.push(file);
+  }
+  if (!accepted.length) return;
+
+  const newItems = accepted.map((file) => ({ file, ref: null, status: 'uploading' }));
+  state.attachments.push(...newItems);
+  renderAttachmentPreview();
+
+  try {
+    const refs = await chat.uploadFiles(accepted);
+    refs.forEach((ref, i) => {
+      newItems[i].ref = ref;
+      newItems[i].status = 'ready';
+    });
+  } catch (err) {
+    console.error('[CosmoMail] upload error:', err);
+    newItems.forEach((item) => { item.status = 'error'; });
+  } finally {
+    renderAttachmentPreview();
+  }
+}
+
+function readyAttachments() {
+  return state.attachments
+    .filter((i) => i.status === 'ready')
+    .map((i) => ({ name: i.file.name, type: i.file.type, size: i.file.size, ref: i.ref }));
+}
+
+function clearAttachments() {
+  state.attachments = [];
+  renderAttachmentPreview();
+}
+
+function initAttachments() {
+  if (!state.config?.attachments?.enabled) {
+    els.attachBtn.hidden = true;
+    return;
+  }
+  els.attachBtn.hidden = false;
+  const allowed = allowedAttachmentTypes();
+  if (allowed.length) els.fileInput.accept = allowed.join(',');
+  els.attachBtn.addEventListener('click', () => els.fileInput.click());
+  els.fileInput.addEventListener('change', () => {
+    const files = Array.from(els.fileInput.files || []);
+    els.fileInput.value = '';
+    handleComposerFiles(files);
+  });
+}
+
 // ── Submission ────────────────────────────────────────────────
 function hasAnySend() {
   return (state.session?.threads ?? []).some((th) => (th.emails ?? []).some((e) => e.outbound));
@@ -427,6 +536,7 @@ async function sendEmail() {
         cc: draft.cc,
         subject: draft.subject,
         body: draft.body,
+        attachments: readyAttachments(),
       }),
     });
     if (!res.ok) throw new Error(`send failed (${res.status})`);
@@ -436,6 +546,7 @@ async function sendEmail() {
     state.activeThreadId = thread.id;
     state.session.drafts = [];
     setEditorMarkdown('');
+    clearAttachments();
     renderThreadRail();
     renderThread(state.activeThreadId);
     updateSubmissionUI();
@@ -534,6 +645,9 @@ function serializeThreadContext() {
     lines.push(`To: ${formatAddressList(email.to)}`);
     if (email.cc?.length) lines.push(`Cc: ${formatAddressList(email.cc)}`);
     if (email.date) lines.push(`Date: ${formatDate(email.date)}`);
+    if (email.attachments?.length) {
+      lines.push(`Attachments: ${email.attachments.map((a) => a.name || 'file').join(', ')}`);
+    }
     lines.push('');
     lines.push(String(email.body ?? ''));
     lines.push('\n---\n');
@@ -683,7 +797,16 @@ async function initAssistant() {
       }),
   });
 
-  state.assistant.chat = new OctavusChat({ transport });
+  const requestUploadUrls = async (files) => {
+    const r = await fetch('/api/upload-urls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: state.assistant.octavusSessionId, files }),
+    });
+    return r.json();
+  };
+
+  state.assistant.chat = new OctavusChat({ transport, requestUploadUrls });
   state.assistant.unsubscribe = state.assistant.chat.subscribe(() => {
     const chat = state.assistant.chat;
     renderAssistant(chat.messages);
@@ -755,6 +878,7 @@ async function boot() {
     renderThread(state.activeThreadId);
     initComposer();
     initSubmission();
+    initAttachments();
     await initAssistant();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);

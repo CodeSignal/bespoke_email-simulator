@@ -291,6 +291,21 @@ app.post('/api/assistant/trigger', async (req, res) => {
   await streamAgent(res, sessionId, payload);
 });
 
+// POST /api/upload-urls — proxy presigned upload URL requests to Octavus.
+app.post('/api/upload-urls', async (req, res) => {
+  const { sessionId, files } = req.body;
+  if (!sessionId || !Array.isArray(files)) {
+    return res.status(400).json({ error: 'sessionId and files[] are required' });
+  }
+  try {
+    const result = await octavus.files.getUploadUrls(sessionId, files);
+    res.json(result);
+  } catch (err) {
+    console.error('[upload-urls] Error:', err);
+    res.status(500).json({ error: 'Failed to get upload URLs' });
+  }
+});
+
 // ── Send flow & simulated recipient ────────────────────────────
 
 // POST /api/email/send — simulate sending: append the learner's email to the

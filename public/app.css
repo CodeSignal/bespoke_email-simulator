@@ -216,7 +216,6 @@ body {
 }
 
 .composer__submit-status {
-  margin-right: auto;
   color: var(--Colors-Text-Body-Light);
   align-self: center;
 }
@@ -267,8 +266,45 @@ body {
 
 .composer__toolbar {
   display: flex;
+  align-items: center;
   justify-content: flex-end;
   gap: var(--UI-Spacing-spacing-s);
+}
+
+.composer__attach {
+  margin-right: auto;
+}
+
+.composer__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--UI-Spacing-spacing-xs);
+}
+
+.composer__attachment,
+.email__attachment {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xxs);
+}
+
+.composer__attachment-remove {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 0 2px;
+}
+
+.email__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--UI-Spacing-spacing-xs);
+  margin-top: var(--UI-Spacing-spacing-s);
+  padding-top: var(--UI-Spacing-spacing-s);
+  border-top: 1px solid var(--Colors-Stroke-Lighter);
 }
 
 /* ── Assistant panel ── */
