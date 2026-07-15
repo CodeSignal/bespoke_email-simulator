@@ -28,7 +28,22 @@ input:
     type: string
     optional: true
     default: "English"
-    description: "The language Cosmo should speak in when responding to the user."
+    description: "The language the agent should speak in when responding."
+  MODE:
+    type: string
+    optional: true
+    default: "assistant"
+    description: "Session role: 'assistant' (Cosmo the copilot) or 'recipient' (in-character correspondent)."
+  PERSONA:
+    type: string
+    optional: true
+    default: ""
+    description: "For recipient sessions: the character description the agent must role-play."
+  PERSONA_NAME:
+    type: string
+    optional: true
+    default: ""
+    description: "For recipient sessions: the display name the agent signs replies as."
 
 triggers:
   assistant-message:
@@ -51,13 +66,26 @@ triggers:
         type: file[]
         optional: true
 
+  recipient-reply:
+    input:
+      LEARNER_EMAIL:
+        type: string
+        description: The email the learner just sent, which the recipient is replying to (Markdown).
+      THREAD_CONTEXT:
+        type: string
+        optional: true
+        description: The full thread so far (Markdown) for continuity.
+
 agent:
   model: MODEL
-  system: system-assistant
+  system: system
   input:
     EXTRA_INSTRUCTIONS: EXTRA_INSTRUCTIONS
     VERBOSITY_INSTRUCTIONS: VERBOSITY_INSTRUCTIONS
     LANGUAGE: LANGUAGE
+    MODE: MODE
+    PERSONA: PERSONA
+    PERSONA_NAME: PERSONA_NAME
   temperature: TEMPERATURE
   thinking: THINKING
   webSearch: true
@@ -72,6 +100,18 @@ handlers:
       input: [USER_MESSAGE, CUSTOM_INSTRUCTIONS, THREAD_CONTEXT, CURRENT_DRAFT, FILES]
       files: [FILES]
       uiContent: USER_MESSAGE
+      display: hidden
+
+    Respond:
+      block: next-message
+
+  recipient-reply:
+    Add learner email:
+      block: add-message
+      role: user
+      prompt: recipient-reply
+      input: [LEARNER_EMAIL, THREAD_CONTEXT]
+      uiContent: LEARNER_EMAIL
       display: hidden
 
     Respond:

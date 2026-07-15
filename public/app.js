@@ -54,6 +54,9 @@ const state = {
     persisted: [],
     lastInsertable: null,
   },
+  recipient: {
+    octavusSessionId: null,
+  },
 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -313,7 +316,142 @@ function initComposer() {
   for (const input of [els.composeTo, els.composeCc, els.composeSubject]) {
     input.addEventListener('input', scheduleDraftSave);
   }
+  els.sendBtn.addEventListener('click', sendEmail);
   updateSendEnabled();
+}
+
+// ── Send flow & simulated recipient ───────────────────────────
+function replaceThread(thread) {
+  const threads = state.session.threads ?? (state.session.threads = []);
+  const idx = threads.findIndex((t) => t.id === thread.id);
+  if (idx >= 0) threads[idx] = thread;
+  else threads.push(thread);
+}
+
+function appendPendingRecipientEmail() {
+  const article = document.createElement('article');
+  article.className = 'email';
+  article.innerHTML = `
+    <div class="email__meta">
+      <div><div class="body-small email__from">Awaiting reply…</div></div>
+    </div>
+    <div class="email__body"><span class="assistant__typing">…</span></div>
+  `;
+  els.readingPane.appendChild(article);
+  els.readingPane.scrollTop = els.readingPane.scrollHeight;
+  return article;
+}
+
+async function sendEmail() {
+  if (els.sendBtn.disabled) return;
+  const draft = currentDraft();
+  if (!draft.body.trim() && !draft.subject.trim()) return;
+
+  els.sendBtn.disabled = true;
+  els.sendBtn.textContent = 'Sending…';
+  try {
+    const res = await fetch('/api/email/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: state.session.sessionId,
+        threadId: state.activeThreadId,
+        to: draft.to,
+        cc: draft.cc,
+        subject: draft.subject,
+        body: draft.body,
+      }),
+    });
+    if (!res.ok) throw new Error(`send failed (${res.status})`);
+    const { email, thread, recipient } = await res.json();
+
+    replaceThread(thread);
+    state.activeThreadId = thread.id;
+    state.session.drafts = [];
+    setEditorMarkdown('');
+    renderThreadRail();
+    renderThread(state.activeThreadId);
+
+    if (recipient?.allowed) {
+      await runRecipientReply(email.body, thread.id, recipient.behavior);
+    }
+  } catch (err) {
+    console.error('[CosmoMail] send failed:', err);
+  } finally {
+    els.sendBtn.textContent = t('Send');
+    updateSendEnabled();
+  }
+}
+
+async function finalizeRecipient(threadId, replyText) {
+  const res = await fetch('/api/recipient/complete', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: state.session.sessionId, threadId, reply: replyText }),
+  });
+  if (!res.ok) return;
+  const { thread } = await res.json();
+  replaceThread(thread);
+  renderThreadRail();
+  renderThread(state.activeThreadId);
+}
+
+async function runRecipientReply(sentBody, threadId, behavior) {
+  // Scripted replies come straight from the author's beats (no LLM).
+  if (behavior === 'scripted') {
+    appendPendingRecipientEmail();
+    await finalizeRecipient(threadId, '');
+    return;
+  }
+
+  // Ensure the recipient Octavus session exists.
+  if (!state.recipient.octavusSessionId) {
+    try {
+      const r = await fetch('/api/recipient/session', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: state.session.sessionId }),
+      });
+      if (!r.ok) throw new Error(`recipient session failed (${r.status})`);
+      state.recipient.octavusSessionId = (await r.json()).recipientOctavusSessionId;
+    } catch (err) {
+      console.error('[CosmoMail] recipient unavailable:', err);
+      return;
+    }
+  }
+
+  const placeholder = appendPendingRecipientEmail();
+  const bodyEl = placeholder.querySelector('.email__body');
+
+  const transport = createHttpTransport({
+    request: (payload) =>
+      fetch('/api/recipient/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: state.recipient.octavusSessionId, ...payload }),
+      }),
+  });
+  const chat = new OctavusChat({ transport });
+  const unsub = chat.subscribe(() => {
+    const text = assistantTextFromMessages(chat.messages);
+    bodyEl.innerHTML = renderMarkdown(text) || '<span class="assistant__typing">…</span>';
+    els.readingPane.scrollTop = els.readingPane.scrollHeight;
+  });
+
+  try {
+    await chat.send(
+      'recipient-reply',
+      { LEARNER_EMAIL: sentBody, THREAD_CONTEXT: serializeThreadContext() },
+      { userMessage: { content: sentBody } },
+    );
+  } catch (err) {
+    console.error('[CosmoMail] recipient reply failed:', err);
+  } finally {
+    unsub();
+  }
+
+  const replyText = assistantTextFromMessages(chat.messages);
+  await finalizeRecipient(threadId, replyText);
 }
 
 // ── Assistant (Cosmo) ─────────────────────────────────────────

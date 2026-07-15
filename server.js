@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
+import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
 import { filterModels } from './lib/helpers.js';
@@ -168,19 +169,90 @@ app.delete('/api/sessions/:sessionId', async (req, res) => {
   }
 });
 
-// Builds the session-level input for a new Octavus agent session from the
-// scenario's generation settings and the trusted course-author extra prompt.
-function buildAgentSessionInput(config) {
+// Shared generation-level inputs (model/temperature/thinking/language).
+function buildGenerationInput(config) {
   const g = config.generation ?? {};
   const input = {};
   if (g.model) input.MODEL = g.model;
-  const language = typeof g.language === 'string' && g.language.trim() ? g.language.trim() : 'English';
-  input.LANGUAGE = language;
+  input.LANGUAGE = typeof g.language === 'string' && g.language.trim() ? g.language.trim() : 'English';
   const thinking = g.thinking ?? 'off';
   input.THINKING = thinking;
   if (thinking === 'off' && g.temperature !== undefined) input.TEMPERATURE = g.temperature;
+  return input;
+}
+
+// Session input for the assistant (copilot) role.
+function buildAgentSessionInput(config) {
+  const input = buildGenerationInput(config);
+  input.MODE = 'assistant';
   if (config.assistant?.systemPromptExtra) input.EXTRA_INSTRUCTIONS = config.assistant.systemPromptExtra;
   return input;
+}
+
+// Session input for the recipient (in-character correspondent) role.
+function buildRecipientSessionInput(config, persona) {
+  const input = buildGenerationInput(config);
+  input.MODE = 'recipient';
+  input.PERSONA = persona?.prompt || `You are ${persona?.name || 'the recipient'}.`;
+  input.PERSONA_NAME = persona?.name || 'The recipient';
+  return input;
+}
+
+// Normalizes a To/Cc value (array or comma-delimited string) into an array of
+// { email } address objects.
+function toAddressList(value) {
+  if (Array.isArray(value)) {
+    return value
+      .map((v) => (typeof v === 'string' ? { email: v.trim() } : v))
+      .filter((v) => v && (v.email || v.name));
+  }
+  if (typeof value === 'string') {
+    return value.split(',').map((s) => s.trim()).filter(Boolean).map((email) => ({ email }));
+  }
+  return [];
+}
+
+// Whether the simulated recipient may still reply given the thread behavior.
+function recipientAllowed(config, record) {
+  const sr = config.simulatedRecipient;
+  if (!sr?.enabled) return false;
+  const turns = record.recipient_turns || 0;
+  switch (sr.threadBehavior) {
+    case 'one_reply':
+      return turns < 1;
+    case 'multi_turn':
+      return turns < (sr.maxTurns ?? 1);
+    case 'scripted':
+      return turns < (Array.isArray(sr.scriptedBeats) ? sr.scriptedBeats.length : 0);
+    default:
+      return false;
+  }
+}
+
+// Attach to an Octavus session, execute the payload, and pipe the SSE stream.
+async function streamAgent(res, octavusSessionId, payload) {
+  const session = octavus.agentSessions.attach(octavusSessionId);
+  const events = session.execute(payload);
+  const stream = toSSEStream(events);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+  } catch (err) {
+    console.error('[stream] error:', err);
+  } finally {
+    reader.releaseLock();
+    res.end();
+  }
 }
 
 // POST /api/assistant/session — lazily create (or return) the Octavus agent
@@ -216,28 +288,147 @@ app.post('/api/assistant/session', async (req, res) => {
 app.post('/api/assistant/trigger', async (req, res) => {
   const { sessionId, ...payload } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  await streamAgent(res, sessionId, payload);
+});
 
-  const session = octavus.agentSessions.attach(sessionId);
-  const events = session.execute(payload);
-  const stream = toSSEStream(events);
+// ── Send flow & simulated recipient ────────────────────────────
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-
-  const reader = stream.getReader();
+// POST /api/email/send — simulate sending: append the learner's email to the
+// thread (creating one for compose-new), clear the draft, and report whether a
+// simulated recipient reply is allowed next.
+app.post('/api/email/send', async (req, res) => {
+  const { sessionId, threadId, to, cc, subject, body, attachments } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
   try {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      res.write(value);
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+    const { config } = await getScenario();
+
+    let thread = record.threads.find((t) => t.id === threadId);
+    if (!thread) {
+      thread = { id: `thread-${randomUUID()}`, subject: subject || '(no subject)', emails: [] };
+      record.threads.push(thread);
     }
+
+    const email = {
+      id: `email-${randomUUID()}`,
+      from: {
+        name: config.learner?.displayName || 'You',
+        email: config.learner?.email || 'you@example.com',
+      },
+      to: toAddressList(to),
+      cc: toAddressList(cc),
+      date: new Date().toISOString(),
+      subject: subject || thread.subject,
+      body: body || '',
+      outbound: true,
+      attachments: Array.isArray(attachments) ? attachments : [],
+    };
+    thread.emails.push(email);
+    record.drafts = [];
+    upsertSession(data, record);
+    await writeSessions(data);
+
+    res.json({
+      email,
+      thread,
+      recipient: {
+        allowed: recipientAllowed(config, record),
+        behavior: config.simulatedRecipient?.enabled ? config.simulatedRecipient.threadBehavior : null,
+      },
+    });
   } catch (err) {
-    console.error('[assistant/trigger] Stream error:', err);
-  } finally {
-    reader.releaseLock();
-    res.end();
+    console.error('[email/send] Error:', err);
+    res.status(500).json({ error: 'Failed to send email' });
+  }
+});
+
+// POST /api/recipient/session — lazily create the Octavus session that role-plays
+// the simulated recipient persona.
+app.post('/api/recipient/session', async (req, res) => {
+  if (!AGENT_ID) return res.status(503).json({ error: 'Agent is not configured' });
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  try {
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+    const { config } = await getScenario();
+    const sr = config.simulatedRecipient;
+    if (!sr?.enabled) return res.status(400).json({ error: 'Simulated recipient is not enabled' });
+
+    if (record.recipient_octavus_session_id) {
+      return res.json({ recipientOctavusSessionId: record.recipient_octavus_session_id });
+    }
+
+    const persona = sr.personas?.[0] ?? {};
+    const input = buildRecipientSessionInput(config, persona);
+    const id = await octavus.agentSessions.create(AGENT_ID, input);
+    record.recipient_octavus_session_id = id;
+    upsertSession(data, record);
+    await writeSessions(data);
+    res.json({ recipientOctavusSessionId: id });
+  } catch (err) {
+    console.error('[recipient/session] Error:', err);
+    res.status(500).json({ error: 'Failed to create recipient session' });
+  }
+});
+
+// POST /api/recipient/trigger — stream an in-character recipient reply via SSE.
+app.post('/api/recipient/trigger', async (req, res) => {
+  const { sessionId, ...payload } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  await streamAgent(res, sessionId, payload);
+});
+
+// POST /api/recipient/complete — append a finished recipient reply (LLM- or
+// script-generated) to the thread as an inbound email and count the turn.
+app.post('/api/recipient/complete', async (req, res) => {
+  const { sessionId, threadId, reply } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  try {
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+    const { config } = await getScenario();
+    const sr = config.simulatedRecipient;
+    const persona = sr?.personas?.[0] ?? {};
+
+    const thread = record.threads.find((t) => t.id === threadId) ?? record.threads[0];
+    if (!thread) return res.status(404).json({ error: 'Thread not found' });
+
+    // Scripted behavior ignores the streamed reply and uses the author's beat.
+    let bodyText = reply || '';
+    if (sr?.threadBehavior === 'scripted') {
+      const beat = sr.scriptedBeats?.[record.recipient_turns || 0];
+      bodyText = typeof beat === 'string' ? beat : beat?.body || '';
+    }
+
+    const learner = record.threads
+      .flatMap((t) => t.emails)
+      .find((e) => e.outbound);
+
+    const email = {
+      id: `email-${randomUUID()}`,
+      from: { name: persona.name || 'Recipient', email: persona.email || 'recipient@example.com' },
+      to: [{ name: config.learner?.displayName || 'You', email: config.learner?.email || 'you@example.com' }],
+      cc: [],
+      date: new Date().toISOString(),
+      subject: /^re:/i.test(thread.subject || '') ? thread.subject : `Re: ${thread.subject || ''}`,
+      body: bodyText,
+      outbound: false,
+      attachments: [],
+    };
+    thread.emails.push(email);
+    record.recipient_turns = (record.recipient_turns || 0) + 1;
+    upsertSession(data, record);
+    await writeSessions(data);
+
+    res.json({ email, thread, recipient: { allowed: recipientAllowed(config, record) } });
+  } catch (err) {
+    console.error('[recipient/complete] Error:', err);
+    res.status(500).json({ error: 'Failed to record recipient reply' });
   }
 });
 

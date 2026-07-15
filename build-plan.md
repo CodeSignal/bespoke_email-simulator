@@ -247,28 +247,34 @@ help with the confirmed v1 capabilities.
 **Goal:** Simulate sending, append to the thread, and optionally get an
 in-character recipient reply.
 
-- [ ] Route `POST /api/email/send`: append the learner's email (Markdown) to the
+- [x] Route `POST /api/email/send`: append the learner's email (Markdown) to the
       thread, clear the composer server-side state, persist.
-- [ ] Extend the agent with a `recipient-reply` trigger + handler and
-      `agents/cosmo-mail/prompts/system-recipient.md` (in-persona, goal-directed,
-      guardrail-bound).
-- [ ] Route `POST /api/recipient/trigger`: generate a recipient reply via SSE
-      using the persona + thread + behavior metadata.
-- [ ] Implement `threadBehavior`: `one_reply`, `multi_turn` (respect `maxTurns`),
+- [x] Extend the agent with a `recipient-reply` trigger + handler and an
+      in-persona system role. *(Implemented as a single MODE-switched
+      `prompts/system.md` — one agent covers both the copilot and the recipient
+      persona, each on its own Octavus session, avoiding a second deployed agent
+      and extra agent-id env vars.)*
+- [x] Route `POST /api/recipient/trigger`: generate a recipient reply via SSE
+      using the persona + thread + behavior metadata (persona set at session
+      creation via `POST /api/recipient/session`; turn recorded via
+      `POST /api/recipient/complete`).
+- [x] Implement `threadBehavior`: `one_reply`, `multi_turn` (respect `maxTurns`),
       `scripted` (author beats); only active when `simulatedRecipient.enabled`.
-- [ ] Client: send button simulates send (no real email), appends learner email,
+- [x] Client: send button simulates send (no real email), appends learner email,
       streams recipient reply into the thread when enabled.
-- [ ] Re-deploy the updated agent (`deploy:agent:dev`).
+- [x] Re-deploy the updated agent (`deploy:agent:dev`).
 
 **Verify**
-- [ ] With recipient disabled: send appends the email, no reply is generated.
-- [ ] With recipient enabled: send triggers an in-character reply; `multi_turn`
-      respects `maxTurns`; personas behave per their prompt.
-- [ ] Thread state (sends + replies) persists across reload.
+- [x] With recipient disabled: send appends the email (4 emails), no reply is
+      generated (`recipient.allowed=false`).
+- [x] With recipient enabled: send triggers an in-character reply (Dana conceded
+      15% for a 24-month term, per persona); turns are counted (`recipient_turns`)
+      and gated by `maxTurns`.
+- [x] Thread state (sends + replies) persists to sessions.json (survives reload).
 
 **Commit & push**
-- [ ] Commit: `feat: send flow and optional simulated recipient replies`
-- [ ] Push to origin.
+- [x] Commit: `feat: send flow and optional simulated recipient replies`
+- [x] Push to origin.
 
 ---
 
