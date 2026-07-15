@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CosmoMail</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Design System: Foundations -->
+  <link rel="stylesheet" href="/design-system/colors/colors.css" />
+  <link rel="stylesheet" href="/design-system/spacing/spacing.css" />
+  <link rel="stylesheet" href="/design-system/typography/typography.css" />
+
+  <!-- Design System: Components -->
+  <link rel="stylesheet" href="/design-system/components/button/button.css" />
+  <link rel="stylesheet" href="/design-system/components/boxes/boxes.css" />
+  <link rel="stylesheet" href="/design-system/components/icons/icons.css" />
+  <link rel="stylesheet" href="/design-system/components/input/input.css" />
+  <link rel="stylesheet" href="/design-system/components/tags/tags.css" />
+  <link rel="stylesheet" href="/design-system/components/dropdown/dropdown.css" />
+  <link rel="stylesheet" href="/design-system/components/modal/modal.css" />
+
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+
+  <div class="boot-error body-small" id="bootError" role="alert" hidden></div>
+
+  <div class="mail-app" id="mailApp">
+
+    <!-- ── THREAD RAIL ── -->
+    <aside class="rail" id="threadRail" aria-label="Mailboxes">
+      <div class="rail__header">
+        <span class="cmail-brand">
+          <span class="cmail-brand__mark" aria-hidden="true"></span>
+          <span class="body-small cmail-brand__name" id="appTitle">CosmoMail</span>
+        </span>
+      </div>
+      <nav class="rail__threads" id="threadList" aria-label="Threads">
+        <!-- thread items rendered here -->
+        <p class="body-xsmall rail__empty" id="threadListEmpty">No threads yet.</p>
+      </nav>
+    </aside>
+
+    <!-- ── MAIN: reading pane + composer ── -->
+    <main class="mail-main">
+      <header class="mail-main__header">
+        <h1 class="heading-small" id="scenarioHeading">CosmoMail</h1>
+        <p class="body-small mail-main__brief" id="scenarioBrief"></p>
+      </header>
+
+      <section class="reading-pane" id="readingPane" aria-label="Conversation" aria-live="polite">
+        <div class="reading-pane__empty" id="readingEmpty">
+          <span class="cmail-brand__mark cmail-brand__mark--lg" aria-hidden="true"></span>
+          <p class="body-medium">Select a thread to get started.</p>
+        </div>
+      </section>
+
+      <section class="composer" id="composer" aria-label="Compose">
+        <div class="composer__fields">
+          <label class="composer__field">
+            <span class="label-small composer__label">To</span>
+            <input type="text" class="input composer__input" id="composeTo" placeholder="recipient@example.com" />
+          </label>
+          <label class="composer__field">
+            <span class="label-small composer__label">Cc</span>
+            <input type="text" class="input composer__input" id="composeCc" placeholder="" />
+          </label>
+          <label class="composer__field">
+            <span class="label-small composer__label">Subject</span>
+            <input type="text" class="input composer__input" id="composeSubject" placeholder="Subject" />
+          </label>
+        </div>
+        <div class="composer__body" id="composerBody">
+          <!-- TipTap editor mounts here (Stage 4) -->
+          <div class="composer__placeholder body-small" id="composerPlaceholder">Message editor loads here.</div>
+        </div>
+        <div class="composer__toolbar">
+          <button type="button" class="button button-primary button-small" id="sendBtn" disabled>Send</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- ── ASSISTANT PANEL ── -->
+    <aside class="assistant" id="assistantPanel" aria-label="AI assistant">
+      <div class="assistant__header">
+        <span class="cmail-brand__mark cmail-brand__mark--sm" aria-hidden="true"></span>
+        <span class="body-small assistant__title">Cosmo</span>
+      </div>
+      <div class="assistant__messages" id="assistantMessages" role="log" aria-live="polite">
+        <p class="body-xsmall assistant__hint" id="assistantHint">Ask Cosmo to help draft, summarize, or answer questions about this thread.</p>
+      </div>
+      <div class="assistant__composer">
+        <textarea class="input assistant__input" id="assistantInput" rows="2" placeholder="Ask Cosmo..." aria-label="Message Cosmo"></textarea>
+        <button type="button" class="button button-secondary button-small" id="assistantSendBtn" disabled>Send</button>
+      </div>
+    </aside>
+
+  </div>
+
+  <script type="module" src="/app.bundle.js"></script>
+</body>
+</html>

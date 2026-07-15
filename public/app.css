@@ -1,0 +1,320 @@
+/* CosmoMail — app styles. Built on the CodeSignal design system tokens. */
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--Colors-Backgrounds-Main-Dark);
+  color: var(--Colors-Text-Body-Default);
+  font-family: 'Work Sans', system-ui, sans-serif;
+}
+
+.boot-error {
+  position: fixed;
+  inset: auto 0 0 0;
+  margin: var(--UI-Spacing-spacing-m);
+  padding: var(--UI-Spacing-spacing-m);
+  border-radius: var(--UI-Radius-radius-m);
+  background: var(--Colors-Base-Danger-700, #b00020);
+  color: #fff;
+  z-index: 1000;
+}
+
+/* ── App shell: 3-column layout ── */
+.mail-app {
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr) 340px;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Thread rail ── */
+.rail {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--Colors-Backgrounds-Main-Darker);
+  border-right: 1px solid var(--Colors-Stroke-Light);
+}
+
+.rail__header {
+  padding: var(--UI-Spacing-spacing-m);
+  border-bottom: 1px solid var(--Colors-Stroke-Light);
+}
+
+.cmail-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
+}
+
+.cmail-brand__name {
+  font-weight: 600;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.cmail-brand__mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--Colors-Base-Primary-600, #6366f1), var(--Colors-Base-Primary-900, #4338ca));
+  flex: 0 0 auto;
+}
+
+.cmail-brand__mark--sm {
+  width: 16px;
+  height: 16px;
+}
+
+.cmail-brand__mark--lg {
+  width: 40px;
+  height: 40px;
+}
+
+.rail__threads {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--UI-Spacing-spacing-xs);
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-xxs);
+}
+
+.rail__empty,
+.rail__thread-preview {
+  color: var(--Colors-Text-Body-Light);
+}
+
+.rail__thread {
+  width: 100%;
+  text-align: left;
+  padding: var(--UI-Spacing-spacing-s);
+  border-radius: var(--UI-Radius-radius-s);
+  border: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rail__thread:hover {
+  background: var(--Colors-Backgrounds-Main-Medium);
+}
+
+.rail__thread.is-active {
+  background: var(--Colors-Backgrounds-Main-Medium);
+  border-color: var(--Colors-Stroke-Primary);
+}
+
+.rail__thread-subject {
+  font-weight: 600;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+/* ── Main column ── */
+.mail-main {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+  background: var(--Colors-Backgrounds-Main-Default);
+}
+
+.mail-main__header {
+  padding: var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-ml);
+  border-bottom: 1px solid var(--Colors-Stroke-Light);
+}
+
+.mail-main__brief {
+  margin: var(--UI-Spacing-spacing-xxs) 0 0;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.reading-pane {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--UI-Spacing-spacing-ml);
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-m);
+}
+
+.reading-pane__empty {
+  margin: auto;
+  text-align: center;
+  color: var(--Colors-Text-Body-Light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+/* Email cards */
+.email {
+  border: 1px solid var(--Colors-Stroke-Light);
+  border-radius: var(--UI-Radius-radius-m);
+  background: var(--Colors-Backgrounds-Main-Top);
+  padding: var(--UI-Spacing-spacing-m);
+}
+
+.email__meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--UI-Spacing-spacing-s);
+  margin-bottom: var(--UI-Spacing-spacing-s);
+  padding-bottom: var(--UI-Spacing-spacing-s);
+  border-bottom: 1px solid var(--Colors-Stroke-Lighter);
+}
+
+.email__from {
+  font-weight: 600;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.email__to,
+.email__date {
+  color: var(--Colors-Text-Body-Light);
+}
+
+.email__body {
+  color: var(--Colors-Text-Body-Default);
+  line-height: 1.55;
+  word-wrap: break-word;
+}
+
+.email__body p:first-child {
+  margin-top: 0;
+}
+
+.email--outbound {
+  border-color: var(--Colors-Stroke-Primary-Light);
+}
+
+/* ── Composer ── */
+.composer {
+  border-top: 1px solid var(--Colors-Stroke-Light);
+  padding: var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-ml);
+  background: var(--Colors-Backgrounds-Main-Default);
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+.composer__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-xxs);
+}
+
+.composer__field {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+.composer__label {
+  width: 48px;
+  flex: 0 0 auto;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.composer__input {
+  flex: 1 1 auto;
+}
+
+.composer__body {
+  min-height: 96px;
+  border: 1px solid var(--Colors-Stroke-Light);
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Backgrounds-Main-Top);
+  padding: var(--UI-Spacing-spacing-s);
+}
+
+.composer__placeholder {
+  color: var(--Colors-Text-Body-Lighter);
+}
+
+.composer__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+/* ── Assistant panel ── */
+.assistant {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--Colors-Backgrounds-Main-Darker);
+  border-left: 1px solid var(--Colors-Stroke-Light);
+}
+
+.assistant__header {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
+  padding: var(--UI-Spacing-spacing-m);
+  border-bottom: 1px solid var(--Colors-Stroke-Light);
+}
+
+.assistant__title {
+  font-weight: 600;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.assistant__messages {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--UI-Spacing-spacing-m);
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+.assistant__hint {
+  color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__msg {
+  padding: var(--UI-Spacing-spacing-s);
+  border-radius: var(--UI-Radius-radius-s);
+  line-height: 1.5;
+}
+
+.assistant__msg--user {
+  background: var(--Colors-Backgrounds-Main-Medium);
+  color: var(--Colors-Text-Body-Strong);
+  align-self: flex-end;
+  max-width: 90%;
+}
+
+.assistant__msg--ai {
+  background: var(--Colors-Backgrounds-Main-Top);
+  border: 1px solid var(--Colors-Stroke-Lighter);
+}
+
+.assistant__composer {
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
+  border-top: 1px solid var(--Colors-Stroke-Light);
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+.assistant__input {
+  resize: none;
+  width: 100%;
+}
+
+.assistant__composer .button {
+  align-self: flex-end;
+}

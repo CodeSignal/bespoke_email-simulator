@@ -74,24 +74,25 @@ design-system submodule, and env/config templates.
 **Goal:** Express server on port 3000 serving a static HTML shell styled by the
 design system. No AI or email logic yet.
 
-- [ ] Create `server.js`: Express app, `PORT` from env (default 3000),
+- [x] Create `server.js`: Express app, `PORT` from env (default 3000),
       static hosting for `public/` and `/design-system`, `NODE_ENV=test` guard
       around `app.listen`, and an `EADDRINUSE` message. Export `app`.
-- [ ] Create `public/index.html` shell: link design-system foundations
+- [x] Create `public/index.html` shell: link design-system foundations
       (colors, spacing, typography) + core components (button, boxes, icons,
       input, modal, dropdown) and `app.css`; load `/app.bundle.js` as a module.
-- [ ] Create `public/app.css` and a minimal `public/app.js` entry (bundled by esbuild).
-- [ ] Lay out the three surfaces from the PRD as static placeholders: thread rail,
+- [x] Create `public/app.css` and a minimal `public/app.js` entry (bundled by esbuild).
+- [x] Lay out the three surfaces from the PRD as static placeholders: thread rail,
       reading pane, composer area, assistant panel.
 
 **Verify**
-- [ ] `npm run dev` starts; visiting `http://localhost:3000` renders the shell
-      with design-system styling and no console errors.
-- [ ] `public/app.bundle.js` is generated (and gitignored).
+- [x] `npm run dev` starts; visiting `http://localhost:3000` renders the shell
+      with design-system styling and no console errors. *(Verified on :3001 — an
+      external ChatCPT instance already occupies :3000.)*
+- [x] `public/app.bundle.js` is generated (and gitignored).
 
 **Commit & push**
-- [ ] Commit: `feat: static express server and app shell on port 3000`
-- [ ] Push to origin.
+- [x] Commit: `feat: static express server and app shell on port 3000`
+- [x] Push to origin.
 
 ---
 
