@@ -122,9 +122,9 @@ string path to a fixture file relative to the project root.
 
 ### Example scenarios
 
-Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/) (with
-their seed data under `scenario-examples/fixtures/`). Copy one to `scenario.json`
-to try it:
+Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/) (their
+seed data lives in [`fixtures/`](fixtures/)). Copy one to `scenario.json` to try
+it:
 
 - **`01-compose-new-outreach`** — write a cold outreach email from scratch
   (no seed inbox, copilot only).
@@ -182,8 +182,8 @@ GitHub release (excluding secrets and runtime files).
 ```
 agents/cosmo-mail/     Octavus agent definition (protocol, prompts, settings)
 design-system/         Shared UI submodule
-scenario-examples/     Ready-to-run example scenarios (+ their fixtures)
-fixtures/              Seed inbox fixtures referenced by scenario.example.json
+scenario-examples/     Ready-to-run example scenarios
+fixtures/              Seed inbox fixtures referenced by scenarios/examples
 i18n/                  Locale catalogs
 lib/                   Pure logic (scenario, sessions, i18n, helpers)
 public/                Client app (index.html, app.js, app.css)

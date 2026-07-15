@@ -6,7 +6,7 @@
   "scenarioType": "reply_chain",
   "learner": { "displayName": "You", "email": "you@company.com" },
   "seed": {
-    "inbox": "scenario-examples/fixtures/vendor-thread.json",
+    "inbox": "fixtures/vendor-thread.json",
     "activeThreadId": "thread-1",
     "focusedEmailId": "email-3"
   },

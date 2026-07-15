@@ -1,8 +1,8 @@
 # Scenario examples
 
 Ready-to-run CosmoMail scenarios covering the main use cases the simulator was
-built for. Each file is a complete scenario config; the `fixtures/` folder holds
-the seeded inbox data they reference.
+built for. Each file is a complete scenario config; the seeded inbox data they
+reference lives in the project-root [`fixtures/`](../fixtures/) folder.
 
 ## Try one
 
@@ -13,9 +13,9 @@ cp scenario-examples/02-reply-vendor-negotiation.scenario.json scenario.json
 npm run dev
 ```
 
-The `seed.inbox` paths are relative to the project root
-(`scenario-examples/fixtures/...`), so they resolve whether you run a file in
-place or copy it to `scenario.json`.
+The `seed.inbox` paths are resolved relative to the project root (e.g.
+`fixtures/vendor-thread.json`), so they work whether you run a file in place or
+copy it to `scenario.json`.
 
 ## The examples
 

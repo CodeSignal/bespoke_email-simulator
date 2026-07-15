@@ -6,7 +6,7 @@
   "scenarioType": "reply",
   "learner": { "displayName": "You", "email": "you@brightlabs.io" },
   "seed": {
-    "inbox": "scenario-examples/fixtures/project-status-thread.json",
+    "inbox": "fixtures/project-status-thread.json",
     "activeThreadId": "thread-1",
     "focusedEmailId": "email-3"
   },

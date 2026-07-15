@@ -6,7 +6,7 @@
   "scenarioType": "reply_chain",
   "learner": { "displayName": "You", "email": "recruiting@northwind.co" },
   "seed": {
-    "inbox": "scenario-examples/fixtures/interview-scheduling.json",
+    "inbox": "fixtures/interview-scheduling.json",
     "activeThreadId": "thread-1",
     "focusedEmailId": "email-1"
   },
