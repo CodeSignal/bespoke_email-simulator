@@ -282,18 +282,21 @@ in-character recipient reply.
 
 **Goal:** Let the learner mark a final email/draft as their submission.
 
-- [ ] Route `POST /api/submission`: set `selected_submission` (default = most
+- [x] Route `POST /api/submission`: set `selected_submission` (default = most
       recent send); enforce `submission.maxSubmissions`.
-- [ ] Client: submission control with the configured `submission.label`; visual
-      indication of the selected submission.
+- [x] Client: submission control with the configured `submission.label`; visual
+      indication of the selected submission ("Submitted" badge + status text).
 
 **Verify**
-- [ ] Marking a submission persists and is reflected on reload.
-- [ ] Default submission is the most recent send when none is chosen.
+- [x] Marking a submission persists (selected_submission + submission_count) and
+      is reflected on reload.
+- [x] Default submission is the most recent send when none is chosen.
+- [x] Enforcement: a second submit with maxSubmissions=1 returns HTTP 409 and the
+      button disables.
 
 **Commit & push**
-- [ ] Commit: `feat: final submission selection`
-- [ ] Push to origin.
+- [x] Commit: `feat: final submission selection`
+- [x] Push to origin.
 
 ---
 

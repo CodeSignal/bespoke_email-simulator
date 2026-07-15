@@ -432,6 +432,72 @@ app.post('/api/recipient/complete', async (req, res) => {
   }
 });
 
+// ── Submission ─────────────────────────────────────────────────
+
+// Finds the most recent outbound (learner-sent) email across all threads.
+function mostRecentSend(record) {
+  let latest = null;
+  for (const thread of record.threads ?? []) {
+    for (const email of thread.emails ?? []) {
+      if (email.outbound && (!latest || (email.date || '') >= (latest.email.date || ''))) {
+        latest = { email, threadId: thread.id };
+      }
+    }
+  }
+  return latest;
+}
+
+// POST /api/submission — mark the learner's final email. Defaults to the most
+// recent send; enforces submission.maxSubmissions.
+app.post('/api/submission', async (req, res) => {
+  const { sessionId, emailId, threadId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  try {
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+    const { config } = await getScenario();
+    const maxSubmissions = config.submission?.maxSubmissions ?? 1;
+
+    record.submission_count = record.submission_count || 0;
+    if (record.submission_count >= maxSubmissions) {
+      return res.status(409).json({
+        error: 'No submissions remaining',
+        submissionsRemaining: 0,
+        selectedSubmission: record.selected_submission,
+      });
+    }
+
+    let target = null;
+    if (emailId) {
+      for (const thread of record.threads ?? []) {
+        const email = thread.emails?.find((e) => e.id === emailId);
+        if (email) { target = { email, threadId: thread.id }; break; }
+      }
+    } else {
+      target = mostRecentSend(record);
+    }
+    if (!target) return res.status(400).json({ error: 'No email to submit' });
+
+    record.selected_submission = {
+      email_id: target.email.id,
+      thread_id: threadId || target.threadId,
+      submitted_at: new Date().toISOString(),
+    };
+    record.submission_count += 1;
+    upsertSession(data, record);
+    await writeSessions(data);
+
+    res.json({
+      selectedSubmission: record.selected_submission,
+      submissionsRemaining: Math.max(0, maxSubmissions - record.submission_count),
+    });
+  } catch (err) {
+    console.error('[submission] Error:', err);
+    res.status(500).json({ error: 'Failed to record submission' });
+  }
+});
+
 // POST /api/session/save — persist threads / drafts / assistant messages / submission.
 app.post('/api/session/save', async (req, res) => {
   const { sessionId, threads, drafts, assistantMessages, selectedSubmission } = req.body;
