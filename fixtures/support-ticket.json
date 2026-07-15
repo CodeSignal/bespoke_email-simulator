@@ -1,0 +1,20 @@
+{
+  "threads": [
+    {
+      "id": "thread-1",
+      "subject": "Order #48231 arrived damaged",
+      "emails": [
+        {
+          "id": "email-1",
+          "from": { "name": "Marcus Bell", "email": "marcus.bell@example.com" },
+          "to": [{ "name": "Support", "email": "support@brightgoods.com" }],
+          "cc": [],
+          "date": "2026-07-14T13:20:00Z",
+          "subject": "Order #48231 arrived damaged",
+          "body": "Hi,\n\nMy order #48231 arrived today and the espresso machine has a cracked water tank and a dented side panel. This was a gift and I'm pretty frustrated — I paid for expedited shipping too.\n\nI'd like a replacement sent as soon as possible, or a full refund. Can you help?\n\nThanks,\nMarcus",
+          "attachments": []
+        }
+      ]
+    }
+  ]
+}

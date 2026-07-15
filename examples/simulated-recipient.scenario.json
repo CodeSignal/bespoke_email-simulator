@@ -1,0 +1,53 @@
+{
+  "id": "support-damaged-order",
+  "title": "CosmoMail",
+  "brief": "You are a customer support agent at BrightGoods. Reply to Marcus, who received a damaged espresso machine. De-escalate, apologize, and resolve his issue. He may reply — keep working the thread until it's resolved.",
+  "primarySkill": "both",
+  "scenarioType": "reply_chain",
+  "learner": { "displayName": "Support", "email": "support@brightgoods.com" },
+  "seed": {
+    "inbox": "fixtures/support-ticket.json",
+    "activeThreadId": "thread-1",
+    "focusedEmailId": "email-1"
+  },
+  "initialDraft": {
+    "to": ["marcus.bell@example.com"],
+    "cc": [],
+    "subject": "Re: Order #48231 arrived damaged",
+    "body": ""
+  },
+  "assistant": {
+    "enabled": true,
+    "capabilities": ["compose", "qa_search", "summarize"],
+    "systemPromptExtra": "Coach the learner toward empathetic, solution-oriented support writing that owns the problem and offers a concrete resolution.",
+    "initialMessage": "Want help drafting an empathetic, solution-first reply?",
+    "allowCustomInstructions": false
+  },
+  "simulatedRecipient": {
+    "enabled": true,
+    "threadBehavior": "multi_turn",
+    "maxTurns": 3,
+    "personas": [
+      {
+        "id": "marcus",
+        "name": "Marcus Bell",
+        "email": "marcus.bell@example.com",
+        "role": "Frustrated customer",
+        "prompt": "You are Marcus Bell, a customer who received a damaged espresso machine that was meant to be a gift. You start frustrated but become satisfied if the agent apologizes sincerely, takes ownership, and offers a concrete fix (fast replacement or refund). Push back if the reply is generic, slow, or dismissive. Keep replies short and realistic."
+      }
+    ],
+    "scriptedBeats": []
+  },
+  "generation": {
+    "model": "anthropic/claude-opus-4-7",
+    "temperature": 0.7,
+    "thinking": "off",
+    "language": "English"
+  },
+  "attachments": { "enabled": false },
+  "submission": { "label": "Submit final reply", "maxSubmissions": 1 },
+  "ui": { "heading": "Resolve Marcus's support ticket" },
+  "rubricHints": {
+    "notes": "Reward: sincere apology and ownership, acknowledgment of the expedited-shipping frustration, a concrete resolution (fast replacement or full refund) with next steps, and an empathetic, professional tone across the whole thread."
+  }
+}

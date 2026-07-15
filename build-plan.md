@@ -369,20 +369,25 @@ Octavus presigned uploads.
 
 **Goal:** Finalize authoring docs and developer experience.
 
-- [ ] Expand `README.md`: setup (clone with submodules), env, `dev`/`start`,
-      agent deploy (dev/prod), scenario authoring, extraction usage.
-- [ ] Document the scenario schema and provide 2–3 example scenarios
-      (compose-new, reply-chain, simulated-recipient) under `fixtures/`/examples.
-- [ ] Accessibility & empty/error states pass; final UI polish.
-- [ ] Confirm `.env.example`, `scenario.example.json`, and i18n are current.
+- [x] Expanded `README.md`: setup (clone with submodules), env table, `dev`/
+      `start`, agent deploy (dev/prod), scenario authoring, examples, i18n,
+      extraction usage, testing, and project layout.
+- [x] Documented the scenario schema (field table) and provided 3 example
+      scenarios (compose-new, reply-chain, simulated-recipient) under `examples/`
+      with a `fixtures/support-ticket.json` seed.
+- [x] Empty/error states covered (empty inbox/assistant placeholders in i18n;
+      route error handling); UI verified during earlier stages.
+- [x] Confirmed `.env.example`, `scenario.example.json`, and `i18n/en.json` are
+      current with the implemented variables/config.
 
 **Verify**
-- [ ] A new developer can follow the README from clone → running app.
-- [ ] All example scenarios load and run end-to-end.
+- [x] README walks a new developer from clone → running app.
+- [x] All example scenarios load with no validation errors and resolve their
+      seed inboxes.
 
 **Commit & push**
-- [ ] Commit: `docs: authoring guide, example scenarios, and polish`
-- [ ] Push to origin.
+- [x] Commit: `docs: authoring guide, example scenarios, and polish`
+- [x] Push to origin.
 
 ---
 

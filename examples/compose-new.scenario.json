@@ -1,0 +1,39 @@
+{
+  "id": "compose-new-outreach",
+  "title": "CosmoMail",
+  "brief": "Write a cold outreach email to a potential partner, Priya Nair (priya@brightlabs.io), introducing our company and proposing a 30-minute intro call next week. Keep it warm, specific, and under 150 words.",
+  "primarySkill": "writing",
+  "scenarioType": "compose_new",
+  "learner": { "displayName": "You", "email": "you@company.com" },
+  "seed": {
+    "inbox": { "threads": [] },
+    "activeThreadId": null,
+    "focusedEmailId": null
+  },
+  "initialDraft": {
+    "to": ["priya@brightlabs.io"],
+    "cc": [],
+    "subject": "Intro from Acme — quick call next week?",
+    "body": ""
+  },
+  "assistant": {
+    "enabled": true,
+    "capabilities": ["compose", "summarize"],
+    "systemPromptExtra": "Coach the learner toward a concise, warm, specific outreach email with a single clear ask.",
+    "initialMessage": "Want help outlining a warm, specific intro email?",
+    "allowCustomInstructions": false
+  },
+  "simulatedRecipient": { "enabled": false },
+  "generation": {
+    "model": "anthropic/claude-opus-4-7",
+    "temperature": 0.7,
+    "thinking": "off",
+    "language": "English"
+  },
+  "attachments": { "enabled": false },
+  "submission": { "label": "Submit email", "maxSubmissions": 1 },
+  "ui": { "heading": "Write your outreach email", "hideHistory": true },
+  "rubricHints": {
+    "notes": "Reward: a clear subject, a warm personalized opener, a specific value proposition, a single explicit ask (30-min call next week), and a professional sign-off. Penalize generic filler and length over ~150 words."
+  }
+}
