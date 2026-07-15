@@ -327,18 +327,18 @@ Octavus presigned uploads.
 
 **Goal:** Produce readable, Markdown transcripts for the tutor/assessment rubric.
 
-- [ ] `extract-conversations.js` reading `sessions.json`, with modes:
+- [x] `extract-conversations.js` reading `sessions.json`, with modes:
       `full`, `submission`, `thread`, `assistant`, `report`; options `--latest`,
-      `--output <file>`, `--print-settings`, `--help`.
-- [ ] Output email bodies as Markdown; include `rubricHints` in the report header.
+      `--output <file>`, `--print-settings`, `--help`. `npm run extract`/`report`.
+- [x] Output email bodies as Markdown; include `rubricHints` in the report header.
 
 **Verify**
-- [ ] Each mode prints/writes correct, readable output for a sample session.
-- [ ] `report` mode writes a well-formed Markdown file.
+- [x] Each mode prints/writes correct, readable output for a sample session.
+- [x] `report` mode writes a well-formed Markdown file.
 
 **Commit & push**
-- [ ] Commit: `feat: extraction and reporting scripts`
-- [ ] Push to origin.
+- [x] Commit: `feat: extraction and reporting scripts`
+- [x] Push to origin.
 
 ---
 
