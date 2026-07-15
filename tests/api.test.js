@@ -53,7 +53,6 @@ describe('session lifecycle', () => {
     expect(res.status).toBe(200);
     expect(res.body.sessionId).toBeTruthy();
     expect(res.body.threads.length).toBeGreaterThan(0);
-    expect(res.body.submissionCount).toBe(0);
     sessionId = res.body.sessionId;
   });
 
@@ -72,17 +71,6 @@ describe('session lifecycle', () => {
     expect(res.body.email.to[0].email).toBe('dana@acme-vendor.com');
     // scenario.example.json enables a multi_turn simulated recipient
     expect(res.body.recipient.allowed).toBe(true);
-  });
-
-  it('POST /api/submission defaults to the most recent send, then enforces the cap', async () => {
-    const first = await request(app).post('/api/submission').send({ sessionId });
-    expect(first.status).toBe(200);
-    expect(first.body.selectedSubmission.email_id).toBeTruthy();
-    expect(first.body.submissionsRemaining).toBe(0);
-
-    const second = await request(app).post('/api/submission').send({ sessionId });
-    expect(second.status).toBe(409);
-    expect(second.body.submissionsRemaining).toBe(0);
   });
 
   it('POST /api/session/save persists drafts and assistant messages', async () => {

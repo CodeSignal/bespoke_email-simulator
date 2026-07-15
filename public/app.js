@@ -77,8 +77,6 @@ const els = {
   composerBody: document.getElementById('composerBody'),
   composerPlaceholder: document.getElementById('composerPlaceholder'),
   sendBtn: document.getElementById('sendBtn'),
-  submitBtn: document.getElementById('submitBtn'),
-  submitStatus: document.getElementById('submitStatus'),
   attachBtn: document.getElementById('attachBtn'),
   fileInput: document.getElementById('fileInput'),
   attachmentPreview: document.getElementById('attachmentPreview'),
@@ -169,12 +167,10 @@ function renderEmail(email, learnerEmail) {
   const isOutbound =
     email.outbound === true ||
     (learnerEmail && formatAddress(email.from).includes(learnerEmail));
-  const isSubmitted = state.session?.selectedSubmission?.email_id === email.id;
   const wrap = document.createElement('article');
-  wrap.className = 'email' + (isOutbound ? ' email--outbound' : '') + (isSubmitted ? ' email--submitted' : '');
+  wrap.className = 'email' + (isOutbound ? ' email--outbound' : '');
   const toLine = formatAddressList(email.to);
   const ccLine = email.cc && email.cc.length ? `<div class="body-xsmall email__to">Cc: ${escapeHtml(formatAddressList(email.cc))}</div>` : '';
-  const submittedBadge = isSubmitted ? '<span class="tag success email__badge">Submitted</span>' : '';
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
   const attachmentsHtml = attachments.length
     ? `<div class="email__attachments">${attachments
@@ -188,10 +184,7 @@ function renderEmail(email, learnerEmail) {
         <div class="body-xsmall email__to">To: ${escapeHtml(toLine)}</div>
         ${ccLine}
       </div>
-      <div class="email__meta-right">
-        ${submittedBadge}
-        <div class="body-xsmall email__date">${escapeHtml(formatDate(email.date))}</div>
-      </div>
+      <div class="body-xsmall email__date">${escapeHtml(formatDate(email.date))}</div>
     </div>
     <div class="email__body">${renderMarkdown(email.body)}</div>
     ${attachmentsHtml}
@@ -436,66 +429,6 @@ function initAttachments() {
   });
 }
 
-// ── Submission ────────────────────────────────────────────────
-function hasAnySend() {
-  return (state.session?.threads ?? []).some((th) => (th.emails ?? []).some((e) => e.outbound));
-}
-
-function maxSubmissions() {
-  return state.config?.submission?.maxSubmissions ?? 1;
-}
-
-function submissionsRemaining() {
-  return Math.max(0, maxSubmissions() - (state.session?.submissionCount ?? 0));
-}
-
-function updateSubmissionUI() {
-  if (!els.submitBtn) return;
-  els.submitBtn.hidden = false;
-  els.submitBtn.textContent = state.config?.submission?.label || t('Submit final email');
-  const remaining = submissionsRemaining();
-  els.submitBtn.disabled = !hasAnySend() || remaining <= 0;
-
-  const submitted = state.session?.selectedSubmission;
-  if (submitted) {
-    els.submitStatus.hidden = false;
-    els.submitStatus.textContent =
-      remaining > 0 ? `Submitted · ${remaining} change(s) left` : 'Submitted · final';
-  } else {
-    els.submitStatus.hidden = true;
-  }
-}
-
-async function submitEmail() {
-  if (els.submitBtn.disabled) return;
-  els.submitBtn.disabled = true;
-  try {
-    const res = await fetch('/api/submission', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: state.session.sessionId }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      console.warn('[CosmoMail] submission rejected:', data.error);
-      if (data.selectedSubmission) state.session.selectedSubmission = data.selectedSubmission;
-      return;
-    }
-    state.session.selectedSubmission = data.selectedSubmission;
-    state.session.submissionCount = (state.session.submissionCount ?? 0) + 1;
-    renderThread(state.activeThreadId);
-  } catch (err) {
-    console.error('[CosmoMail] submit failed:', err);
-  } finally {
-    updateSubmissionUI();
-  }
-}
-
-function initSubmission() {
-  els.submitBtn.addEventListener('click', submitEmail);
-  updateSubmissionUI();
-}
-
 // ── Send flow & simulated recipient ───────────────────────────
 function replaceThread(thread) {
   const threads = state.session.threads ?? (state.session.threads = []);
@@ -549,7 +482,6 @@ async function sendEmail() {
     clearAttachments();
     renderThreadRail();
     renderThread(state.activeThreadId);
-    updateSubmissionUI();
 
     if (recipient?.allowed) {
       await runRecipientReply(email.body, thread.id, recipient.behavior);
@@ -877,7 +809,6 @@ async function boot() {
     renderThreadRail();
     renderThread(state.activeThreadId);
     initComposer();
-    initSubmission();
     initAttachments();
     await initAssistant();
   } catch (err) {

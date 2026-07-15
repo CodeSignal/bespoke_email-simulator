@@ -18,7 +18,6 @@ describe('newSessionRecord', () => {
     expect(rec.threads).toHaveLength(1);
     expect(rec.drafts).toEqual([]);
     expect(rec.assistant_messages).toEqual([]);
-    expect(rec.selected_submission).toBeNull();
     // deep clone — mutating the copy must not touch the seed
     rec.threads[0].emails[0].body = 'changed';
     expect(seedThreads[0].emails[0].body).toBe('a');
@@ -57,6 +56,5 @@ describe('toClientSession', () => {
     const client = toClientSession(rec);
     expect(client.sessionId).toBe(rec.session_id);
     expect(client.threads).toHaveLength(1);
-    expect(client.selectedSubmission).toBeNull();
   });
 });

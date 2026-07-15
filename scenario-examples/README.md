@@ -42,7 +42,7 @@ copy it to `scenario.json`.
   and offers a concrete fix — good for realistic back-and-forth practice.
 - **05 — Simulated recipient, scripted:** The recipient (Jordan) returns fixed
   scripted beats regardless of exact wording, useful for deterministic,
-  repeatable exercises. `maxSubmissions` is 2 to allow a follow-up.
+  repeatable exercises.
 
 ## Extraction
 

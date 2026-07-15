@@ -19,8 +19,8 @@ for rubric-based assessment.
   a `MODE` session input. Separate **dev** and **prod** agent profiles let you
   test configuration before going live.
 - The UI uses the shared **`design-system`** submodule.
-- **No database** — short-term state (threads, drafts, assistant messages,
-  submission) is stored in a local `sessions.json` file.
+- **No database** — short-term state (threads, drafts, assistant messages) is
+  stored in a local `sessions.json` file.
 
 ## Prerequisites
 
@@ -116,7 +116,6 @@ string path to a fixture file relative to the project root.
 | `simulatedRecipient.scriptedBeats` | string[] | Fixed replies for `scripted`. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
 | `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support. |
-| `submission` | `{ label, maxSubmissions }` | Final-submission control. |
 | `ui` | `{ heading, hideAssistant, hideHistory, strings }` | UI overrides + i18n strings. |
 | `rubricHints` | object \| string | Notes surfaced in the extraction report. |
 
@@ -156,7 +155,7 @@ or an assessment rubric:
 
 ```bash
 npm run extract                                    # full transcript, newest first
-node extract-conversations.js --mode submission    # only the submitted email
+node extract-conversations.js --mode submission    # only the final (most recent) sent email
 node extract-conversations.js --mode thread        # the email thread(s)
 node extract-conversations.js --mode assistant     # the Cosmo conversation
 npm run report                                      # Markdown report (rubric hints in header)
