@@ -6,6 +6,9 @@
  * assistant are wired in later stages.
  */
 
+import { Editor } from '@tiptap/core';
+import StarterKit from '@tiptap/starter-kit';
+import { Markdown } from '@tiptap/markdown';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -41,6 +44,8 @@ const state = {
   scenario: null,
   session: null,
   activeThreadId: null,
+  editor: null,
+  draftSaveTimer: null,
 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -54,6 +59,12 @@ const els = {
   readingPane: document.getElementById('readingPane'),
   readingEmpty: document.getElementById('readingEmpty'),
   assistantHint: document.getElementById('assistantHint'),
+  composeTo: document.getElementById('composeTo'),
+  composeCc: document.getElementById('composeCc'),
+  composeSubject: document.getElementById('composeSubject'),
+  composerBody: document.getElementById('composerBody'),
+  composerPlaceholder: document.getElementById('composerPlaceholder'),
+  sendBtn: document.getElementById('sendBtn'),
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -191,6 +202,109 @@ function applyScenarioChrome() {
   }
 }
 
+// ── Composer (TipTap, Markdown-native) ────────────────────────
+function getEditorMarkdown() {
+  if (!state.editor) return '';
+  if (typeof state.editor.getMarkdown === 'function') return state.editor.getMarkdown();
+  // Fallback for markdown-extension variants that expose storage helpers.
+  return state.editor.storage?.markdown?.getMarkdown?.() ?? '';
+}
+
+function setEditorMarkdown(md) {
+  if (!state.editor) return;
+  state.editor.commands.setContent(String(md ?? ''), { contentType: 'markdown' });
+}
+
+// Determines the starting To/Cc/Subject/body for the composer: a saved draft
+// wins, then the scenario's initialDraft, then a reply prefill derived from the
+// focused email for reply/reply_chain scenarios.
+function computeInitialDraft() {
+  const saved = state.session?.drafts?.[0];
+  if (saved) return saved;
+
+  const initial = state.config?.initialDraft;
+  const base = { to: [], cc: [], subject: '', body: '' };
+
+  const type = state.config?.scenarioType;
+  if (type === 'reply' || type === 'reply_chain') {
+    const thread = state.session?.threads?.find((t) => t.id === state.activeThreadId);
+    const focusedId = state.scenario?.focusedEmailId;
+    const emails = thread?.emails ?? [];
+    const focused = emails.find((e) => e.id === focusedId) ?? emails[emails.length - 1];
+    if (focused) {
+      base.to = [focused.from?.email].filter(Boolean);
+      const subj = focused.subject || thread?.subject || '';
+      base.subject = /^re:/i.test(subj) ? subj : `Re: ${subj}`;
+    }
+  }
+
+  return {
+    to: initial?.to?.length ? initial.to : base.to,
+    cc: initial?.cc?.length ? initial.cc : base.cc,
+    subject: initial?.subject || base.subject,
+    body: initial?.body || base.body,
+  };
+}
+
+function currentDraft() {
+  return {
+    to: (els.composeTo.value || '').split(',').map((s) => s.trim()).filter(Boolean),
+    cc: (els.composeCc.value || '').split(',').map((s) => s.trim()).filter(Boolean),
+    subject: els.composeSubject.value || '',
+    body: getEditorMarkdown(),
+    updated_at: new Date().toISOString(),
+  };
+}
+
+function updateSendEnabled() {
+  const draft = currentDraft();
+  const hasContent = draft.body.trim().length > 0 || draft.subject.trim().length > 0;
+  els.sendBtn.disabled = !hasContent;
+}
+
+async function saveDraftNow() {
+  if (!state.session?.sessionId) return;
+  const draft = currentDraft();
+  state.session.drafts = [draft];
+  try {
+    await fetch('/api/session/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: state.session.sessionId, drafts: [draft] }),
+    });
+  } catch (err) {
+    console.error('[CosmoMail] draft save failed:', err);
+  }
+}
+
+function scheduleDraftSave() {
+  updateSendEnabled();
+  clearTimeout(state.draftSaveTimer);
+  state.draftSaveTimer = setTimeout(saveDraftNow, 600);
+}
+
+function initComposer() {
+  const draft = computeInitialDraft();
+  els.composeTo.value = (draft.to || []).join(', ');
+  els.composeCc.value = (draft.cc || []).join(', ');
+  els.composeSubject.value = draft.subject || '';
+
+  if (els.composerPlaceholder) els.composerPlaceholder.remove();
+
+  state.editor = new Editor({
+    element: els.composerBody,
+    extensions: [StarterKit, Markdown],
+    content: draft.body || '',
+    contentType: 'markdown',
+    onUpdate: scheduleDraftSave,
+  });
+
+  for (const input of [els.composeTo, els.composeCc, els.composeSubject]) {
+    input.addEventListener('input', scheduleDraftSave);
+  }
+  updateSendEnabled();
+}
+
 // ── Boot ──────────────────────────────────────────────────────
 async function boot() {
   try {
@@ -214,6 +328,7 @@ async function boot() {
     applyScenarioChrome();
     renderThreadRail();
     renderThread(state.activeThreadId);
+    initComposer();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);
     showBootError('Could not load CosmoMail. Is the server running?');

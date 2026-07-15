@@ -157,22 +157,22 @@ the thread(s) read-only in the UI.
 **Goal:** Compose/reply in a TipTap editor with Markdown as the source of truth,
 and persist drafts.
 
-- [ ] Integrate TipTap (`@tiptap/core` + `@tiptap/pm` + `@tiptap/starter-kit` +
+- [x] Integrate TipTap (`@tiptap/core` + `@tiptap/pm` + `@tiptap/starter-kit` +
       `@tiptap/markdown`) into `public/app.js`, bundled by esbuild.
-- [ ] Composer UI: To / Cc / Subject fields + TipTap body; load `initialDraft`
+- [x] Composer UI: To / Cc / Subject fields + TipTap body; load `initialDraft`
       with `contentType: 'markdown'`; serialize with `editor.getMarkdown()`.
-- [ ] Wire reply vs. compose-new flows based on `scenarioType`
+- [x] Wire reply vs. compose-new flows based on `scenarioType`
       (`compose_new` / `reply` / `reply_chain`), prefilling recipients/subject.
-- [ ] Autosave/save drafts to the session (`POST /api/session/save`) as Markdown.
+- [x] Autosave/save drafts to the session (`POST /api/session/save`) as Markdown.
 
 **Verify**
-- [ ] Editing in TipTap and reloading restores the draft as Markdown.
-- [ ] Reply prefills To/Subject from the focused email; compose-new starts blank.
-- [ ] Round-trip check: Markdown → TipTap → `getMarkdown()` is stable.
+- [x] Editing in TipTap and reloading restores the draft as Markdown.
+- [x] Reply prefills To/Subject from the focused email; compose-new starts blank.
+- [x] Round-trip check: Markdown → TipTap → `getMarkdown()` is stable.
 
 **Commit & push**
-- [ ] Commit: `feat: TipTap composer with Markdown drafts`
-- [ ] Push to origin.
+- [x] Commit: `feat: TipTap composer with Markdown drafts`
+- [x] Push to origin.
 
 ---
 
