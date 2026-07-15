@@ -3,6 +3,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
+import { OctavusClient } from '@octavus/server-sdk';
 import { filterModels } from './lib/helpers.js';
 import { loadScenario } from './lib/scenario.js';
 import { resolveStrings } from './lib/i18n.js';
@@ -24,6 +25,29 @@ const MODELS_FILE = path.join(__dirname, 'current-models.txt');
 const I18N_DIR = path.join(__dirname, 'i18n');
 const app = express();
 const PORT = Number.parseInt(process.env.PORT ?? '3000', 10) || 3000;
+
+// ── Octavus client ────────────────────────────────────────────
+// Fall back to sensible defaults so the server can boot for local UI work even
+// before credentials are configured. Actual agent calls still require a valid
+// OCTAVUS_API_KEY and a deployed agent id.
+const octavus = new OctavusClient({
+  baseUrl: process.env.OCTAVUS_API_URL || 'https://octavus.ai',
+  apiKey: process.env.OCTAVUS_API_KEY || '',
+});
+
+// Which deployed agent the server talks to. Defaults to "prod" so existing
+// deployments that only set the legacy OCTAVUS_AGENT_ID keep working. Local
+// development opts into the dev agent via `npm run dev` (AGENT_TARGET=dev).
+const AGENT_TARGET = (process.env.AGENT_TARGET ?? 'prod').toLowerCase();
+if (AGENT_TARGET !== 'prod' && AGENT_TARGET !== 'dev') {
+  throw new Error(
+    `Invalid AGENT_TARGET "${process.env.AGENT_TARGET}". Expected "prod" or "dev".`,
+  );
+}
+const AGENT_ID =
+  (AGENT_TARGET === 'prod'
+    ? process.env.OCTAVUS_AGENT_ID_PROD
+    : process.env.OCTAVUS_AGENT_ID_DEV) ?? process.env.OCTAVUS_AGENT_ID;
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json({ limit: '5mb' }));
@@ -171,6 +195,11 @@ app.post('/api/session/save', async (req, res) => {
 if (process.env.NODE_ENV !== 'test') {
   const server = app.listen(PORT, () => {
     console.log(`CosmoMail running at http://localhost:${PORT}`);
+    console.log(`[agent] target=${AGENT_TARGET}${AGENT_ID ? ` (agent ${AGENT_ID})` : ''}`);
+    if (!AGENT_ID) {
+      const expected = `OCTAVUS_AGENT_ID_${AGENT_TARGET.toUpperCase()}`;
+      console.warn(`[WARN] ${expected} is not set — the assistant will not work until it is configured.`);
+    }
   });
   server.on('error', (err) => {
     if (err.code === 'EADDRINUSE') {

@@ -181,30 +181,32 @@ and persist drafts.
 **Goal:** Define the Cosmo Mail agent (assistant behavior first) and the dev/prod
 deploy tooling. No client wiring yet.
 
-- [ ] `agents/cosmo-mail/settings.json` (slug `cosmo-mail`, name, description,
+- [x] `agents/cosmo-mail/settings.json` (slug `cosmo-mail`, name, description,
       `format: interactive`).
-- [ ] `agents/cosmo-mail/protocol.yaml`: session inputs (MODEL, TEMPERATURE,
+- [x] `agents/cosmo-mail/protocol.yaml`: session inputs (MODEL, TEMPERATURE,
       THINKING, LANGUAGE, EXTRA_INSTRUCTIONS, VERBOSITY_INSTRUCTIONS) + scenario
-      context inputs (SCENARIO_BRIEF, INBOX/THREAD, CURRENT_DRAFT); the
-      `assistant-message` trigger (USER_MESSAGE, CUSTOM_INSTRUCTIONS, FILES);
-      agent block; handlers.
-- [ ] `agents/cosmo-mail/prompts/system-assistant.md` (email copilot persona,
+      context inputs (THREAD_CONTEXT, CURRENT_DRAFT on the trigger so they stay
+      fresh); the `assistant-message` trigger (USER_MESSAGE, CUSTOM_INSTRUCTIONS,
+      FILES); agent block; handlers.
+- [x] `agents/cosmo-mail/prompts/system-assistant.md` (email copilot persona,
       context usage, capabilities, guardrails, instruction-priority ordering).
-- [ ] `agents/cosmo-mail/prompts/assistant-message.md` (user-turn template).
-- [ ] `scripts/deploy-agent.mjs`: stage a copy, rewrite only slug/name for the
+- [x] `agents/cosmo-mail/prompts/assistant-message.md` (user-turn template).
+- [x] `scripts/deploy-agent.mjs`: stage a copy, rewrite only slug/name for the
       target (`cosmo-mail` / `cosmo-mail-dev`), run `octavus validate` + `sync`;
       prod requires confirmation (`--yes` for CI).
-- [ ] Server: `OctavusClient` init + `AGENT_TARGET` selection
+- [x] Server: `OctavusClient` init + `AGENT_TARGET` selection
       (`OCTAVUS_AGENT_ID_DEV`/`_PROD`, legacy fallback) per ChatCPT.
 
 **Verify**
-- [ ] `npm run validate:agent` passes.
-- [ ] `npm run deploy:agent:dev` syncs to `cosmo-mail-dev` (requires real `.env`).
-- [ ] Server boot logs the resolved `AGENT_TARGET` and agent id.
+- [x] `npm run validate:agent` passes.
+- [x] `npm run deploy:agent:dev` syncs to `cosmo-mail-dev` (created agent
+      `cmrmasa14001b04l7kqiwl0xn`; `.env` updated to point at it).
+- [x] Server boot logs the resolved `AGENT_TARGET` and agent id
+      (`[agent] target=dev (agent …)`).
 
 **Commit & push**
-- [ ] Commit: `feat: cosmo-mail agent definition and dev/prod deploy tooling`
-- [ ] Push to origin.
+- [x] Commit: `feat: cosmo-mail agent definition and dev/prod deploy tooling`
+- [x] Push to origin.
 
 ---
 

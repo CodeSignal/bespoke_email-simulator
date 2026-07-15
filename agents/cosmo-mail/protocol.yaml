@@ -1,0 +1,78 @@
+input:
+  MODEL:
+    type: string
+    optional: true
+    default: "anthropic/claude-opus-4-7"
+    description: LLM model to use for this session (provider/model-id format).
+  TEMPERATURE:
+    type: number
+    optional: true
+    default: 0.7
+    description: "Sampling temperature (0-2). Lower = more focused, higher = more creative."
+  THINKING:
+    type: string
+    optional: true
+    default: "off"
+    description: "Extended reasoning level. Values: off, low, medium, high, max."
+  EXTRA_INSTRUCTIONS:
+    type: string
+    optional: true
+    default: ""
+    description: Trusted course-author instructions appended to the system prompt at session creation.
+  VERBOSITY_INSTRUCTIONS:
+    type: string
+    optional: true
+    default: "Be clear, concise, and conversational"
+    description: "Response verbosity directive injected into the system prompt guidelines."
+  LANGUAGE:
+    type: string
+    optional: true
+    default: "English"
+    description: "The language Cosmo should speak in when responding to the user."
+
+triggers:
+  assistant-message:
+    input:
+      USER_MESSAGE:
+        type: string
+      CUSTOM_INSTRUCTIONS:
+        type: string
+        optional: true
+        description: User-provided custom instructions. Delivered in the user turn (NOT the system prompt) so they remain subordinate to the system guardrails.
+      THREAD_CONTEXT:
+        type: string
+        optional: true
+        description: Serialized inbox/thread the learner is working in (Markdown), refreshed each turn so Cosmo can answer, summarize, and extract.
+      CURRENT_DRAFT:
+        type: string
+        optional: true
+        description: The learner's current compose draft (Markdown), refreshed each turn so Cosmo can help revise it.
+      FILES:
+        type: file[]
+        optional: true
+
+agent:
+  model: MODEL
+  system: system-assistant
+  input:
+    EXTRA_INSTRUCTIONS: EXTRA_INSTRUCTIONS
+    VERBOSITY_INSTRUCTIONS: VERBOSITY_INSTRUCTIONS
+    LANGUAGE: LANGUAGE
+  temperature: TEMPERATURE
+  thinking: THINKING
+  webSearch: true
+  agentic: true
+
+handlers:
+  assistant-message:
+    Add user message:
+      block: add-message
+      role: user
+      prompt: assistant-message
+      input: [USER_MESSAGE, CUSTOM_INSTRUCTIONS, THREAD_CONTEXT, CURRENT_DRAFT, FILES]
+      files: [FILES]
+      uiContent: USER_MESSAGE
+      display: hidden
+
+    Respond:
+      block: next-message
