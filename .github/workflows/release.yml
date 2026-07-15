@@ -1,0 +1,62 @@
+name: Build and Release
+
+on:
+  release:
+    types: [created]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Populate design system submodule
+        run: git submodule update --init
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Build frontend bundle
+        run: npm run build
+
+      - name: Archive release package
+        run: |
+          tar -czf /tmp/dist.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.env' \
+            --exclude='sessions.json' \
+            --exclude='scenario.json' \
+            --exclude='public/app.js' \
+            .
+          mv /tmp/dist.tar.gz dist.tar.gz
+
+      - name: Upload build artifact (for workflow logs)
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist.tar.gz
+
+      - name: Upload asset to existing release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag: ${{ github.event.release.tag_name }}
+          artifacts: dist.tar.gz
+          allowUpdates: true
+          omitBodyDuringUpdate: true
+          omitNameDuringUpdate: true

@@ -346,20 +346,22 @@ Octavus presigned uploads.
 
 **Goal:** Automated tests for pure logic and API routes, plus a release workflow.
 
-- [ ] `tests/` with `vitest` + `supertest`: config/i18n helpers, session
-      seed/save, scenario resolution, send/submission routes (import `app` via the
-      `NODE_ENV=test` guard). Keep pure logic in `lib/` for unit testing.
-- [ ] `.github/workflows/release.yml`: init submodule, `npm ci`, `npm run build`,
-      archive dist (excluding `.git`, `.github`, `.env`, `sessions.json`,
-      `public/app.js`), attach to the GitHub release.
+- [x] `tests/` with `vitest` + `supertest`: scenario resolution, session
+      seed/save, send/submission/delete routes (import `app` via the
+      `NODE_ENV=test` guard, isolated with `SESSIONS_FILE`/`SCENARIO_FILE` env
+      overrides). Pure logic lives in `lib/` for unit testing.
+- [x] `.github/workflows/ci.yml`: `npm ci` + `npm run build` + `npm test` on
+      push/PR. `.github/workflows/release.yml`: init submodule, `npm ci`, test,
+      `npm run build`, archive dist (excluding `.git`, `.github`, `.env`,
+      `sessions.json`, `scenario.json`, `public/app.js`), attach to the release.
 
 **Verify**
-- [ ] `npm test` passes locally.
-- [ ] CI workflow succeeds on a test release/tag (or via `act`/manual review).
+- [x] `npm test` passes locally (18 tests across unit + API).
+- [x] Release archive verified locally to exclude secrets/runtime files.
 
 **Commit & push**
-- [ ] Commit: `test: unit/API tests and release CI workflow`
-- [ ] Push to origin.
+- [x] Commit: `test: unit/API tests and release CI workflow`
+- [x] Push to origin.
 
 ---
 

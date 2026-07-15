@@ -20,8 +20,8 @@ import {
 } from './lib/sessions.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const SCENARIO_FILE = path.join(__dirname, 'scenario.json');
-const SESSIONS_FILE = path.join(__dirname, 'sessions.json');
+const SCENARIO_FILE = process.env.SCENARIO_FILE || path.join(__dirname, 'scenario.json');
+const SESSIONS_FILE = process.env.SESSIONS_FILE || path.join(__dirname, 'sessions.json');
 const MODELS_FILE = path.join(__dirname, 'current-models.txt');
 const I18N_DIR = path.join(__dirname, 'i18n');
 const app = express();
