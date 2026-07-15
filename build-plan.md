@@ -215,26 +215,30 @@ deploy tooling. No client wiring yet.
 **Goal:** A working streaming assistant that has full scenario context and can
 help with the confirmed v1 capabilities.
 
-- [ ] Route `POST /api/assistant/trigger`: attach to the Octavus session and
-      stream via SSE (`toSSEStream`), injecting inbox/thread/current-draft context.
-- [ ] Client: assistant panel using `@octavus/client-sdk` (`OctavusChat` +
+- [x] Route `POST /api/assistant/trigger`: attach to the Octavus session and
+      stream via SSE (`toSSEStream`). Context (thread + current draft) is passed
+      as fresh trigger inputs from the client each turn; `POST
+      /api/assistant/session` lazily creates the backing Octavus session.
+- [x] Client: assistant panel using `@octavus/client-sdk` (`OctavusChat` +
       `createHttpTransport` → `/api/assistant/trigger`) with streaming render.
-- [ ] Support capabilities gated by `assistant.capabilities`: compose/draft,
+- [x] Support capabilities gated by `assistant.capabilities`: compose/draft,
       Q&A + search over history, summarize, extract action items.
-- [ ] "Insert into composer" action for assistant-drafted emails (explicit,
+- [x] "Insert into composer" action for assistant-drafted emails (explicit,
       learner-controlled — see PRD §13).
-- [ ] Persist assistant turns to `assistant_messages`; honor `systemPromptExtra`
+- [x] Persist assistant turns to `assistant_messages`; honor `systemPromptExtra`
       and optional learner custom instructions (delivered in the user turn).
 
 **Verify**
-- [ ] Ask the assistant to summarize the seeded thread → correct summary streams in.
-- [ ] Ask a Q&A question about the thread → grounded answer.
-- [ ] Ask it to draft a reply → "insert" populates the TipTap composer as Markdown.
-- [ ] Assistant transcript persists across reload.
+- [x] Ask the assistant to summarize the seeded thread → correct summary streams in.
+- [x] Ask a Q&A question about the thread → grounded answer ("Firm: 12-month term
+      at $48,000").
+- [x] Ask it to draft a reply → "insert" populates the TipTap composer as Markdown.
+- [x] Assistant transcript persists across reload (octavus_session_id +
+      user/assistant messages saved to sessions.json).
 
 **Commit & push**
-- [ ] Commit: `feat: streaming AI assistant with scenario context and capabilities`
-- [ ] Push to origin.
+- [x] Commit: `feat: streaming AI assistant with scenario context and capabilities`
+- [x] Push to origin.
 
 ---
 

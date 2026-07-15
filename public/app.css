@@ -318,3 +318,26 @@ body {
 .assistant__composer .button {
   align-self: flex-end;
 }
+
+.assistant__msg--ai p:first-child {
+  margin-top: 0;
+}
+
+.assistant__msg--ai p:last-child {
+  margin-bottom: 0;
+}
+
+.assistant__msg--ai pre {
+  background: var(--Colors-Backgrounds-Main-Dark);
+  padding: var(--UI-Spacing-spacing-s);
+  border-radius: var(--UI-Radius-radius-s);
+  overflow-x: auto;
+}
+
+.assistant__insert {
+  margin-top: var(--UI-Spacing-spacing-s);
+}
+
+.assistant__typing {
+  color: var(--Colors-Text-Body-Light);
+}

@@ -3,7 +3,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
 import { fileURLToPath } from 'url';
-import { OctavusClient } from '@octavus/server-sdk';
+import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
 import { filterModels } from './lib/helpers.js';
 import { loadScenario } from './lib/scenario.js';
 import { resolveStrings } from './lib/i18n.js';
@@ -165,6 +165,79 @@ app.delete('/api/sessions/:sessionId', async (req, res) => {
   } catch (err) {
     console.error('[sessions] Delete error:', err);
     res.status(500).json({ error: 'Failed to delete session' });
+  }
+});
+
+// Builds the session-level input for a new Octavus agent session from the
+// scenario's generation settings and the trusted course-author extra prompt.
+function buildAgentSessionInput(config) {
+  const g = config.generation ?? {};
+  const input = {};
+  if (g.model) input.MODEL = g.model;
+  const language = typeof g.language === 'string' && g.language.trim() ? g.language.trim() : 'English';
+  input.LANGUAGE = language;
+  const thinking = g.thinking ?? 'off';
+  input.THINKING = thinking;
+  if (thinking === 'off' && g.temperature !== undefined) input.TEMPERATURE = g.temperature;
+  if (config.assistant?.systemPromptExtra) input.EXTRA_INSTRUCTIONS = config.assistant.systemPromptExtra;
+  return input;
+}
+
+// POST /api/assistant/session — lazily create (or return) the Octavus agent
+// session backing a CMail session's assistant conversation.
+app.post('/api/assistant/session', async (req, res) => {
+  if (!AGENT_ID) return res.status(503).json({ error: 'Assistant agent is not configured' });
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  try {
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+
+    if (record.octavus_session_id) {
+      return res.json({ octavusSessionId: record.octavus_session_id });
+    }
+
+    const { config } = await getScenario();
+    const input = buildAgentSessionInput(config);
+    const octavusSessionId = await octavus.agentSessions.create(AGENT_ID, input);
+    record.octavus_session_id = octavusSessionId;
+    upsertSession(data, record);
+    await writeSessions(data);
+    res.json({ octavusSessionId });
+  } catch (err) {
+    console.error('[assistant/session] Error:', err);
+    res.status(500).json({ error: 'Failed to create assistant session' });
+  }
+});
+
+// POST /api/assistant/trigger — attach to the Octavus session and stream the
+// assistant response as SSE.
+app.post('/api/assistant/trigger', async (req, res) => {
+  const { sessionId, ...payload } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+
+  const session = octavus.agentSessions.attach(sessionId);
+  const events = session.execute(payload);
+  const stream = toSSEStream(events);
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+
+  const reader = stream.getReader();
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      res.write(value);
+    }
+  } catch (err) {
+    console.error('[assistant/trigger] Stream error:', err);
+  } finally {
+    reader.releaseLock();
+    res.end();
   }
 });
 

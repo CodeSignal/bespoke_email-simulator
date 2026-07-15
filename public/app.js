@@ -6,6 +6,7 @@
  * assistant are wired in later stages.
  */
 
+import { OctavusChat, createHttpTransport } from '@octavus/client-sdk';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
@@ -46,6 +47,13 @@ const state = {
   activeThreadId: null,
   editor: null,
   draftSaveTimer: null,
+  assistant: {
+    chat: null,
+    unsubscribe: null,
+    octavusSessionId: null,
+    persisted: [],
+    lastInsertable: null,
+  },
 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -65,6 +73,9 @@ const els = {
   composerBody: document.getElementById('composerBody'),
   composerPlaceholder: document.getElementById('composerPlaceholder'),
   sendBtn: document.getElementById('sendBtn'),
+  assistantMessages: document.getElementById('assistantMessages'),
+  assistantInput: document.getElementById('assistantInput'),
+  assistantSendBtn: document.getElementById('assistantSendBtn'),
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -305,6 +316,214 @@ function initComposer() {
   updateSendEnabled();
 }
 
+// ── Assistant (Cosmo) ─────────────────────────────────────────
+// Serializes the active thread into Markdown context for the agent.
+function serializeThreadContext() {
+  const threads = state.session?.threads ?? [];
+  const thread = threads.find((th) => th.id === state.activeThreadId) ?? threads[0];
+  if (!thread) return 'No emails in the current mailbox.';
+  const lines = [`Subject: ${thread.subject || '(no subject)'}`, ''];
+  for (const email of thread.emails ?? []) {
+    lines.push(`From: ${formatAddress(email.from)}`);
+    lines.push(`To: ${formatAddressList(email.to)}`);
+    if (email.cc?.length) lines.push(`Cc: ${formatAddressList(email.cc)}`);
+    if (email.date) lines.push(`Date: ${formatDate(email.date)}`);
+    lines.push('');
+    lines.push(String(email.body ?? ''));
+    lines.push('\n---\n');
+  }
+  return lines.join('\n');
+}
+
+function customInstructionsValue() {
+  const allow = state.config?.assistant?.allowCustomInstructions;
+  const ci = state.config?.customInstructions || state.config?.assistant?.customInstructions;
+  return allow && ci ? ci : 'NO CUSTOM INSTRUCTIONS';
+}
+
+function assistantTextFromMessages(messages) {
+  // Return the latest assistant message's concatenated text parts (live turn).
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (messages[i].role === 'assistant') {
+      return (messages[i].parts ?? [])
+        .filter((p) => p.type === 'text')
+        .map((p) => p.text)
+        .join('');
+    }
+  }
+  return '';
+}
+
+// Extract the last fenced code block (a ready-to-send email) from Markdown.
+function extractLastCodeBlock(md) {
+  const matches = [...String(md ?? '').matchAll(/```[a-zA-Z]*\n([\s\S]*?)```/g)];
+  if (!matches.length) return null;
+  return matches[matches.length - 1][1].trim();
+}
+
+function makeBubble(role, contentHtml) {
+  const div = document.createElement('div');
+  div.className = `assistant__msg assistant__msg--${role === 'user' ? 'user' : 'ai'}`;
+  div.innerHTML = contentHtml;
+  return div;
+}
+
+function renderAssistant(liveMessages = []) {
+  const container = els.assistantMessages;
+  container.innerHTML = '';
+
+  const persisted = state.assistant.persisted;
+  const hasAny = persisted.length > 0 || liveMessages.length > 0;
+  if (!hasAny) {
+    const hint = document.createElement('p');
+    hint.className = 'body-xsmall assistant__hint';
+    hint.textContent = state.config?.assistant?.initialMessage
+      || t('Ask Cosmo to help draft, summarize, or answer questions about this thread.');
+    container.appendChild(hint);
+    return;
+  }
+
+  for (const m of persisted) {
+    const html = m.role === 'user' ? escapeHtml(m.content) : renderMarkdown(m.content);
+    container.appendChild(makeBubble(m.role, html));
+  }
+
+  // Live (this page load) turns from OctavusChat.
+  for (const m of liveMessages) {
+    if (m.role === 'user') {
+      const text = (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('')
+        || m.content || '';
+      container.appendChild(makeBubble('user', escapeHtml(text)));
+    } else if (m.role === 'assistant') {
+      const text = (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('');
+      const bubble = makeBubble('ai', renderMarkdown(text) || '<span class="assistant__typing">…</span>');
+      // Offer an "insert into composer" action when the reply contains an email.
+      const code = extractLastCodeBlock(text);
+      if (code && m.status !== 'streaming') {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'button button-text-primary button-xsmall assistant__insert';
+        btn.textContent = 'Insert into composer';
+        btn.addEventListener('click', () => insertIntoComposer(code));
+        bubble.appendChild(btn);
+      }
+      container.appendChild(bubble);
+    }
+  }
+
+  container.scrollTop = container.scrollHeight;
+}
+
+function insertIntoComposer(markdown) {
+  setEditorMarkdown(markdown);
+  scheduleDraftSave();
+  els.composerBody.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function persistAssistant() {
+  const live = (state.assistant.chat?.messages ?? []).map((m) => ({
+    role: m.role,
+    content: m.role === 'assistant'
+      ? (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('')
+      : ((m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('') || m.content || ''),
+    timestamp: new Date().toISOString(),
+  }));
+  const all = [...state.assistant.persisted, ...live];
+  state.session.assistantMessages = all;
+  fetch('/api/session/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: state.session.sessionId, assistantMessages: all }),
+  }).catch((err) => console.error('[CosmoMail] assistant save failed:', err));
+}
+
+function setAssistantEnabled(enabled) {
+  els.assistantInput.disabled = !enabled;
+  els.assistantSendBtn.disabled = !enabled || !els.assistantInput.value.trim();
+}
+
+async function initAssistant() {
+  state.assistant.persisted = state.session?.assistantMessages ?? [];
+  renderAssistant([]);
+
+  if (state.config?.assistant?.enabled === false || state.config?.ui?.hideAssistant) {
+    document.getElementById('assistantPanel')?.setAttribute('hidden', '');
+    return;
+  }
+
+  // Create (or resume) the backing Octavus session.
+  try {
+    const res = await fetch('/api/assistant/session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: state.session.sessionId }),
+    });
+    if (!res.ok) throw new Error(`assistant session failed (${res.status})`);
+    const { octavusSessionId } = await res.json();
+    state.assistant.octavusSessionId = octavusSessionId;
+  } catch (err) {
+    console.error('[CosmoMail] assistant unavailable:', err);
+    els.assistantInput.placeholder = 'Assistant unavailable (agent not configured).';
+    setAssistantEnabled(false);
+    return;
+  }
+
+  const transport = createHttpTransport({
+    request: (payload) =>
+      fetch('/api/assistant/trigger', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: state.assistant.octavusSessionId, ...payload }),
+      }),
+  });
+
+  state.assistant.chat = new OctavusChat({ transport });
+  state.assistant.unsubscribe = state.assistant.chat.subscribe(() => {
+    const chat = state.assistant.chat;
+    renderAssistant(chat.messages);
+    if (chat.status !== 'streaming') persistAssistant();
+    setAssistantEnabled(chat.status !== 'streaming');
+  });
+
+  els.assistantInput.addEventListener('input', () => {
+    els.assistantSendBtn.disabled = !els.assistantInput.value.trim()
+      || state.assistant.chat?.status === 'streaming';
+  });
+  els.assistantInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendAssistant();
+    }
+  });
+  els.assistantSendBtn.addEventListener('click', sendAssistant);
+  setAssistantEnabled(true);
+}
+
+async function sendAssistant() {
+  const chat = state.assistant.chat;
+  if (!chat || chat.status === 'streaming') return;
+  const text = els.assistantInput.value.trim();
+  if (!text) return;
+  els.assistantInput.value = '';
+  setAssistantEnabled(false);
+
+  try {
+    await chat.send(
+      'assistant-message',
+      {
+        USER_MESSAGE: text,
+        CUSTOM_INSTRUCTIONS: customInstructionsValue(),
+        THREAD_CONTEXT: serializeThreadContext(),
+        CURRENT_DRAFT: getEditorMarkdown() || '(empty)',
+      },
+      { userMessage: { content: text } },
+    );
+  } catch (err) {
+    console.error('[CosmoMail] assistant send failed:', err);
+    setAssistantEnabled(true);
+  }
+}
+
 // ── Boot ──────────────────────────────────────────────────────
 async function boot() {
   try {
@@ -329,6 +548,7 @@ async function boot() {
     renderThreadRail();
     renderThread(state.activeThreadId);
     initComposer();
+    await initAssistant();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);
     showBootError('Could not load CosmoMail. Is the server running?');
