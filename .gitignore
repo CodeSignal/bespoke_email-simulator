@@ -4,6 +4,6 @@ node_modules
 .env
 public/app.bundle.js
 public/hljs-*.css
-chat-sessions.json
-chat-config.json
+sessions.json
+scenario.json
 .agent-build
