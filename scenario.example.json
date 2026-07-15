@@ -1,0 +1,71 @@
+{
+  "id": "reply-to-vendor-negotiation",
+  "title": "CosmoMail",
+  "brief": "Reply to Dana's latest email. Push back on the $48,000 price and propose a 24-month term in exchange for a discount. Keep it firm but friendly.",
+  "primarySkill": "both",
+  "scenarioType": "reply_chain",
+
+  "learner": { "displayName": "You" },
+
+  "seed": {
+    "inbox": "fixtures/vendor-thread.json",
+    "activeThreadId": "thread-1",
+    "focusedEmailId": "email-3"
+  },
+
+  "initialDraft": {
+    "to": ["dana@acme-vendor.com"],
+    "cc": [],
+    "subject": "Re: Proposal for annual license",
+    "body": ""
+  },
+
+  "assistant": {
+    "enabled": true,
+    "capabilities": ["compose", "qa_search", "summarize", "extract"],
+    "systemPromptExtra": "Coach the learner toward a concise, professional, firm-but-friendly tone.",
+    "initialMessage": "Want help drafting a firm-but-friendly counter-offer?",
+    "allowCustomInstructions": false
+  },
+
+  "simulatedRecipient": {
+    "enabled": true,
+    "threadBehavior": "multi_turn",
+    "maxTurns": 4,
+    "personas": [
+      {
+        "id": "dana",
+        "name": "Dana Reyes",
+        "email": "dana@acme-vendor.com",
+        "role": "Vendor account manager",
+        "prompt": "You are Dana Reyes, a friendly but firm account manager at Acme. Defend your pricing, but you can concede up to a 15% discount in exchange for a 24-month term. Stay professional and concise."
+      }
+    ],
+    "scriptedBeats": []
+  },
+
+  "generation": {
+    "model": "anthropic/claude-opus-4-7",
+    "temperature": 0.7,
+    "thinking": "off",
+    "language": "English"
+  },
+
+  "attachments": {
+    "enabled": true,
+    "allowedTypes": [".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".txt", ".doc", ".docx"]
+  },
+
+  "submission": { "label": "Submit final email", "maxSubmissions": 1 },
+
+  "ui": {
+    "heading": "Reply to Dana's proposal",
+    "hideAssistant": false,
+    "hideHistory": false,
+    "strings": {}
+  },
+
+  "rubricHints": {
+    "notes": "Reward: acknowledges the proposal, counters the price with a clear rationale, proposes a 24-month term, maintains a professional and firm-but-friendly tone."
+  }
+}

@@ -101,27 +101,28 @@ design system. No AI or email logic yet.
 **Goal:** Load a scenario config + seed data (inline or fixture file) and expose
 it to the client. No email rendering yet.
 
-- [ ] Define the scenario schema per PRD §6 and create
+- [x] Define the scenario schema per PRD §6 and create
       `scenario.example.json` (committed template) + a working `scenario.json`
       (gitignored) for local dev.
-- [ ] Add `fixtures/` sample inbox/thread file(s) matching PRD §6.2.
-- [ ] `lib/config.js` (or extend `lib/helpers.js`): read scenario config, resolve
+- [x] Add `fixtures/` sample inbox/thread file(s) matching PRD §6.2.
+- [x] `lib/config.js` (or extend `lib/helpers.js`): read scenario config, resolve
       `seed.inbox` inline-or-from-file, and validate required fields.
-- [ ] `lib/i18n.js`: locale catalog loader + string resolution
+      *(Implemented as `lib/scenario.js` + `lib/helpers.js`.)*
+- [x] `lib/i18n.js`: locale catalog loader + string resolution
       (config `strings` override → i18n catalog → English), reusing ChatCPT's approach.
-- [ ] `i18n/en.json` seed catalog.
-- [ ] Routes: `GET /api/config` (config + resolved strings) and
+- [x] `i18n/en.json` seed catalog.
+- [x] Routes: `GET /api/config` (config + resolved strings) and
       `GET /api/scenario` (resolved brief + seed threads).
-- [ ] `GET /api/models` backed by a `current-models.txt` list, filtered by config.
+- [x] `GET /api/models` backed by a `current-models.txt` list, filtered by config.
 
 **Verify**
-- [ ] `curl localhost:3000/api/config` and `/api/scenario` return the expected
+- [x] `curl localhost:3000/api/config` and `/api/scenario` return the expected
       JSON for both inline and fixture-file seed modes.
-- [ ] Unit test: config loader resolves inline vs. fixture seeds correctly.
+- [x] Unit test: config loader resolves inline vs. fixture seeds correctly.
 
 **Commit & push**
-- [ ] Commit: `feat: scenario config loader, fixtures, and config/scenario APIs`
-- [ ] Push to origin.
+- [x] Commit: `feat: scenario config loader, fixtures, and config/scenario APIs`
+- [x] Push to origin.
 
 ---
 

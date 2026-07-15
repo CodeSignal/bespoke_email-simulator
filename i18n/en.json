@@ -1,0 +1,16 @@
+{
+  "languageNames": ["en", "english"],
+  "strings": {
+    "CosmoMail": "CosmoMail",
+    "Cosmo": "Cosmo",
+    "Send": "Send",
+    "To": "To",
+    "Cc": "Cc",
+    "Subject": "Subject",
+    "Ask Cosmo...": "Ask Cosmo...",
+    "Ask Cosmo to help draft, summarize, or answer questions about this thread.": "Ask Cosmo to help draft, summarize, or answer questions about this thread.",
+    "Select a thread to get started.": "Select a thread to get started.",
+    "No threads yet.": "No threads yet.",
+    "Submit final email": "Submit final email"
+  }
+}
