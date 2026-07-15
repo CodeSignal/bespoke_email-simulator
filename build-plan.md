@@ -131,24 +131,24 @@ it to the client. No email rendering yet.
 **Goal:** Seed a session from the scenario, persist it to a JSON file, and render
 the thread(s) read-only in the UI.
 
-- [ ] Define the session record shape per PRD §7.5 (`threads`, `drafts`,
+- [x] Define the session record shape per PRD §7.5 (`threads`, `drafts`,
       `assistant_messages`, `selected_submission`, timestamps, `scenario_id`).
-- [ ] `lib/sessions.js`: JSON file read/write helpers (`sessions.json`) and
+- [x] `lib/sessions.js`: JSON file read/write helpers (`sessions.json`) and
       session create/resume that seeds the scenario inbox into the record.
-- [ ] Routes: `GET /api/session` (create/resume, seeds inbox),
+- [x] Routes: `GET /api/session` (create/resume, seeds inbox),
       `POST /api/sessions`, `DELETE /api/sessions/:id`, `POST /api/session/save`.
-- [ ] Client: fetch scenario + session, render the thread rail and the reading
+- [x] Client: fetch scenario + session, render the thread rail and the reading
       pane (each email: from/to/cc/subject/date + Markdown body via `marked` +
       `highlight.js`), open the `activeThread`/`focusedEmail` by default.
 
 **Verify**
-- [ ] Loading the app shows the seeded thread rendered correctly.
-- [ ] `sessions.json` is created/updated and is gitignored.
-- [ ] Unit tests: session seed + save/read round-trip.
+- [x] Loading the app shows the seeded thread rendered correctly.
+- [x] `sessions.json` is created/updated and is gitignored.
+- [x] Unit tests: session seed + save/read round-trip.
 
 **Commit & push**
-- [ ] Commit: `feat: session persistence and read-only thread rendering`
-- [ ] Push to origin.
+- [x] Commit: `feat: session persistence and read-only thread rendering`
+- [x] Push to origin.
 
 ---
 
