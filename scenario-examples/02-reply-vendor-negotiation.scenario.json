@@ -5,6 +5,14 @@
   "primarySkill": "both",
   "scenarioType": "reply_chain",
   "learner": { "displayName": "You", "email": "you@company.com" },
+  "characters": [
+    {
+      "id": "dana",
+      "name": "Dana Reyes",
+      "email": "dana@acme-vendor.com",
+      "role": "Vendor account manager"
+    }
+  ],
   "seed": {
     "inbox": "fixtures/vendor-thread.json",
     "activeThreadId": "thread-1",

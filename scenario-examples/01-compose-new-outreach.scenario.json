@@ -5,6 +5,14 @@
   "primarySkill": "writing",
   "scenarioType": "compose_new",
   "learner": { "displayName": "You", "email": "you@company.com" },
+  "characters": [
+    {
+      "id": "priya",
+      "name": "Priya Nair",
+      "email": "priya@brightlabs.io",
+      "role": "Potential partner"
+    }
+  ],
   "seed": {
     "inbox": { "threads": [] },
     "activeThreadId": null,

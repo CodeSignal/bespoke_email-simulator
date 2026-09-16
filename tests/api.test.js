@@ -34,6 +34,15 @@ describe('config & scenario routes', () => {
     expect(res.body.id).toBe('reply-to-vendor-negotiation');
     expect(res.body.seed).toBeUndefined();
     expect(res.body.strings).toBeTypeOf('object');
+    expect(res.body.characters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'dana',
+          name: 'Dana Reyes',
+          email: 'dana@acme-vendor.com',
+        }),
+      ]),
+    );
   });
 
   it('GET /api/scenario returns resolved seed threads', async () => {
@@ -68,9 +77,22 @@ describe('session lifecycle', () => {
       });
     expect(res.status).toBe(200);
     expect(res.body.email.outbound).toBe(true);
-    expect(res.body.email.to[0].email).toBe('dana@acme-vendor.com');
+    expect(res.body.email.to[0]).toEqual({ name: 'Dana Reyes', email: 'dana@acme-vendor.com' });
     // scenario.example.json enables a multi_turn simulated recipient
     expect(res.body.recipient.allowed).toBe(true);
+  });
+
+  it('POST /api/email/send rejects recipients outside the character directory', async () => {
+    const res = await request(app)
+      .post('/api/email/send')
+      .send({
+        sessionId,
+        threadId: 'thread-1',
+        to: ['stranger@example.com'],
+        subject: 'Nope',
+        body: 'This should not send.',
+      });
+    expect(res.status).toBe(400);
   });
 
   it('POST /api/session/save persists drafts and assistant messages', async () => {

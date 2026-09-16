@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
 import { filterModels } from './lib/helpers.js';
 import { loadScenario } from './lib/scenario.js';
+import { constrainToCharacters, toCharacterAddress } from './lib/characters.js';
 import { resolveStrings } from './lib/i18n.js';
 import {
   newSessionRecord,
@@ -198,20 +199,6 @@ function buildRecipientSessionInput(config, persona) {
   return input;
 }
 
-// Normalizes a To/Cc value (array or comma-delimited string) into an array of
-// { email } address objects.
-function toAddressList(value) {
-  if (Array.isArray(value)) {
-    return value
-      .map((v) => (typeof v === 'string' ? { email: v.trim() } : v))
-      .filter((v) => v && (v.email || v.name));
-  }
-  if (typeof value === 'string') {
-    return value.split(',').map((s) => s.trim()).filter(Boolean).map((email) => ({ email }));
-  }
-  return [];
-}
-
 // Whether the simulated recipient may still reply given the thread behavior.
 function recipientAllowed(config, record) {
   const sr = config.simulatedRecipient;
@@ -319,6 +306,14 @@ app.post('/api/email/send', async (req, res) => {
     const record = findSession(data, sessionId);
     if (!record) return res.status(404).json({ error: 'Session not found' });
     const { config } = await getScenario();
+    const characters = config.characters ?? [];
+    const toList = constrainToCharacters(to, characters);
+    const ccList = constrainToCharacters(cc, characters).filter(
+      (email) => !toList.some((value) => value.toLowerCase() === email.toLowerCase()),
+    );
+    if (characters.length && toList.length === 0) {
+      return res.status(400).json({ error: 'to must include a scenario character' });
+    }
 
     let thread = record.threads.find((t) => t.id === threadId);
     if (!thread) {
@@ -332,8 +327,8 @@ app.post('/api/email/send', async (req, res) => {
         name: config.learner?.displayName || 'You',
         email: config.learner?.email || 'you@example.com',
       },
-      to: toAddressList(to),
-      cc: toAddressList(cc),
+      to: toList.map((addr) => toCharacterAddress(addr, characters)),
+      cc: ccList.map((addr) => toCharacterAddress(addr, characters)),
       date: new Date().toISOString(),
       subject: subject || thread.subject,
       body: body || '',

@@ -5,6 +5,20 @@
   "primarySkill": "writing",
   "scenarioType": "reply_chain",
   "learner": { "displayName": "You", "email": "recruiting@northwind.co" },
+  "characters": [
+    {
+      "id": "jordan",
+      "name": "Jordan Lee",
+      "email": "jordan.lee@candidatemail.com",
+      "role": "Candidate"
+    },
+    {
+      "id": "morgan",
+      "name": "Morgan Hale",
+      "email": "morgan.hale@northwind.co",
+      "role": "Hiring manager"
+    }
+  ],
   "seed": {
     "inbox": "fixtures/interview-scheduling.json",
     "activeThreadId": "thread-1",

@@ -20,6 +20,25 @@ describe('withScenarioDefaults', () => {
     // untouched keys keep their defaults
     expect(cfg.assistant.capabilities).toContain('compose');
     expect(cfg.ui.hideAssistant).toBeUndefined();
+    expect(cfg.characters).toEqual([]);
+  });
+
+  it('normalizes characters and keeps extra persona fields', () => {
+    const cfg = withScenarioDefaults({
+      id: 'cast',
+      characters: [
+        { name: 'Priya Nair', email: 'priya@brightlabs.io', role: 'Partner', prompt: 'Stay warm.' },
+      ],
+    });
+    expect(cfg.characters).toEqual([
+      {
+        name: 'Priya Nair',
+        email: 'priya@brightlabs.io',
+        role: 'Partner',
+        prompt: 'Stay warm.',
+        id: 'priya',
+      },
+    ]);
   });
 });
 

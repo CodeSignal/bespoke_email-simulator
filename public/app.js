@@ -17,6 +17,12 @@ import {
   threadsInMailbox,
   buildReplyHeaders,
 } from '../lib/mailboxes.js';
+import {
+  availableCharacters,
+  characterByEmail,
+  characterLabel,
+  constrainToCharacters,
+} from '../lib/characters.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -56,6 +62,8 @@ const state = {
   view: 'list', // list | thread | compose
   composingNew: false,
   replying: null, // null | 'reply' | 'replyAll'
+  recipients: { to: [], cc: [] },
+  openRecipientField: null, // null | 'to' | 'cc'
   editor: null,
   draftSaveTimer: null,
   assistant: {
@@ -86,8 +94,16 @@ const els = {
   readingPane: document.getElementById('readingPane'),
   composer: document.getElementById('composer'),
   assistantHint: document.getElementById('assistantHint'),
-  composeTo: document.getElementById('composeTo'),
-  composeCc: document.getElementById('composeCc'),
+  composeToLabel: document.getElementById('composeToLabel'),
+  composeCcLabel: document.getElementById('composeCcLabel'),
+  composeToPicker: document.getElementById('composeToPicker'),
+  composeCcPicker: document.getElementById('composeCcPicker'),
+  composeToChips: document.getElementById('composeToChips'),
+  composeCcChips: document.getElementById('composeCcChips'),
+  composeToAdd: document.getElementById('composeToAdd'),
+  composeCcAdd: document.getElementById('composeCcAdd'),
+  composeToMenu: document.getElementById('composeToMenu'),
+  composeCcMenu: document.getElementById('composeCcMenu'),
   composeSubject: document.getElementById('composeSubject'),
   composerBody: document.getElementById('composerBody'),
   composerPlaceholder: document.getElementById('composerPlaceholder'),
@@ -186,6 +202,187 @@ function threadListFrom(thread, mailbox) {
 
 function learnerEmail() {
   return state.config?.learner?.email || '';
+}
+
+function directoryCharacters() {
+  const learner = learnerEmail().toLowerCase();
+  return (state.config?.characters ?? []).filter(
+    (character) => character.email.toLowerCase() !== learner,
+  );
+}
+
+function selectedRecipientEmails() {
+  return [...state.recipients.to, ...state.recipients.cc];
+}
+
+function applyRecipientDraft({ to = [], cc = [] } = {}) {
+  const directory = directoryCharacters();
+  state.recipients.to = constrainToCharacters(to, directory);
+  const toKeys = new Set(state.recipients.to.map((email) => email.toLowerCase()));
+  state.recipients.cc = constrainToCharacters(cc, directory).filter(
+    (email) => !toKeys.has(email.toLowerCase()),
+  );
+  renderRecipientPickers();
+}
+
+function addRecipient(field, email) {
+  const directory = directoryCharacters();
+  const other = field === 'to' ? 'cc' : 'to';
+  const canonical = constrainToCharacters([email], directory)[0];
+  if (!canonical) return;
+  state.recipients[other] = state.recipients[other].filter(
+    (value) => value.toLowerCase() !== canonical.toLowerCase(),
+  );
+  if (!state.recipients[field].some((value) => value.toLowerCase() === canonical.toLowerCase())) {
+    state.recipients[field] = [...state.recipients[field], canonical];
+  }
+  state.openRecipientField = availableCharacters(directory, { selected: selectedRecipientEmails() }).length
+    ? field
+    : null;
+  renderRecipientPickers();
+  scheduleDraftSave();
+  if (state.openRecipientField === field) {
+    pickerEls(field).menu?.querySelector('button')?.focus();
+  } else {
+    pickerEls(field).add?.focus();
+  }
+}
+
+function removeRecipient(field, email) {
+  const key = String(email || '').toLowerCase();
+  state.recipients[field] = state.recipients[field].filter((value) => value.toLowerCase() !== key);
+  renderRecipientPickers();
+  scheduleDraftSave();
+}
+
+function pickerEls(field) {
+  return field === 'cc'
+    ? { picker: els.composeCcPicker, chips: els.composeCcChips, add: els.composeCcAdd, menu: els.composeCcMenu }
+    : { picker: els.composeToPicker, chips: els.composeToChips, add: els.composeToAdd, menu: els.composeToMenu };
+}
+
+function closeRecipientMenus() {
+  state.openRecipientField = null;
+  renderRecipientPickers();
+}
+
+function renderRecipientChip(field, email) {
+  const character = characterByEmail(directoryCharacters(), email);
+  const chip = document.createElement('span');
+  chip.className = 'tag outline recipient-picker__chip';
+  chip.dataset.email = email;
+
+  const label = document.createElement('span');
+  label.textContent = characterLabel(character) || email;
+  chip.appendChild(label);
+
+  const remove = document.createElement('button');
+  remove.type = 'button';
+  remove.className = 'recipient-picker__remove';
+  remove.setAttribute('aria-label', `${t('Remove')} ${label.textContent}`);
+  remove.textContent = '×';
+  remove.addEventListener('click', (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    removeRecipient(field, email);
+  });
+  chip.appendChild(remove);
+  return chip;
+}
+
+function renderRecipientMenu(field) {
+  const { picker, add, menu } = pickerEls(field);
+  const directory = directoryCharacters();
+  const remaining = availableCharacters(directory, { selected: selectedRecipientEmails() });
+  const open = state.openRecipientField === field && remaining.length > 0;
+
+  if (picker) picker.classList.toggle('is-open', open);
+  if (add) {
+    add.hidden = remaining.length === 0;
+    add.disabled = remaining.length === 0;
+    add.setAttribute('aria-expanded', open ? 'true' : 'false');
+    add.textContent = t('Select a recipient');
+    if (remaining.length === 0) add.setAttribute('aria-label', t('No more people to add'));
+    else add.setAttribute('aria-label', t('Select a recipient'));
+  }
+  if (!menu) return;
+  menu.hidden = !open;
+  menu.innerHTML = '';
+  if (!open) return;
+
+  for (const character of remaining) {
+    const item = document.createElement('li');
+    item.setAttribute('role', 'presentation');
+    const option = document.createElement('button');
+    option.type = 'button';
+    option.className = 'recipient-picker__option';
+    option.setAttribute('role', 'option');
+    option.dataset.email = character.email;
+    const name = document.createElement('span');
+    name.className = 'recipient-picker__option-name';
+    name.textContent = characterLabel(character);
+    option.appendChild(name);
+    if (character.role) {
+      const meta = document.createElement('span');
+      meta.className = 'body-xsmall recipient-picker__option-meta';
+      meta.textContent = character.role;
+      option.appendChild(meta);
+    }
+    option.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      addRecipient(field, character.email);
+    });
+    item.appendChild(option);
+    menu.appendChild(item);
+  }
+}
+
+function renderRecipientPickers() {
+  for (const field of ['to', 'cc']) {
+    const { chips } = pickerEls(field);
+    if (chips) {
+      chips.innerHTML = '';
+      for (const email of state.recipients[field]) {
+        chips.appendChild(renderRecipientChip(field, email));
+      }
+    }
+    renderRecipientMenu(field);
+  }
+}
+
+function toggleRecipientMenu(field) {
+  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
+  if (!remaining.length) return;
+  state.openRecipientField = state.openRecipientField === field ? null : field;
+  renderRecipientPickers();
+  if (state.openRecipientField === field) {
+    pickerEls(field).menu?.querySelector('button')?.focus();
+  }
+}
+
+function initRecipientPickers() {
+  for (const field of ['to', 'cc']) {
+    const { picker, add } = pickerEls(field);
+    const open = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleRecipientMenu(field);
+    };
+    add?.addEventListener('click', open);
+    picker?.addEventListener('click', (event) => {
+      if (event.target.closest('.recipient-picker__remove, .recipient-picker__option')) return;
+      open(event);
+    });
+  }
+  document.addEventListener('click', (event) => {
+    if (!state.openRecipientField) return;
+    if (event.target.closest('.recipient-picker')) return;
+    closeRecipientMenus();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && state.openRecipientField) closeRecipientMenus();
+  });
 }
 
 function visibleThreads() {
@@ -384,14 +581,13 @@ function replyTargetEmail(thread) {
 
 function applyThreadComposer(threadId, mode = state.replying || 'reply') {
   const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
-  if (!thread || !els.composeTo) return;
+  if (!thread) return;
   const headers = buildReplyHeaders(replyTargetEmail(thread), {
     mode,
     learnerEmail: learnerEmail(),
     subjectFallback: thread.subject || '',
   });
-  els.composeTo.value = headers.to.join(', ');
-  els.composeCc.value = headers.cc.join(', ');
+  applyRecipientDraft(headers);
   els.composeSubject.value = headers.subject;
   scheduleDraftSave();
 }
@@ -434,15 +630,14 @@ function startCompose({ blank = true } = {}) {
   state.replying = null;
   state.activeThreadId = null;
   if (blank) {
-    els.composeTo.value = '';
-    els.composeCc.value = '';
+    applyRecipientDraft({ to: [], cc: [] });
     els.composeSubject.value = '';
     setEditorMarkdown('');
     clearAttachments();
   }
   scheduleDraftSave();
   renderShell();
-  els.composeTo?.focus();
+  els.composeToAdd?.focus();
 }
 
 function backToList() {
@@ -457,6 +652,8 @@ function applyScenarioChrome() {
   const title = state.config?.title || 'CosmoMail';
   document.title = title;
   if (els.appTitle) els.appTitle.textContent = title;
+  if (els.composeToLabel) els.composeToLabel.textContent = t('To');
+  if (els.composeCcLabel) els.composeCcLabel.textContent = t('Cc');
   if (els.assistantHint && state.config?.assistant?.initialMessage) {
     els.assistantHint.textContent = state.config.assistant.initialMessage;
   }
@@ -508,8 +705,8 @@ function computeInitialDraft() {
 
 function currentDraft() {
   return {
-    to: (els.composeTo.value || '').split(',').map((s) => s.trim()).filter(Boolean),
-    cc: (els.composeCc.value || '').split(',').map((s) => s.trim()).filter(Boolean),
+    to: [...state.recipients.to],
+    cc: [...state.recipients.cc],
     subject: els.composeSubject.value || '',
     body: getEditorMarkdown(),
     updated_at: new Date().toISOString(),
@@ -519,7 +716,7 @@ function currentDraft() {
 function updateSendEnabled() {
   const draft = currentDraft();
   const hasContent = draft.body.trim().length > 0 || draft.subject.trim().length > 0;
-  els.sendBtn.disabled = !hasContent;
+  els.sendBtn.disabled = !hasContent || draft.to.length === 0;
 }
 
 async function saveDraftNow() {
@@ -545,8 +742,7 @@ function scheduleDraftSave() {
 
 function initComposer() {
   const draft = computeInitialDraft();
-  els.composeTo.value = (draft.to || []).join(', ');
-  els.composeCc.value = (draft.cc || []).join(', ');
+  applyRecipientDraft(draft);
   els.composeSubject.value = draft.subject || '';
 
   if (els.composerPlaceholder) els.composerPlaceholder.remove();
@@ -559,9 +755,8 @@ function initComposer() {
     onUpdate: scheduleDraftSave,
   });
 
-  for (const input of [els.composeTo, els.composeCc, els.composeSubject]) {
-    input.addEventListener('input', scheduleDraftSave);
-  }
+  initRecipientPickers();
+  els.composeSubject.addEventListener('input', scheduleDraftSave);
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);

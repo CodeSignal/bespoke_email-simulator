@@ -70,14 +70,22 @@
 
       <section class="composer" id="composer" aria-label="Compose" hidden>
         <div class="composer__fields">
-          <label class="composer__field">
-            <span class="label-small composer__label">To</span>
-            <input type="text" class="input composer__input" id="composeTo" placeholder="recipient@example.com" />
-          </label>
-          <label class="composer__field">
-            <span class="label-small composer__label">Cc</span>
-            <input type="text" class="input composer__input" id="composeCc" placeholder="" />
-          </label>
+          <div class="composer__field">
+            <span class="label-small composer__label" id="composeToLabel">To</span>
+            <div class="recipient-picker" id="composeToPicker" data-field="to" role="group" aria-labelledby="composeToLabel">
+              <div class="recipient-picker__chips" id="composeToChips"></div>
+              <button type="button" class="recipient-picker__add body-small" id="composeToAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeToMenu">Select a recipient</button>
+              <ul class="recipient-picker__menu" id="composeToMenu" role="listbox" hidden></ul>
+            </div>
+          </div>
+          <div class="composer__field">
+            <span class="label-small composer__label" id="composeCcLabel">Cc</span>
+            <div class="recipient-picker" id="composeCcPicker" data-field="cc" role="group" aria-labelledby="composeCcLabel">
+              <div class="recipient-picker__chips" id="composeCcChips"></div>
+              <button type="button" class="recipient-picker__add body-small" id="composeCcAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeCcMenu">Select a recipient</button>
+              <ul class="recipient-picker__menu" id="composeCcMenu" role="listbox" hidden></ul>
+            </div>
+          </div>
           <label class="composer__field">
             <span class="label-small composer__label">Subject</span>
             <input type="text" class="input composer__input" id="composeSubject" placeholder="Subject" />

@@ -5,6 +5,15 @@
   "primarySkill": "both",
   "scenarioType": "reply_chain",
   "learner": { "displayName": "Support", "email": "support@brightgoods.com" },
+  "characters": [
+    {
+      "id": "marcus",
+      "name": "Marcus Bell",
+      "email": "marcus.bell@example.com",
+      "role": "Frustrated customer",
+      "prompt": "You are Marcus Bell, a customer who received a damaged espresso machine that was meant to be a gift. You start frustrated but become satisfied if the agent apologizes sincerely, takes ownership, and offers a concrete fix (fast replacement or refund). Push back if the reply is generic, slow, or dismissive. Keep replies short and realistic."
+    }
+  ],
   "seed": {
     "inbox": "fixtures/support-ticket.json",
     "activeThreadId": "thread-1",

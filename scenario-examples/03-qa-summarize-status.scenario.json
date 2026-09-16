@@ -5,6 +5,20 @@
   "primarySkill": "prompting",
   "scenarioType": "reply",
   "learner": { "displayName": "You", "email": "you@brightlabs.io" },
+  "characters": [
+    {
+      "id": "priya",
+      "name": "Priya Nair",
+      "email": "priya@brightlabs.io",
+      "role": "Engineering lead"
+    },
+    {
+      "id": "sam",
+      "name": "Sam Okafor",
+      "email": "sam@brightlabs.io",
+      "role": "Auth service owner"
+    }
+  ],
   "seed": {
     "inbox": "fixtures/project-status-thread.json",
     "activeThreadId": "thread-1",
