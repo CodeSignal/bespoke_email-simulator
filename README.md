@@ -100,8 +100,8 @@ string path to a fixture file relative to the project root.
 | `primarySkill` | `writing` \| `prompting` \| `both` | What the exercise assesses. |
 | `scenarioType` | `compose_new` \| `reply` \| `reply_chain` | Drives composer prefill. |
 | `learner` | `{ displayName, email }` | Who the learner is in the thread. |
-| `seed.inbox` | object \| string | Inline `{ threads }` or a fixture path. |
-| `seed.activeThreadId` | string | Thread opened on load. |
+| `seed.inbox` | object \| string | Inline `{ threads }` or a fixture path. Threads may set `"mailbox": "spam"` to land in Spam; otherwise they start in Inbox. Sent is filled automatically when the learner sends. |
+| `seed.activeThreadId` | string | Which mailbox to open on load (the folder that contains this thread). |
 | `seed.focusedEmailId` | string | Email the reply targets. |
 | `initialDraft` | `{ to, cc, subject, body }` | Optional composer prefill. |
 | `assistant.enabled` | boolean | When `false`, hide the Cosmo copilot panel. |

@@ -31,30 +31,44 @@
 
   <div class="mail-app" id="mailApp">
 
-    <!-- ── THREAD RAIL ── -->
-    <aside class="rail" id="threadRail" aria-label="Mailboxes">
+    <!-- ── MAILBOX RAIL (folders only) ── -->
+    <aside class="rail" id="threadRail" aria-label="Mailbox">
       <div class="rail__header">
         <span class="cmail-brand">
-          <span class="cmail-brand__mark" aria-hidden="true"></span>
-          <span class="body-small cmail-brand__name" id="appTitle">CosmoMail</span>
+          <span class="icon icon-cosmo-black icon-primary cmail-brand__icon" aria-hidden="true"></span>
+          <span class="heading-xxxsmall cmail-brand__name" id="appTitle">CosmoMail</span>
         </span>
       </div>
-      <nav class="rail__threads" id="threadList" aria-label="Threads">
-        <!-- thread items rendered here -->
-        <p class="body-xsmall rail__empty" id="threadListEmpty">No threads yet.</p>
-      </nav>
+      <div class="rail__compose">
+        <button type="button" class="button button-primary rail__compose-btn" id="composeBtn">
+          <svg class="rail__compose-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M2 12.5V14h1.5L12 5.5 10.5 4 2 12.5Z"/>
+            <path d="M9.5 3 13 6.5"/>
+          </svg>
+          <span id="composeBtnLabel">Compose</span>
+        </button>
+      </div>
+      <nav class="rail__mailboxes" id="mailboxList" aria-label="Folders"></nav>
     </aside>
 
-    <!-- ── MAIN: reading pane + composer ── -->
-    <main class="mail-main">
-      <section class="reading-pane" id="readingPane" aria-label="Conversation" aria-live="polite">
-        <div class="reading-pane__empty" id="readingEmpty">
-          <span class="cmail-brand__mark cmail-brand__mark--lg" aria-hidden="true"></span>
-          <p class="body-medium">Select a thread to get started.</p>
-        </div>
+    <!-- ── MAIN: list, or a conversation / compose that takes it over ── -->
+    <main class="mail-main" id="mailMain">
+      <header class="mail-toolbar" id="mailToolbar">
+        <button type="button" class="button button-text button-small mail-toolbar__back" id="backBtn" hidden aria-label="Back to mail list">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+            <path d="M10 3 5 8l5 5"/>
+          </svg>
+        </button>
+        <h1 class="heading-xxxsmall mail-toolbar__title" id="mailToolbarTitle">Inbox</h1>
+      </header>
+
+      <section class="mail-list" id="mailList" aria-label="Mail">
+        <div class="mail-list__rows" id="threadList"></div>
       </section>
 
-      <section class="composer" id="composer" aria-label="Compose">
+      <section class="reading-pane" id="readingPane" aria-label="Conversation" aria-live="polite" hidden></section>
+
+      <section class="composer" id="composer" aria-label="Compose" hidden>
         <div class="composer__fields">
           <label class="composer__field">
             <span class="label-small composer__label">To</span>
@@ -85,8 +99,8 @@
     <!-- ── ASSISTANT PANEL ── -->
     <aside class="assistant" id="assistantPanel" aria-label="AI assistant">
       <div class="assistant__header">
-        <span class="cmail-brand__mark cmail-brand__mark--sm" aria-hidden="true"></span>
-        <span class="body-small assistant__title">Cosmo</span>
+        <span class="icon icon-cosmo-black icon-primary icon-small" aria-hidden="true"></span>
+        <span class="heading-xxxsmall assistant__title">Cosmo</span>
       </div>
       <div class="assistant__messages" id="assistantMessages" role="log" aria-live="polite">
         <p class="body-xsmall assistant__hint" id="assistantHint">Ask Cosmo to help draft, summarize, or answer questions about this thread.</p>

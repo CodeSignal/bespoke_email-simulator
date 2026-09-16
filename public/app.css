@@ -8,7 +8,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--Colors-Backgrounds-Main-Dark);
+  background: var(--Colors-Backgrounds-Main-Default);
   color: var(--Colors-Text-Body-Default);
   font-family: 'Work Sans', system-ui, sans-serif;
 }
@@ -19,35 +19,38 @@ body {
   margin: var(--UI-Spacing-spacing-m);
   padding: var(--UI-Spacing-spacing-m);
   border-radius: var(--UI-Radius-radius-m);
-  background: var(--Colors-Base-Danger-700, #b00020);
-  color: #fff;
+  background: var(--Colors-Alert-Error-Default);
+  color: var(--Colors-Text-Body-White);
   z-index: 1000;
+}
+
+[hidden] {
+  display: none !important;
 }
 
 /* ── App shell: 3-column layout (2-column when Cosmo is disabled) ── */
 .mail-app {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr) 340px;
+  grid-template-columns: 220px minmax(0, 1fr) 340px;
   height: 100vh;
   overflow: hidden;
 }
 
 .mail-app:has(#assistantPanel[hidden]) {
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: 220px minmax(0, 1fr);
 }
 
-/* ── Thread rail ── */
+/* ── Mailbox rail (Gmail-style folder nav) ── */
 .rail {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--Colors-Backgrounds-Main-Darker);
-  border-right: 1px solid var(--Colors-Stroke-Light);
+  background: var(--Colors-Backgrounds-Main-Light);
+  border-right: 1px solid var(--Colors-Stroke-Default);
 }
 
 .rail__header {
   padding: var(--UI-Spacing-spacing-m);
-  border-bottom: 1px solid var(--Colors-Stroke-Light);
 }
 
 .cmail-brand {
@@ -57,69 +60,91 @@ body {
 }
 
 .cmail-brand__name {
-  font-weight: 600;
   color: var(--Colors-Text-Body-Strong);
 }
 
-.cmail-brand__mark {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--Colors-Base-Primary-600, #6366f1), var(--Colors-Base-Primary-900, #4338ca));
+.rail__compose {
+  padding: 0 var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
+}
+
+.rail__compose-btn {
+  width: 100%;
+  border-radius: var(--UI-Radius-radius-l);
+}
+
+.rail__compose-icon {
+  width: 16px;
+  height: 16px;
   flex: 0 0 auto;
 }
 
-.cmail-brand__mark--sm {
-  width: 16px;
-  height: 16px;
-}
-
-.cmail-brand__mark--lg {
-  width: 40px;
-  height: 40px;
-}
-
-.rail__threads {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding: var(--UI-Spacing-spacing-xs);
+.rail__mailboxes {
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-xxs);
+  padding: 0 0 var(--UI-Spacing-spacing-s);
 }
 
-.rail__empty,
-.rail__thread-preview {
-  color: var(--Colors-Text-Body-Light);
-}
-
-.rail__thread {
-  width: 100%;
+.rail__mailbox {
+  width: auto;
+  font: inherit;
   text-align: left;
-  padding: var(--UI-Spacing-spacing-s);
-  border-radius: var(--UI-Radius-radius-s);
-  border: 1px solid transparent;
+  margin-right: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m);
+  border-radius: 0 var(--UI-Radius-radius-l) var(--UI-Radius-radius-l) 0;
+  border: none;
   background: transparent;
   color: inherit;
   cursor: pointer;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
 }
 
-.rail__thread:hover {
+.rail__mailbox:hover {
   background: var(--Colors-Backgrounds-Main-Medium);
 }
 
-.rail__thread.is-active {
+.rail__mailbox.is-active {
   background: var(--Colors-Backgrounds-Main-Medium);
-  border-color: var(--Colors-Stroke-Primary);
-}
-
-.rail__thread-subject {
-  font-weight: 600;
   color: var(--Colors-Text-Body-Strong);
+}
+
+.rail__mailbox.is-active .rail__mailbox-label {
+  font-weight: 700;
+}
+
+.rail__mailbox-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.rail__mailbox.is-active .rail__mailbox-icon {
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.rail__mailbox-icon svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.rail__mailbox-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.rail__mailbox-count {
+  flex: 0 0 auto;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.rail__mailbox.is-active .rail__mailbox-count {
+  color: var(--Colors-Text-Body-Strong);
+  font-weight: 700;
 }
 
 /* ── Main column ── */
@@ -129,6 +154,140 @@ body {
   min-height: 0;
   min-width: 0;
   background: var(--Colors-Backgrounds-Main-Default);
+}
+
+.mail-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+  min-height: var(--UI-Input-md);
+  padding: 0 var(--UI-Spacing-spacing-ms);
+  border-bottom: 1px solid var(--Colors-Stroke-Default);
+  background: var(--Colors-Backgrounds-Main-Default);
+  flex: 0 0 auto;
+}
+
+.mail-toolbar__back {
+  padding: 0 var(--UI-Spacing-spacing-xs);
+  min-width: var(--UI-Input-sm);
+}
+
+.mail-toolbar__back svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+}
+
+.mail-toolbar__title {
+  margin: 0;
+  color: var(--Colors-Text-Body-Strong);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Conversation list (Gmail-style rows) ── */
+.mail-list {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mail-list__rows {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.mail-row {
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  display: grid;
+  grid-template-columns: minmax(112px, 200px) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-m);
+  padding: var(--UI-Spacing-spacing-mxs) var(--UI-Spacing-spacing-ml);
+  border: none;
+  border-bottom: 1px solid var(--Colors-Stroke-Light);
+  background: var(--Colors-Backgrounds-Main-Top);
+  color: inherit;
+  cursor: pointer;
+}
+
+.mail-row:hover {
+  background: var(--Colors-Backgrounds-Main-Medium);
+}
+
+.mail-row__from,
+.mail-row__main,
+.mail-row__date {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.mail-row__from {
+  color: var(--Colors-Text-Body-Strong);
+  font-weight: 600;
+}
+
+.mail-row__main {
+  display: flex;
+  align-items: baseline;
+  gap: var(--UI-Spacing-spacing-xs);
+  min-width: 0;
+}
+
+.mail-row__subject {
+  color: var(--Colors-Text-Body-Strong);
+  flex: 0 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mail-row__snippet {
+  color: var(--Colors-Text-Body-Light);
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mail-row__date {
+  color: var(--Colors-Text-Body-Light);
+  text-align: right;
+}
+
+.mail-list__empty {
+  flex: 1 1 auto;
+  align-self: stretch;
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  text-align: center;
+  color: var(--Colors-Text-Body-Light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-xl);
+}
+
+.mail-list__empty-title {
+  color: var(--Colors-Text-Body-Medium);
+  margin: 0;
+}
+
+.mail-list__empty-body {
+  margin: 0;
+  max-width: 28rem;
+  text-wrap: pretty;
 }
 
 .reading-pane {
@@ -141,22 +300,11 @@ body {
   gap: var(--UI-Spacing-spacing-m);
 }
 
-.reading-pane__empty {
-  margin: auto;
-  text-align: center;
-  color: var(--Colors-Text-Body-Light);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-s);
-}
-
-/* Email cards */
-.email {
-  border: 1px solid var(--Colors-Stroke-Light);
-  border-radius: var(--UI-Radius-radius-m);
-  background: var(--Colors-Backgrounds-Main-Top);
-  padding: var(--UI-Spacing-spacing-m);
+/* Email cards — built on the design-system .box component */
+.email.box {
+  display: block;
+  padding: var(--UI-Spacing-spacing-ms);
+  text-align: left;
 }
 
 .email__meta {
@@ -165,11 +313,10 @@ body {
   gap: var(--UI-Spacing-spacing-s);
   margin-bottom: var(--UI-Spacing-spacing-s);
   padding-bottom: var(--UI-Spacing-spacing-s);
-  border-bottom: 1px solid var(--Colors-Stroke-Lighter);
+  border-bottom: 1px solid var(--Colors-Stroke-Light);
 }
 
 .email__from {
-  font-weight: 600;
   color: var(--Colors-Text-Body-Strong);
 }
 
@@ -188,18 +335,34 @@ body {
   margin-top: 0;
 }
 
-.email--outbound {
-  border-color: var(--Colors-Stroke-Primary-Light);
+/* Outbound (learner) emails get a subtle primary accent that survives the
+   .box.non-interactive hover reset. */
+.email--outbound.box,
+.email--outbound.box:hover {
+  box-shadow:
+    inset 3px 0 0 0 var(--Colors-Stroke-Primary-Light),
+    0 3px 2px 0 var(--Colors-Shadow-Card);
 }
 
 /* ── Composer ── */
 .composer {
-  border-top: 1px solid var(--Colors-Stroke-Light);
+  border-top: 1px solid var(--Colors-Stroke-Default);
   padding: var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-ml);
   background: var(--Colors-Backgrounds-Main-Default);
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-s);
+}
+
+.mail-main.is-composing .composer {
+  flex: 1 1 auto;
+  min-height: 0;
+  border-top: none;
+}
+
+.mail-main.is-composing .composer__body {
+  flex: 1 1 auto;
+  min-height: 160px;
 }
 
 .composer__fields {
@@ -226,7 +389,7 @@ body {
 
 .composer__body {
   min-height: 96px;
-  border: 1px solid var(--Colors-Stroke-Light);
+  border: 1px solid var(--Colors-Stroke-Default);
   border-radius: var(--UI-Radius-radius-s);
   background: var(--Colors-Backgrounds-Main-Top);
   padding: var(--UI-Spacing-spacing-s);
@@ -261,13 +424,13 @@ body {
 }
 
 .composer__attachment-remove {
+  display: inline-flex;
+  align-items: center;
   background: none;
   border: none;
   color: inherit;
   cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  padding: 0 2px;
+  padding: 0;
 }
 
 .email__attachments {
@@ -276,7 +439,7 @@ body {
   gap: var(--UI-Spacing-spacing-xs);
   margin-top: var(--UI-Spacing-spacing-s);
   padding-top: var(--UI-Spacing-spacing-s);
-  border-top: 1px solid var(--Colors-Stroke-Lighter);
+  border-top: 1px solid var(--Colors-Stroke-Light);
 }
 
 /* ── Assistant panel ── */
@@ -284,8 +447,8 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--Colors-Backgrounds-Main-Darker);
-  border-left: 1px solid var(--Colors-Stroke-Light);
+  background: var(--Colors-Backgrounds-Main-Light);
+  border-left: 1px solid var(--Colors-Stroke-Default);
 }
 
 .assistant[hidden] {
@@ -297,11 +460,10 @@ body {
   align-items: center;
   gap: var(--UI-Spacing-spacing-xs);
   padding: var(--UI-Spacing-spacing-m);
-  border-bottom: 1px solid var(--Colors-Stroke-Light);
+  border-bottom: 1px solid var(--Colors-Stroke-Default);
 }
 
 .assistant__title {
-  font-weight: 600;
   color: var(--Colors-Text-Body-Strong);
 }
 
@@ -312,34 +474,53 @@ body {
   padding: var(--UI-Spacing-spacing-m);
   display: flex;
   flex-direction: column;
-  gap: var(--UI-Spacing-spacing-s);
+  gap: var(--UI-Spacing-spacing-m);
 }
 
 .assistant__hint {
   color: var(--Colors-Text-Body-Light);
 }
 
+/* Message row: avatar + bubble (mirrors the ChatCPT layout) */
+.assistant__row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--UI-Spacing-spacing-xs);
+  max-width: 100%;
+}
+
+.assistant__row--user {
+  justify-content: flex-end;
+}
+
+.assistant__avatar {
+  margin-top: var(--UI-Spacing-spacing-min);
+}
+
 .assistant__msg {
-  padding: var(--UI-Spacing-spacing-s);
-  border-radius: var(--UI-Radius-radius-s);
   line-height: 1.5;
 }
 
 .assistant__msg--user {
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
+  border-radius: var(--UI-Radius-radius-ml);
   background: var(--Colors-Backgrounds-Main-Medium);
   color: var(--Colors-Text-Body-Strong);
-  align-self: flex-end;
-  max-width: 90%;
+  max-width: 85%;
 }
 
-.assistant__msg--ai {
-  background: var(--Colors-Backgrounds-Main-Top);
-  border: 1px solid var(--Colors-Stroke-Lighter);
+/* AI message — built on the design-system .box component */
+.assistant__msg--ai.box {
+  display: block;
+  text-align: left;
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
+  border-radius: var(--UI-Radius-radius-m);
+  max-width: 85%;
 }
 
 .assistant__composer {
   padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
-  border-top: 1px solid var(--Colors-Stroke-Light);
+  border-top: 1px solid var(--Colors-Stroke-Default);
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-s);

@@ -10,6 +10,21 @@
     "Ask Cosmo...": "Ask Cosmo...",
     "Ask Cosmo to help draft, summarize, or answer questions about this thread.": "Ask Cosmo to help draft, summarize, or answer questions about this thread.",
     "Select a thread to get started.": "Select a thread to get started.",
-    "No threads yet.": "No threads yet."
+    "No threads yet.": "No threads yet.",
+    "Compose": "Compose",
+    "Inbox": "Inbox",
+    "Sent": "Sent",
+    "Spam": "Spam",
+    "Inbox is empty.": "Inbox is empty.",
+    "Inbox Zero": "Inbox Zero",
+    "You're all caught up. No new mail.": "You're all caught up. No new mail.",
+    "No sent messages.": "No sent messages.",
+    "No sent messages": "No sent messages",
+    "Messages you send will appear here.": "Messages you send will appear here.",
+    "No spam.": "No spam.",
+    "Hooray, no spam here!": "Hooray, no spam here!",
+    "Messages that look like spam will show up in this folder.": "Messages that look like spam will show up in this folder.",
+    "New message": "New message",
+    "Back to list": "Back to list"
   }
 }

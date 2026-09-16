@@ -10,6 +10,12 @@ import { OctavusChat, createHttpTransport } from '@octavus/client-sdk';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
+import {
+  MAILBOXES,
+  mailboxCounts,
+  mailboxForThread,
+  threadsInMailbox,
+} from '../lib/mailboxes.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -44,7 +50,10 @@ const state = {
   config: null,
   scenario: null,
   session: null,
+  activeMailbox: 'inbox',
   activeThreadId: null,
+  view: 'list', // list | thread | compose
+  composingNew: false,
   editor: null,
   draftSaveTimer: null,
   assistant: {
@@ -64,10 +73,16 @@ const state = {
 const els = {
   bootError: document.getElementById('bootError'),
   appTitle: document.getElementById('appTitle'),
+  composeBtn: document.getElementById('composeBtn'),
+  composeBtnLabel: document.getElementById('composeBtnLabel'),
+  mailboxList: document.getElementById('mailboxList'),
+  mailMain: document.getElementById('mailMain'),
+  mailList: document.getElementById('mailList'),
   threadList: document.getElementById('threadList'),
-  threadListEmpty: document.getElementById('threadListEmpty'),
+  mailToolbarTitle: document.getElementById('mailToolbarTitle'),
+  backBtn: document.getElementById('backBtn'),
   readingPane: document.getElementById('readingPane'),
-  readingEmpty: document.getElementById('readingEmpty'),
+  composer: document.getElementById('composer'),
   assistantHint: document.getElementById('assistantHint'),
   composeTo: document.getElementById('composeTo'),
   composeCc: document.getElementById('composeCc'),
@@ -128,33 +143,160 @@ function formatDate(iso) {
   });
 }
 
-function threadPreview(thread) {
+function formatListDate(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const now = new Date();
+  if (d.toDateString() === now.toDateString()) {
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  }
+  if (d.getFullYear() === now.getFullYear()) {
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function threadSnippet(thread) {
   const last = thread.emails?.[thread.emails.length - 1];
-  const from = last ? formatAddress(last.from) : '';
-  return from;
+  return String(last?.body ?? '')
+    .replace(/[#*_`>[\]()]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function displayName(addr) {
+  if (!addr) return '';
+  if (typeof addr === 'string') return addr;
+  return addr.name || addr.email || '';
+}
+
+function threadListFrom(thread, mailbox) {
+  const last = thread.emails?.[thread.emails.length - 1];
+  if (mailbox === 'sent') {
+    const to = Array.isArray(last?.to) ? last.to[0] : last?.to;
+    const name = displayName(to);
+    return name ? `${t('To')}: ${name}` : t('To');
+  }
+  return displayName(last?.from) || formatAddress(last?.from);
+}
+
+function learnerEmail() {
+  return state.config?.learner?.email || '';
+}
+
+function visibleThreads() {
+  return threadsInMailbox(state.session?.threads ?? [], state.activeMailbox, learnerEmail());
+}
+
+function mailboxLabel(mailbox) {
+  const box = MAILBOXES.find((m) => m.id === mailbox);
+  return t(box?.label || 'Inbox');
+}
+
+function emptyMailboxCopy(mailbox) {
+  if (mailbox === 'sent') {
+    return { title: t('No sent messages'), body: t('Messages you send will appear here.') };
+  }
+  if (mailbox === 'spam') {
+    return { title: t('Hooray, no spam here!'), body: t('Messages that look like spam will show up in this folder.') };
+  }
+  return { title: t('Inbox Zero'), body: t("You're all caught up. No new mail.") };
+}
+
+const MAILBOX_ICONS = {
+  inbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 9.5 4.2 4h7.6L14 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9.5Z"/><path d="M2 9.5h3l.8 1.5h4.4l.8-1.5H14"/></svg>',
+  sent: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M14 2 7 9M14 2 9.2 14 7 9 2 6.8 14 2Z"/></svg>',
+  spam: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="5.25"/><path d="m4.4 11.6 7.2-7.2"/></svg>',
+};
+
+function renderShell() {
+  renderMailboxes();
+  applyView();
+  if (state.view === 'list') renderMailList();
+  else if (state.view === 'thread') renderThread(state.activeThreadId);
+}
+
+function applyView() {
+  const view = state.view;
+  const isList = view === 'list';
+  const isThread = view === 'thread';
+  const isCompose = view === 'compose';
+
+  if (els.mailList) els.mailList.hidden = !isList;
+  if (els.readingPane) els.readingPane.hidden = !isThread;
+  if (els.composer) els.composer.hidden = isList;
+  if (els.backBtn) {
+    els.backBtn.hidden = isList;
+    els.backBtn.setAttribute('aria-label', t('Back to list'));
+  }
+  if (els.mailMain) els.mailMain.classList.toggle('is-composing', isCompose);
+
+  if (els.mailToolbarTitle) {
+    if (isCompose) els.mailToolbarTitle.textContent = t('New message');
+    else if (isThread) {
+      const thread = (state.session?.threads ?? []).find((th) => th.id === state.activeThreadId);
+      els.mailToolbarTitle.textContent = thread?.subject || t('Inbox');
+    } else {
+      els.mailToolbarTitle.textContent = mailboxLabel(state.activeMailbox);
+    }
+  }
 }
 
 // ── Rendering ─────────────────────────────────────────────────
-function renderThreadRail() {
-  const threads = state.session?.threads ?? [];
-  els.threadList.querySelectorAll('.rail__thread').forEach((n) => n.remove());
-
-  if (!threads.length) {
-    els.threadListEmpty.hidden = false;
-    els.threadListEmpty.textContent = t('No threads yet.');
-    return;
-  }
-  els.threadListEmpty.hidden = true;
-
-  for (const thread of threads) {
+function renderMailboxes() {
+  if (!els.mailboxList) return;
+  const counts = mailboxCounts(state.session?.threads ?? [], learnerEmail());
+  els.mailboxList.innerHTML = '';
+  for (const box of MAILBOXES) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'rail__thread' + (thread.id === state.activeThreadId ? ' is-active' : '');
+    btn.className = 'rail__mailbox' + (box.id === state.activeMailbox ? ' is-active' : '');
+    btn.dataset.mailbox = box.id;
+    if (box.id === state.activeMailbox) btn.setAttribute('aria-current', 'true');
+    const count = counts[box.id] ?? 0;
+    btn.innerHTML = `
+      <span class="rail__mailbox-icon">${MAILBOX_ICONS[box.id] || ''}</span>
+      <span class="body-small rail__mailbox-label">${escapeHtml(t(box.label))}</span>
+      <span class="body-xsmall rail__mailbox-count">${count ? escapeHtml(String(count)) : ''}</span>
+    `;
+    btn.addEventListener('click', () => selectMailbox(box.id));
+    els.mailboxList.appendChild(btn);
+  }
+  if (els.composeBtnLabel) els.composeBtnLabel.textContent = t('Compose');
+}
+
+function renderMailList() {
+  const threads = visibleThreads();
+  els.threadList.innerHTML = '';
+
+  if (!threads.length) {
+    const copy = emptyMailboxCopy(state.activeMailbox);
+    const empty = document.createElement('div');
+    empty.className = 'mail-list__empty';
+    empty.innerHTML = `
+      <span class="icon icon-cosmo-black icon-xlarge icon-secondary" aria-hidden="true"></span>
+      <p class="heading-small mail-list__empty-title">${escapeHtml(copy.title)}</p>
+      <p class="body-small mail-list__empty-body">${escapeHtml(copy.body)}</p>
+    `;
+    els.threadList.appendChild(empty);
+    return;
+  }
+
+  for (const thread of threads) {
+    const last = thread.emails?.[thread.emails.length - 1];
+    const snippet = threadSnippet(thread);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mail-row';
     btn.dataset.threadId = thread.id;
     btn.innerHTML = `
-      <span class="body-small rail__thread-subject">${escapeHtml(thread.subject || '(no subject)')}</span>
-      <span class="body-xsmall rail__thread-preview">${escapeHtml(threadPreview(thread))}</span>
-      <span class="body-xxsmall rail__thread-preview">${thread.emails?.length ?? 0} message(s)</span>
+      <span class="body-small mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
+      <span class="mail-row__main">
+        <span class="body-small mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
+        ${snippet ? `<span class="body-xsmall mail-row__snippet"> – ${escapeHtml(snippet)}</span>` : ''}
+      </span>
+      <span class="body-xsmall mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
     `;
     btn.addEventListener('click', () => selectThread(thread.id));
     els.threadList.appendChild(btn);
@@ -166,7 +308,7 @@ function renderEmail(email, learnerEmail) {
     email.outbound === true ||
     (learnerEmail && formatAddress(email.from).includes(learnerEmail));
   const wrap = document.createElement('article');
-  wrap.className = 'email' + (isOutbound ? ' email--outbound' : '');
+  wrap.className = 'email box card non-interactive' + (isOutbound ? ' email--outbound' : '');
   const toLine = formatAddressList(email.to);
   const ccLine = email.cc && email.cc.length ? `<div class="body-xsmall email__to">Cc: ${escapeHtml(formatAddressList(email.cc))}</div>` : '';
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
@@ -178,7 +320,7 @@ function renderEmail(email, learnerEmail) {
   wrap.innerHTML = `
     <div class="email__meta">
       <div>
-        <div class="body-small email__from">${escapeHtml(formatAddress(email.from))}</div>
+        <div class="heading-xxxsmall email__from">${escapeHtml(formatAddress(email.from))}</div>
         <div class="body-xsmall email__to">To: ${escapeHtml(toLine)}</div>
         ${ccLine}
       </div>
@@ -192,26 +334,85 @@ function renderEmail(email, learnerEmail) {
 
 function renderThread(threadId) {
   const threads = state.session?.threads ?? [];
-  const thread = threads.find((th) => th.id === threadId) ?? threads[0];
-  const learnerEmail = state.config?.learner?.email;
+  const thread = threads.find((th) => th.id === threadId);
+  const learnerAddr = learnerEmail();
 
   els.readingPane.innerHTML = '';
   if (!thread) {
-    const empty = document.createElement('div');
-    empty.className = 'reading-pane__empty';
-    empty.innerHTML = `<p class="body-medium">${escapeHtml(t('Select a thread to get started.'))}</p>`;
-    els.readingPane.appendChild(empty);
+    backToList();
     return;
   }
   for (const email of thread.emails ?? []) {
-    els.readingPane.appendChild(renderEmail(email, learnerEmail));
+    els.readingPane.appendChild(renderEmail(email, learnerAddr));
   }
 }
 
+function replyHeadersForThread(thread) {
+  const emails = thread?.emails ?? [];
+  const focusedId = state.scenario?.focusedEmailId;
+  const focused = emails.find((e) => e.id === focusedId) ?? emails[emails.length - 1];
+  const subj = focused?.subject || thread?.subject || '';
+  const subject = !subj ? '' : /^re:/i.test(subj) ? subj : `Re: ${subj}`;
+  if (!focused) return { to: [], cc: [], subject };
+
+  const fromAddr = typeof focused.from === 'string' ? focused.from : focused.from?.email;
+  const outbound = focused.outbound === true
+    || (learnerEmail() && fromAddr && fromAddr.toLowerCase() === learnerEmail().toLowerCase());
+  const to = outbound
+    ? (Array.isArray(focused.to) ? focused.to : [focused.to])
+        .map((addr) => (typeof addr === 'string' ? addr : addr?.email))
+        .filter(Boolean)
+    : [fromAddr].filter(Boolean);
+  return { to, cc: [], subject };
+}
+
+function applyThreadComposer(threadId) {
+  const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
+  if (!thread || !els.composeTo) return;
+  const headers = replyHeadersForThread(thread);
+  els.composeTo.value = headers.to.join(', ');
+  els.composeCc.value = headers.cc.join(', ');
+  els.composeSubject.value = headers.subject;
+  scheduleDraftSave();
+}
+
+function selectMailbox(mailbox) {
+  state.activeMailbox = mailbox;
+  state.view = 'list';
+  state.composingNew = false;
+  state.activeThreadId = null;
+  renderShell();
+}
+
 function selectThread(threadId) {
+  state.view = 'thread';
+  state.composingNew = false;
   state.activeThreadId = threadId;
-  renderThreadRail();
-  renderThread(threadId);
+  applyThreadComposer(threadId);
+  renderShell();
+}
+
+function startCompose({ blank = true } = {}) {
+  state.view = 'compose';
+  state.composingNew = true;
+  state.activeThreadId = null;
+  if (blank) {
+    els.composeTo.value = '';
+    els.composeCc.value = '';
+    els.composeSubject.value = '';
+    setEditorMarkdown('');
+    clearAttachments();
+  }
+  scheduleDraftSave();
+  renderShell();
+  els.composeTo?.focus();
+}
+
+function backToList() {
+  state.view = 'list';
+  state.composingNew = false;
+  state.activeThreadId = null;
+  renderShell();
 }
 
 function applyScenarioChrome() {
@@ -324,6 +525,8 @@ function initComposer() {
     input.addEventListener('input', scheduleDraftSave);
   }
   els.sendBtn.addEventListener('click', sendEmail);
+  els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
+  els.backBtn?.addEventListener('click', backToList);
   updateSendEnabled();
 }
 
@@ -354,7 +557,7 @@ function renderAttachmentPreview() {
     remove.type = 'button';
     remove.className = 'composer__attachment-remove';
     remove.setAttribute('aria-label', `Remove ${item.file.name}`);
-    remove.textContent = '×';
+    remove.innerHTML = '<span class="icon icon-trash icon-small" aria-hidden="true"></span>';
     remove.addEventListener('click', () => {
       state.attachments.splice(idx, 1);
       renderAttachmentPreview();
@@ -435,10 +638,10 @@ function replaceThread(thread) {
 
 function appendPendingRecipientEmail() {
   const article = document.createElement('article');
-  article.className = 'email';
+  article.className = 'email box card non-interactive';
   article.innerHTML = `
     <div class="email__meta">
-      <div><div class="body-small email__from">Awaiting reply…</div></div>
+      <div><div class="heading-xxxsmall email__from">Awaiting reply…</div></div>
     </div>
     <div class="email__body"><span class="assistant__typing">…</span></div>
   `;
@@ -455,12 +658,13 @@ async function sendEmail() {
   els.sendBtn.disabled = true;
   els.sendBtn.textContent = 'Sending…';
   try {
+    const composingNew = state.composingNew || !state.activeThreadId;
     const res = await fetch('/api/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         sessionId: state.session.sessionId,
-        threadId: state.activeThreadId,
+        threadId: composingNew ? null : state.activeThreadId,
         to: draft.to,
         cc: draft.cc,
         subject: draft.subject,
@@ -472,12 +676,15 @@ async function sendEmail() {
     const { email, thread, recipient } = await res.json();
 
     replaceThread(thread);
+    state.composingNew = false;
+    state.view = 'thread';
     state.activeThreadId = thread.id;
+    state.activeMailbox = mailboxForThread(thread, learnerEmail());
     state.session.drafts = [];
     setEditorMarkdown('');
     clearAttachments();
-    renderThreadRail();
-    renderThread(state.activeThreadId);
+    applyThreadComposer(thread.id);
+    renderShell();
 
     if (recipient?.allowed) {
       await runRecipientReply(email.body, thread.id, recipient.behavior);
@@ -499,8 +706,7 @@ async function finalizeRecipient(threadId, replyText) {
   if (!res.ok) return;
   const { thread } = await res.json();
   replaceThread(thread);
-  renderThreadRail();
-  renderThread(state.activeThreadId);
+  renderShell();
 }
 
 async function runRecipientReply(sentBody, threadId, behavior) {
@@ -610,10 +816,24 @@ function extractLastCodeBlock(md) {
 }
 
 function makeBubble(role, contentHtml) {
-  const div = document.createElement('div');
-  div.className = `assistant__msg assistant__msg--${role === 'user' ? 'user' : 'ai'}`;
-  div.innerHTML = contentHtml;
-  return div;
+  const isUser = role === 'user';
+  const row = document.createElement('div');
+  row.className = `assistant__row assistant__row--${isUser ? 'user' : 'ai'}`;
+
+  if (!isUser) {
+    const avatar = document.createElement('span');
+    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    row.appendChild(avatar);
+  }
+
+  const bubble = document.createElement('div');
+  bubble.className = isUser
+    ? 'assistant__msg assistant__msg--user'
+    : 'assistant__msg assistant__msg--ai box non-interactive';
+  bubble.innerHTML = contentHtml;
+  row.appendChild(bubble);
+  return row;
 }
 
 function renderAssistant(liveMessages = []) {
@@ -644,7 +864,7 @@ function renderAssistant(liveMessages = []) {
       container.appendChild(makeBubble('user', escapeHtml(text)));
     } else if (m.role === 'assistant') {
       const text = (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('');
-      const bubble = makeBubble('ai', renderMarkdown(text) || '<span class="assistant__typing">…</span>');
+      const row = makeBubble('ai', renderMarkdown(text) || '<span class="assistant__typing">…</span>');
       // Offer an "insert into composer" action when the reply contains an email.
       const code = extractLastCodeBlock(text);
       if (code && m.status !== 'streaming') {
@@ -653,9 +873,9 @@ function renderAssistant(liveMessages = []) {
         btn.className = 'button button-text-primary button-xsmall assistant__insert';
         btn.textContent = 'Insert into composer';
         btn.addEventListener('click', () => insertIntoComposer(code));
-        bubble.appendChild(btn);
+        row.querySelector('.assistant__msg').appendChild(btn);
       }
-      container.appendChild(bubble);
+      container.appendChild(row);
     }
   }
 
@@ -665,6 +885,7 @@ function renderAssistant(liveMessages = []) {
 function insertIntoComposer(markdown) {
   setEditorMarkdown(markdown);
   scheduleDraftSave();
+  if (state.view === 'list') startCompose({ blank: false });
   els.composerBody.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -796,16 +1017,21 @@ async function boot() {
     state.scenario = await scenarioRes.json();
     state.session = await sessionRes.json();
 
-    state.activeThreadId =
-      state.scenario.activeThreadId ||
-      state.session.threads?.[0]?.id ||
-      null;
+    const threads = state.session.threads ?? [];
+    const seeded = threads.find((th) => th.id === state.scenario.activeThreadId) ?? threads[0];
+    state.activeMailbox = seeded ? mailboxForThread(seeded, learnerEmail()) : 'inbox';
+    state.activeThreadId = null;
+    state.composingNew = false;
+    state.view = 'list';
 
     applyScenarioChrome();
-    renderThreadRail();
-    renderThread(state.activeThreadId);
     initComposer();
     initAttachments();
+    if (state.config?.scenarioType === 'compose_new') {
+      startCompose({ blank: false });
+    } else {
+      renderShell();
+    }
     await initAssistant();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);
