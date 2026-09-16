@@ -10,13 +10,15 @@
       "id": "priya",
       "name": "Priya Nair",
       "email": "priya@brightlabs.io",
-      "role": "Engineering lead"
+      "role": "Engineering lead",
+      "avatar": 12
     },
     {
       "id": "sam",
       "name": "Sam Okafor",
       "email": "sam@brightlabs.io",
-      "role": "Auth service owner"
+      "role": "Auth service owner",
+      "avatar": 2
     }
   ],
   "seed": {

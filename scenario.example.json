@@ -12,6 +12,7 @@
       "name": "Dana Reyes",
       "email": "dana@acme-vendor.com",
       "role": "Vendor account manager",
+      "avatar": 5,
       "prompt": "You are Dana Reyes, a friendly but firm account manager at Acme. Defend your pricing, but you can concede up to a 15% discount in exchange for a 24-month term. Stay professional and concise."
     }
   ],

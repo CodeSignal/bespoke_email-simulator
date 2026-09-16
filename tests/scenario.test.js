@@ -21,6 +21,7 @@ describe('withScenarioDefaults', () => {
     expect(cfg.assistant.capabilities).toContain('compose');
     expect(cfg.ui.hideAssistant).toBeUndefined();
     expect(cfg.characters).toEqual([]);
+    expect(cfg.learner.avatar).toBe(0);
   });
 
   it('normalizes characters and keeps extra persona fields', () => {

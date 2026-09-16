@@ -99,8 +99,8 @@ string path to a fixture file relative to the project root.
 | `brief` | string | The exercise task/prompt. Presented by the host harness; CosmoMail no longer renders it in-app. |
 | `primarySkill` | `writing` \| `prompting` \| `both` | What the exercise assesses. |
 | `scenarioType` | `compose_new` \| `reply` \| `reply_chain` | Drives composer prefill. |
-| `learner` | `{ displayName, email }` | Who the learner is in the thread. |
-| `characters` | object[] | People the learner may put on To / Cc. `{ id, name, email }` required; extra fields (`role`, `prompt`, …) are kept for future personas. Compose and reply pickers are limited to this list. |
+| `learner` | `{ displayName, email, avatar }` | Who the learner is in the thread. Optional `avatar` is `0`–`12`; **`0` is the empty face and the default for You**. |
+| `characters` | object[] | People the learner may put on To / Cc. `{ id, name, email }` required; optional `avatar` (`0`–`12`) picks a bundled circle-cropped face (`0` is empty). Extra fields (`role`, `prompt`, …) are kept for future personas. Compose and reply pickers are limited to this list. |
 | `seed.inbox` | object \| string | Inline `{ threads }` or a fixture path. Threads may set `"mailbox": "spam"` to land in Spam; otherwise they start in Inbox. Sent is filled automatically when the learner sends. |
 | `seed.activeThreadId` | string | Which mailbox to open on load (the folder that contains this thread). |
 | `seed.focusedEmailId` | string | Email the reply targets. |

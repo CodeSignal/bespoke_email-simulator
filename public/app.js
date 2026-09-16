@@ -22,6 +22,8 @@ import {
   characterByEmail,
   characterLabel,
   constrainToCharacters,
+  avatarPath,
+  initialsFromName,
 } from '../lib/characters.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
@@ -190,6 +192,36 @@ function displayName(addr) {
   return addr.name || addr.email || '';
 }
 
+function addressEmail(addr) {
+  if (!addr) return '';
+  return typeof addr === 'string' ? addr : (addr.email || '');
+}
+
+function learnerPerson() {
+  const learner = state.config?.learner || {};
+  return { name: learner.displayName || 'You', email: learner.email, avatar: learner.avatar };
+}
+
+function personForAddress(addr) {
+  const email = addressEmail(addr);
+  const learner = state.config?.learner;
+  if (email && learner?.email && email.toLowerCase() === learner.email.toLowerCase()) {
+    return learnerPerson();
+  }
+  const character = characterByEmail(state.config?.characters ?? [], email);
+  if (character) return character;
+  return { name: displayName(addr), email };
+}
+
+function avatarMarkup(person, size = 'md') {
+  const src = avatarPath(person?.avatar);
+  const label = person?.name || person?.email || '';
+  if (src) {
+    return `<img class="person-avatar person-avatar--${size}" src="${escapeHtml(src)}" alt="" />`;
+  }
+  return `<span class="person-avatar person-avatar--${size} person-avatar--initials" aria-hidden="true">${escapeHtml(initialsFromName(label))}</span>`;
+}
+
 function threadListFrom(thread, mailbox) {
   const last = thread.emails?.[thread.emails.length - 1];
   if (mailbox === 'sent') {
@@ -198,6 +230,16 @@ function threadListFrom(thread, mailbox) {
     return name ? `${t('To')}: ${name}` : t('To');
   }
   return displayName(last?.from) || formatAddress(last?.from);
+}
+
+function threadListPerson(thread, mailbox) {
+  const last = thread.emails?.[thread.emails.length - 1];
+  if (mailbox === 'sent') {
+    const to = Array.isArray(last?.to) ? last.to[0] : last?.to;
+    return personForAddress(to);
+  }
+  if (last?.outbound) return learnerPerson();
+  return personForAddress(last?.from);
 }
 
 function learnerEmail() {
@@ -267,10 +309,11 @@ function closeRecipientMenus() {
 }
 
 function renderRecipientChip(field, email) {
-  const character = characterByEmail(directoryCharacters(), email);
+  const character = characterByEmail(directoryCharacters(), email) || personForAddress(email);
   const chip = document.createElement('span');
   chip.className = 'tag outline recipient-picker__chip';
   chip.dataset.email = email;
+  chip.insertAdjacentHTML('afterbegin', avatarMarkup(character, 'xs'));
 
   const label = document.createElement('span');
   label.textContent = characterLabel(character) || email;
@@ -318,16 +361,20 @@ function renderRecipientMenu(field) {
     option.className = 'recipient-picker__option';
     option.setAttribute('role', 'option');
     option.dataset.email = character.email;
+    option.insertAdjacentHTML('afterbegin', avatarMarkup(character, 'sm'));
+    const text = document.createElement('span');
+    text.className = 'recipient-picker__option-text';
     const name = document.createElement('span');
     name.className = 'recipient-picker__option-name';
     name.textContent = characterLabel(character);
-    option.appendChild(name);
+    text.appendChild(name);
     if (character.role) {
       const meta = document.createElement('span');
       meta.className = 'body-xsmall recipient-picker__option-meta';
       meta.textContent = character.role;
-      option.appendChild(meta);
+      text.appendChild(meta);
     }
+    option.appendChild(text);
     option.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -496,6 +543,7 @@ function renderMailList() {
     btn.className = 'mail-row';
     btn.dataset.threadId = thread.id;
     btn.innerHTML = `
+      ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'sm')}
       <span class="body-small mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
       <span class="mail-row__main">
         <span class="body-small mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
@@ -524,7 +572,8 @@ function renderEmail(email, learnerEmail) {
     : '';
   wrap.innerHTML = `
     <div class="email__meta">
-      <div>
+      ${avatarMarkup(isOutbound ? learnerPerson() : personForAddress(email.from), 'md')}
+      <div class="email__meta-text">
         <div class="heading-xxxsmall email__from">${escapeHtml(formatAddress(email.from))}</div>
         <div class="body-xsmall email__to">To: ${escapeHtml(toLine)}</div>
         ${ccLine}
@@ -873,9 +922,14 @@ function replaceThread(thread) {
 function appendPendingRecipientEmail() {
   const article = document.createElement('article');
   article.className = 'email box card non-interactive';
+  const persona = state.config?.simulatedRecipient?.personas?.[0];
+  const person = persona ? personForAddress(persona) : { name: t('Awaiting reply…') };
   article.innerHTML = `
     <div class="email__meta">
-      <div><div class="heading-xxxsmall email__from">Awaiting reply…</div></div>
+      ${avatarMarkup(person, 'md')}
+      <div class="email__meta-text">
+        <div class="heading-xxxsmall email__from">Awaiting reply…</div>
+      </div>
     </div>
     <div class="email__body"><span class="assistant__typing">…</span></div>
   `;

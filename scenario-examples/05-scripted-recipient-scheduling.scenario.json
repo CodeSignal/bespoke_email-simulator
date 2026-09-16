@@ -10,13 +10,15 @@
       "id": "jordan",
       "name": "Jordan Lee",
       "email": "jordan.lee@candidatemail.com",
-      "role": "Candidate"
+      "role": "Candidate",
+      "avatar": 11
     },
     {
       "id": "morgan",
       "name": "Morgan Hale",
       "email": "morgan.hale@northwind.co",
-      "role": "Hiring manager"
+      "role": "Hiring manager",
+      "avatar": 3
     }
   ],
   "seed": {

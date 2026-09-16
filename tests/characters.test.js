@@ -6,6 +6,9 @@ import {
   characterByEmail,
   validateCharacters,
   emailsFromAddresses,
+  normalizeAvatar,
+  avatarPath,
+  initialsFromName,
 } from '../lib/characters.js';
 
 const jordan = {
@@ -68,6 +71,33 @@ describe('constrainToCharacters / availableCharacters', () => {
 
   it('looks up a character by email, case-insensitively', () => {
     expect(characterByEmail(directory, 'MORGAN.HALE@northwind.co')?.name).toBe('Morgan Hale');
+  });
+});
+
+describe('avatars', () => {
+  it('accepts 0–12, empty, and avatar-prefixed strings', () => {
+    expect(normalizeAvatar(0)).toBe(0);
+    expect(normalizeAvatar('empty')).toBe(0);
+    expect(normalizeAvatar('avatar-00')).toBe(0);
+    expect(normalizeAvatar(5)).toBe(5);
+    expect(normalizeAvatar('12')).toBe(12);
+    expect(normalizeAvatar('avatar-03')).toBe(3);
+    expect(normalizeAvatar(-1)).toBeNull();
+    expect(normalizeAvatar(13)).toBeNull();
+    expect(avatarPath(0)).toBe('/avatars/avatar-00.svg');
+    expect(avatarPath(5)).toBe('/avatars/avatar-05.png');
+  });
+
+  it('builds initials from a display name', () => {
+    expect(initialsFromName('Jordan Lee')).toBe('JL');
+    expect(initialsFromName('Priya')).toBe('PR');
+    expect(initialsFromName('')).toBe('?');
+  });
+
+  it('stores a valid avatar on the character and flags a bad one', () => {
+    expect(normalizeCharacters([{ ...jordan, avatar: 11 }])[0].avatar).toBe(11);
+    expect(normalizeCharacters([{ ...jordan, avatar: 0 }])[0].avatar).toBe(0);
+    expect(validateCharacters([{ ...jordan, avatar: 99 }]).some((error) => error.includes('avatar'))).toBe(true);
   });
 });
 
