@@ -25,6 +25,9 @@
     "Hooray, no spam here!": "Hooray, no spam here!",
     "Messages that look like spam will show up in this folder.": "Messages that look like spam will show up in this folder.",
     "New message": "New message",
-    "Back to list": "Back to list"
+    "Back to list": "Back to list",
+    "Reply": "Reply",
+    "Reply all": "Reply all",
+    "Discard": "Discard"
   }
 }

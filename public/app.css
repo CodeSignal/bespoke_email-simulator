@@ -399,6 +399,13 @@ body {
   color: var(--Colors-Text-Body-Lighter);
 }
 
+.thread-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--UI-Spacing-spacing-s);
+  padding-top: var(--UI-Spacing-spacing-s);
+}
+
 .composer__toolbar {
   display: flex;
   align-items: center;
@@ -406,7 +413,10 @@ body {
   gap: var(--UI-Spacing-spacing-s);
 }
 
-.composer__attach {
+.composer__toolbar-start {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
   margin-right: auto;
 }
 

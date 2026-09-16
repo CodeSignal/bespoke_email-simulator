@@ -15,6 +15,7 @@ import {
   mailboxCounts,
   mailboxForThread,
   threadsInMailbox,
+  buildReplyHeaders,
 } from '../lib/mailboxes.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
@@ -54,6 +55,7 @@ const state = {
   activeThreadId: null,
   view: 'list', // list | thread | compose
   composingNew: false,
+  replying: null, // null | 'reply' | 'replyAll'
   editor: null,
   draftSaveTimer: null,
   assistant: {
@@ -90,6 +92,7 @@ const els = {
   composerBody: document.getElementById('composerBody'),
   composerPlaceholder: document.getElementById('composerPlaceholder'),
   sendBtn: document.getElementById('sendBtn'),
+  discardBtn: document.getElementById('discardBtn'),
   attachBtn: document.getElementById('attachBtn'),
   fileInput: document.getElementById('fileInput'),
   attachmentPreview: document.getElementById('attachmentPreview'),
@@ -225,7 +228,12 @@ function applyView() {
 
   if (els.mailList) els.mailList.hidden = !isList;
   if (els.readingPane) els.readingPane.hidden = !isThread;
-  if (els.composer) els.composer.hidden = isList;
+  const showComposer = isCompose || (isThread && Boolean(state.replying));
+  if (els.composer) els.composer.hidden = !showComposer;
+  if (els.discardBtn) {
+    els.discardBtn.hidden = !state.replying;
+    els.discardBtn.textContent = t('Discard');
+  }
   if (els.backBtn) {
     els.backBtn.hidden = isList;
     els.backBtn.setAttribute('aria-label', t('Back to list'));
@@ -345,31 +353,43 @@ function renderThread(threadId) {
   for (const email of thread.emails ?? []) {
     els.readingPane.appendChild(renderEmail(email, learnerAddr));
   }
+  if (!state.replying) els.readingPane.appendChild(renderThreadActions());
 }
 
-function replyHeadersForThread(thread) {
+function renderThreadActions() {
+  const actions = document.createElement('div');
+  actions.className = 'thread-actions';
+
+  const reply = document.createElement('button');
+  reply.type = 'button';
+  reply.className = 'button button-tertiary button-small';
+  reply.textContent = t('Reply');
+  reply.addEventListener('click', () => startReply('reply'));
+
+  const replyAll = document.createElement('button');
+  replyAll.type = 'button';
+  replyAll.className = 'button button-tertiary button-small';
+  replyAll.textContent = t('Reply all');
+  replyAll.addEventListener('click', () => startReply('replyAll'));
+
+  actions.append(reply, replyAll);
+  return actions;
+}
+
+function replyTargetEmail(thread) {
   const emails = thread?.emails ?? [];
   const focusedId = state.scenario?.focusedEmailId;
-  const focused = emails.find((e) => e.id === focusedId) ?? emails[emails.length - 1];
-  const subj = focused?.subject || thread?.subject || '';
-  const subject = !subj ? '' : /^re:/i.test(subj) ? subj : `Re: ${subj}`;
-  if (!focused) return { to: [], cc: [], subject };
-
-  const fromAddr = typeof focused.from === 'string' ? focused.from : focused.from?.email;
-  const outbound = focused.outbound === true
-    || (learnerEmail() && fromAddr && fromAddr.toLowerCase() === learnerEmail().toLowerCase());
-  const to = outbound
-    ? (Array.isArray(focused.to) ? focused.to : [focused.to])
-        .map((addr) => (typeof addr === 'string' ? addr : addr?.email))
-        .filter(Boolean)
-    : [fromAddr].filter(Boolean);
-  return { to, cc: [], subject };
+  return emails.find((email) => email.id === focusedId) ?? emails[emails.length - 1];
 }
 
-function applyThreadComposer(threadId) {
+function applyThreadComposer(threadId, mode = state.replying || 'reply') {
   const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
   if (!thread || !els.composeTo) return;
-  const headers = replyHeadersForThread(thread);
+  const headers = buildReplyHeaders(replyTargetEmail(thread), {
+    mode,
+    learnerEmail: learnerEmail(),
+    subjectFallback: thread.subject || '',
+  });
   els.composeTo.value = headers.to.join(', ');
   els.composeCc.value = headers.cc.join(', ');
   els.composeSubject.value = headers.subject;
@@ -380,6 +400,7 @@ function selectMailbox(mailbox) {
   state.activeMailbox = mailbox;
   state.view = 'list';
   state.composingNew = false;
+  state.replying = null;
   state.activeThreadId = null;
   renderShell();
 }
@@ -387,14 +408,30 @@ function selectMailbox(mailbox) {
 function selectThread(threadId) {
   state.view = 'thread';
   state.composingNew = false;
+  state.replying = null;
   state.activeThreadId = threadId;
-  applyThreadComposer(threadId);
+  renderShell();
+}
+
+function startReply(mode) {
+  state.view = 'thread';
+  state.composingNew = false;
+  state.replying = mode;
+  applyThreadComposer(state.activeThreadId, mode);
+  renderShell();
+  els.composerBody?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  state.editor?.commands.focus();
+}
+
+function cancelReply() {
+  state.replying = null;
   renderShell();
 }
 
 function startCompose({ blank = true } = {}) {
   state.view = 'compose';
   state.composingNew = true;
+  state.replying = null;
   state.activeThreadId = null;
   if (blank) {
     els.composeTo.value = '';
@@ -411,6 +448,7 @@ function startCompose({ blank = true } = {}) {
 function backToList() {
   state.view = 'list';
   state.composingNew = false;
+  state.replying = null;
   state.activeThreadId = null;
   renderShell();
 }
@@ -527,6 +565,7 @@ function initComposer() {
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);
+  els.discardBtn?.addEventListener('click', cancelReply);
   updateSendEnabled();
 }
 
@@ -645,7 +684,9 @@ function appendPendingRecipientEmail() {
     </div>
     <div class="email__body"><span class="assistant__typing">…</span></div>
   `;
-  els.readingPane.appendChild(article);
+  const actions = els.readingPane.querySelector('.thread-actions');
+  if (actions) els.readingPane.insertBefore(article, actions);
+  else els.readingPane.appendChild(article);
   els.readingPane.scrollTop = els.readingPane.scrollHeight;
   return article;
 }
@@ -677,13 +718,13 @@ async function sendEmail() {
 
     replaceThread(thread);
     state.composingNew = false;
+    state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
     state.session.drafts = [];
     setEditorMarkdown('');
     clearAttachments();
-    applyThreadComposer(thread.id);
     renderShell();
 
     if (recipient?.allowed) {
@@ -883,9 +924,10 @@ function renderAssistant(liveMessages = []) {
 }
 
 function insertIntoComposer(markdown) {
+  if (state.view === 'list') startCompose({ blank: false });
+  else if (state.view === 'thread' && !state.replying) startReply('reply');
   setEditorMarkdown(markdown);
   scheduleDraftSave();
-  if (state.view === 'list') startCompose({ blank: false });
   els.composerBody.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
@@ -1022,6 +1064,7 @@ async function boot() {
     state.activeMailbox = seeded ? mailboxForThread(seeded, learnerEmail()) : 'inbox';
     state.activeThreadId = null;
     state.composingNew = false;
+    state.replying = null;
     state.view = 'list';
 
     applyScenarioChrome();

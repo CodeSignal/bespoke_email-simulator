@@ -6,6 +6,7 @@ import {
   threadsInMailbox,
   mailboxCounts,
   mailboxForThread,
+  buildReplyHeaders,
 } from '../lib/mailboxes.js';
 
 const learner = 'you@company.com';
@@ -92,5 +93,50 @@ describe('mailboxCounts / mailboxForThread', () => {
     expect(mailboxForThread(repliedThread, learner)).toBe('inbox');
     expect(mailboxForThread(sentThread, learner)).toBe('sent');
     expect(mailboxForThread(spamThread, learner)).toBe('spam');
+  });
+});
+
+describe('buildReplyHeaders', () => {
+  const inbound = {
+    from: { name: 'Dana', email: 'dana@acme.com' },
+    to: [{ email: learner }, { email: 'alex@company.com' }],
+    cc: [{ email: 'pat@company.com' }],
+    subject: 'Proposal',
+  };
+
+  it('replies only to the sender', () => {
+    expect(buildReplyHeaders(inbound, { mode: 'reply', learnerEmail: learner })).toEqual({
+      to: ['dana@acme.com'],
+      cc: [],
+      subject: 'Re: Proposal',
+    });
+  });
+
+  it('reply-all keeps other recipients except the learner', () => {
+    expect(buildReplyHeaders(inbound, { mode: 'replyAll', learnerEmail: learner })).toEqual({
+      to: ['dana@acme.com'],
+      cc: ['alex@company.com', 'pat@company.com'],
+      subject: 'Re: Proposal',
+    });
+  });
+
+  it('replies to the original To when the last mail was outbound', () => {
+    const outbound = {
+      from: { email: learner },
+      to: [{ email: 'dana@acme.com' }],
+      cc: [{ email: 'alex@company.com' }],
+      outbound: true,
+      subject: 'Re: Proposal',
+    };
+    expect(buildReplyHeaders(outbound, { mode: 'reply', learnerEmail: learner })).toEqual({
+      to: ['dana@acme.com'],
+      cc: [],
+      subject: 'Re: Proposal',
+    });
+    expect(buildReplyHeaders(outbound, { mode: 'replyAll', learnerEmail: learner })).toEqual({
+      to: ['dana@acme.com'],
+      cc: ['alex@company.com'],
+      subject: 'Re: Proposal',
+    });
   });
 });

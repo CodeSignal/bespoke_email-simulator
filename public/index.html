@@ -90,7 +90,10 @@
         <div class="composer__attachments" id="attachmentPreview" hidden></div>
         <input type="file" id="fileInput" multiple hidden />
         <div class="composer__toolbar">
-          <button type="button" class="button button-text button-small composer__attach" id="attachBtn" hidden>Attach</button>
+          <div class="composer__toolbar-start">
+            <button type="button" class="button button-text button-small composer__attach" id="attachBtn" hidden>Attach</button>
+            <button type="button" class="button button-text button-small" id="discardBtn" hidden>Discard</button>
+          </div>
           <button type="button" class="button button-primary button-small" id="sendBtn" disabled>Send</button>
         </div>
       </section>
