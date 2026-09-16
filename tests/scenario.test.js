@@ -19,6 +19,7 @@ describe('withScenarioDefaults', () => {
     expect(cfg.assistant.enabled).toBe(false);
     // untouched keys keep their defaults
     expect(cfg.assistant.capabilities).toContain('compose');
+    expect(cfg.ui.hideAssistant).toBeUndefined();
   });
 });
 

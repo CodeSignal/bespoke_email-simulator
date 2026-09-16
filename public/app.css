@@ -24,12 +24,16 @@ body {
   z-index: 1000;
 }
 
-/* ── App shell: 3-column layout ── */
+/* ── App shell: 3-column layout (2-column when Cosmo is disabled) ── */
 .mail-app {
   display: grid;
   grid-template-columns: 260px minmax(0, 1fr) 340px;
   height: 100vh;
   overflow: hidden;
+}
+
+.mail-app:has(#assistantPanel[hidden]) {
+  grid-template-columns: 260px minmax(0, 1fr);
 }
 
 /* ── Thread rail ── */
@@ -282,6 +286,10 @@ body {
   min-height: 0;
   background: var(--Colors-Backgrounds-Main-Darker);
   border-left: 1px solid var(--Colors-Stroke-Light);
+}
+
+.assistant[hidden] {
+  display: none;
 }
 
 .assistant__header {

@@ -104,7 +104,7 @@ string path to a fixture file relative to the project root.
 | `seed.activeThreadId` | string | Thread opened on load. |
 | `seed.focusedEmailId` | string | Email the reply targets. |
 | `initialDraft` | `{ to, cc, subject, body }` | Optional composer prefill. |
-| `assistant.enabled` | boolean | Show the Cosmo copilot panel. |
+| `assistant.enabled` | boolean | When `false`, hide the Cosmo copilot panel. |
 | `assistant.capabilities` | string[] | `compose`, `qa_search`, `summarize`, `extract`. |
 | `assistant.systemPromptExtra` | string | Trusted extra instructions for the copilot. |
 | `assistant.initialMessage` | string | Cosmo's opening message. |
@@ -116,7 +116,7 @@ string path to a fixture file relative to the project root.
 | `simulatedRecipient.scriptedBeats` | string[] | Fixed replies for `scripted`. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
 | `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support. |
-| `ui` | `{ hideAssistant, hideHistory, strings }` | UI overrides + i18n strings. |
+| `ui` | `{ hideHistory, strings }` | UI overrides + i18n strings. |
 | `rubricHints` | object \| string | Notes surfaced in the extraction report. |
 
 ### Example scenarios

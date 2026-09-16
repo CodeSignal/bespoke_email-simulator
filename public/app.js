@@ -694,7 +694,7 @@ async function initAssistant() {
   state.assistant.persisted = state.session?.assistantMessages ?? [];
   renderAssistant([]);
 
-  if (state.config?.assistant?.enabled === false || state.config?.ui?.hideAssistant) {
+  if (state.config?.assistant?.enabled === false) {
     document.getElementById('assistantPanel')?.setAttribute('hidden', '');
     return;
   }
