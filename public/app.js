@@ -115,6 +115,7 @@ const els = {
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
+  mailToasts: document.getElementById('mailToasts'),
 };
 
 // ── Helpers ───────────────────────────────────────────────────
@@ -178,7 +179,12 @@ function formatListDate(iso) {
 
 function threadSnippet(thread) {
   const last = thread.emails?.[thread.emails.length - 1];
-  return String(last?.body ?? '')
+  return emailSnippet(last);
+}
+
+function emailSnippet(email) {
+  return String(email?.body ?? '')
+    .replace(/\[\[(?:continue|done)\]\]/gi, '')
     .replace(/[#*_`>[\]()]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
@@ -560,6 +566,7 @@ function renderEmail(email, learnerEmail) {
     (learnerEmail && formatAddress(email.from).includes(learnerEmail));
   const wrap = document.createElement('article');
   wrap.className = 'email box card non-interactive' + (isOutbound ? ' email--outbound' : '');
+  if (email.id) wrap.dataset.emailId = email.id;
   const toLine = formatAddressList(email.to);
   const ccLine = email.cc && email.cc.length ? `<div class="body-xsmall email__to">Cc: ${escapeHtml(formatAddressList(email.cc))}</div>` : '';
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
@@ -917,25 +924,93 @@ function replaceThread(thread) {
   else threads.push(thread);
 }
 
-function appendPendingCharacterEmail(character) {
-  const article = document.createElement('article');
-  article.className = 'email box card non-interactive';
-  const person = character ? personForAddress(character) : { name: t('Awaiting reply…') };
-  const fromLabel = character?.name ? `${character.name} is writing…` : t('Awaiting reply…');
-  article.innerHTML = `
-    <div class="email__meta">
-      ${avatarMarkup(person, 'md')}
-      <div class="email__meta-text">
-        <div class="heading-xxxsmall email__from">${escapeHtml(fromLabel)}</div>
-      </div>
-    </div>
-    <div class="email__body"><span class="assistant__typing">…</span></div>
+function isViewingThread(threadId) {
+  return state.view === 'thread' && state.activeThreadId === threadId && els.readingPane && !els.readingPane.hidden;
+}
+
+function escapeSelector(value) {
+  if (typeof CSS !== 'undefined' && typeof CSS.escape === 'function') return CSS.escape(value);
+  return String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function scrollToEmail(emailId) {
+  if (!emailId || !els.readingPane) return;
+  requestAnimationFrame(() => {
+    const el = els.readingPane.querySelector(`[data-email-id="${escapeSelector(emailId)}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    el.classList.remove('email--arrive');
+    void el.offsetWidth;
+    el.classList.add('email--arrive');
+  });
+}
+
+function openInboundEmail(threadId, emailId) {
+  dismissMailToasts();
+  const thread = (state.session?.threads ?? []).find((item) => item.id === threadId);
+  if (!thread) return;
+  if (!isViewingThread(threadId)) {
+    state.activeMailbox = mailboxForThread(thread, learnerEmail());
+    selectThread(threadId);
+  }
+  scrollToEmail(emailId);
+}
+
+function dismissMailToast(toast) {
+  if (!toast) return;
+  if (toast._timer) clearTimeout(toast._timer);
+  toast.remove();
+}
+
+function dismissMailToasts() {
+  if (!els.mailToasts) return;
+  for (const toast of [...els.mailToasts.children]) dismissMailToast(toast);
+}
+
+function showMailToast(thread, email) {
+  if (!els.mailToasts || !email) return;
+  const person = personForAddress(email.from);
+  const subject = thread?.subject || t('(no subject)');
+  const snippet = emailSnippet(email);
+  const toast = document.createElement('div');
+  toast.className = 'mail-toast box card';
+  toast.setAttribute('role', 'status');
+  toast.innerHTML = `
+    <button type="button" class="mail-toast__open">
+      ${avatarMarkup(person, 'sm')}
+      <span class="mail-toast__text">
+        <span class="label-small mail-toast__kicker">${escapeHtml(t('New email'))}</span>
+        <span class="body-small mail-toast__from">${escapeHtml(person.name || person.email || '')}</span>
+        <span class="body-xsmall mail-toast__snippet">${escapeHtml(subject)}${snippet ? ` · ${escapeHtml(snippet)}` : ''}</span>
+      </span>
+    </button>
+    <button type="button" class="mail-toast__close" aria-label="${escapeHtml(t('Dismiss'))}">
+      <span aria-hidden="true">×</span>
+    </button>
   `;
-  const actions = els.readingPane.querySelector('.thread-actions');
-  if (actions) els.readingPane.insertBefore(article, actions);
-  else els.readingPane.appendChild(article);
-  els.readingPane.scrollTop = els.readingPane.scrollHeight;
-  return article;
+  toast.querySelector('.mail-toast__open').addEventListener('click', () => {
+    openInboundEmail(thread.id, email.id);
+  });
+  toast.querySelector('.mail-toast__close').addEventListener('click', (event) => {
+    event.stopPropagation();
+    dismissMailToast(toast);
+  });
+  els.mailToasts.appendChild(toast);
+  while (els.mailToasts.children.length > 3) {
+    dismissMailToast(els.mailToasts.firstElementChild);
+  }
+  toast._timer = setTimeout(() => dismissMailToast(toast), 8000);
+}
+
+function refreshMailAfterInbound(thread, email) {
+  replaceThread(thread);
+  renderMailboxes();
+  if (state.view === 'list') renderMailList();
+  if (isViewingThread(thread.id)) {
+    renderThread(thread.id);
+    scrollToEmail(email?.id);
+  }
+  showMailToast(thread, email);
 }
 
 async function sendEmail() {
@@ -974,14 +1049,18 @@ async function sendEmail() {
     clearAttachments();
     renderShell();
 
-    for (const responder of responders || []) {
-      await runCharacterReply(responder, email, thread.id);
-    }
+    void collectCharacterReplies(responders, email, thread.id);
   } catch (err) {
     console.error('[CosmoMail] send failed:', err);
   } finally {
     els.sendBtn.textContent = t('Send');
     updateSendEnabled();
+  }
+}
+
+async function collectCharacterReplies(responders, email, threadId) {
+  for (const responder of responders || []) {
+    await runCharacterReply(responder, email, threadId);
   }
 }
 
@@ -997,10 +1076,10 @@ async function finalizeCharacterReply(characterId, threadId, replyText, inReplyT
       inReplyToId,
     }),
   });
-  if (!res.ok) return;
-  const { thread } = await res.json();
-  replaceThread(thread);
-  renderShell();
+  if (!res.ok) return null;
+  const { thread, email } = await res.json();
+  refreshMailAfterInbound(thread, email);
+  return email;
 }
 
 async function ensureCharacterSession(characterId) {
@@ -1031,9 +1110,6 @@ async function runCharacterReply(character, sentEmail, threadId) {
     return;
   }
 
-  const placeholder = appendPendingCharacterEmail(character);
-  const bodyEl = placeholder.querySelector('.email__body');
-
   const transport = createHttpTransport({
     request: (payload) =>
       fetch('/api/character/trigger', {
@@ -1043,38 +1119,32 @@ async function runCharacterReply(character, sentEmail, threadId) {
       }),
   });
   const chat = new OctavusChat({ transport });
-  const unsub = chat.subscribe(() => {
-    const text = assistantTextFromMessages(chat.messages).replace(/\s*\[\[(?:continue|done)\]\]\s*$/i, '');
-    bodyEl.innerHTML = renderMarkdown(text) || '<span class="assistant__typing">…</span>';
-    els.readingPane.scrollTop = els.readingPane.scrollHeight;
-  });
-
   const sentBody = sentEmail?.body || '';
   try {
     await chat.send(
       'character-reply',
       {
         LEARNER_EMAIL: sentBody,
-        THREAD_CONTEXT: serializeThreadContext(),
+        THREAD_CONTEXT: serializeThreadContext(threadId),
         RECIPIENTS: formatRecipientsContext(sentEmail),
       },
       { userMessage: { content: sentBody } },
     );
   } catch (err) {
     console.error('[CosmoMail] character reply failed:', err);
-  } finally {
-    unsub();
+    return;
   }
 
   const replyText = assistantTextFromMessages(chat.messages);
+  if (!replyText.trim()) return;
   await finalizeCharacterReply(character.id, threadId, replyText, sentEmail?.id);
 }
 
 // ── Assistant (Cosmo) ─────────────────────────────────────────
 // Serializes the active thread into Markdown context for the agent.
-function serializeThreadContext() {
+function serializeThreadContext(threadId = state.activeThreadId) {
   const threads = state.session?.threads ?? [];
-  const thread = threads.find((th) => th.id === state.activeThreadId) ?? threads[0];
+  const thread = threads.find((th) => th.id === threadId) ?? threads[0];
   if (!thread) return 'No emails in the current mailbox.';
   const lines = [`Subject: ${thread.subject || '(no subject)'}`, ''];
   for (const email of thread.emails ?? []) {

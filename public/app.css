@@ -153,6 +153,7 @@ body {
   flex-direction: column;
   min-height: 0;
   min-width: 0;
+  position: relative;
   background: var(--Colors-Backgrounds-Main-Default);
 }
 
@@ -727,4 +728,98 @@ body {
 
 .assistant__typing {
   color: var(--Colors-Text-Body-Light);
+}
+
+.email--arrive {
+  animation: email-arrive 1.2s ease;
+}
+
+@keyframes email-arrive {
+  from {
+    box-shadow: 0 0 0 2px var(--Colors-Stroke-Primary);
+  }
+  to {
+    box-shadow: none;
+  }
+}
+
+.mail-toasts {
+  position: absolute;
+  left: var(--UI-Spacing-spacing-m);
+  bottom: var(--UI-Spacing-spacing-m);
+  z-index: 1100;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--UI-Spacing-spacing-s);
+  width: min(22rem, calc(100vw - 2 * var(--UI-Spacing-spacing-m)));
+  pointer-events: none;
+}
+
+.mail-toast.box {
+  pointer-events: auto;
+  display: flex;
+  align-items: stretch;
+  gap: var(--UI-Spacing-spacing-xxs);
+  padding: var(--UI-Spacing-spacing-s);
+  text-align: left;
+}
+
+.mail-toast__open {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mail-toast__open:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 2px;
+}
+
+.mail-toast__text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-min);
+}
+
+.mail-toast__kicker {
+  color: var(--Colors-Text-Body-Secondary);
+}
+
+.mail-toast__from {
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.mail-toast__snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--Colors-Text-Body-Secondary);
+}
+
+.mail-toast__close {
+  flex: 0 0 auto;
+  align-self: flex-start;
+  margin: 0;
+  padding: 0 var(--UI-Spacing-spacing-xxs);
+  border: none;
+  background: transparent;
+  color: var(--Colors-Text-Body-Secondary);
+  font-size: 1.25rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.mail-toast__close:hover,
+.mail-toast__close:focus-visible {
+  color: var(--Colors-Text-Body-Strong);
 }
