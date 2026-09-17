@@ -247,13 +247,14 @@ body {
 .mail-row__subject {
   color: var(--Colors-Text-Body-Strong);
   flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .mail-row__snippet {
   color: var(--Colors-Text-Body-Light);
-  flex: 1 1 auto;
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
