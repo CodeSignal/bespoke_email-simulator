@@ -55,6 +55,28 @@ marked.use(
   }),
 );
 
+function parseMailto(href) {
+  const raw = String(href || '').trim();
+  if (!/^mailto:/i.test(raw)) return '';
+  try {
+    return decodeURIComponent(raw.slice('mailto:'.length)).split('?')[0].trim();
+  } catch {
+    return raw.slice('mailto:'.length).split('?')[0].trim();
+  }
+}
+
+marked.use({
+  renderer: {
+    link({ href, tokens }) {
+      const email = parseMailto(href);
+      if (!email) return false;
+      const text = this.parser.parseInline(tokens);
+      if (!constrainToCharacters([email], directoryCharacters())[0]) return text;
+      return `<a href="mailto:${escapeHtml(email)}" class="js-compose-mailto">${text}</a>`;
+    },
+  },
+});
+
 // ── State ─────────────────────────────────────────────────────
 const state = {
   config: null,
@@ -695,6 +717,27 @@ function startCompose({ blank = true } = {}) {
   els.composeToAdd?.focus();
 }
 
+function composeNewTo(email) {
+  startCompose({ blank: true });
+  addRecipient('to', email);
+  state.openRecipientField = null;
+  renderRecipientPickers();
+  state.editor?.commands.focus();
+}
+
+function initMailtoCompose() {
+  document.addEventListener('click', (event) => {
+    const el = event.target instanceof Element ? event.target : event.target.parentElement;
+    const link = el?.closest('a[href^="mailto:"]');
+    if (!link) return;
+    event.preventDefault();
+    if (!link.closest('.email__body, .assistant__msg')) return;
+    const canonical = constrainToCharacters([parseMailto(link.getAttribute('href'))], directoryCharacters())[0];
+    if (!canonical) return;
+    composeNewTo(canonical);
+  });
+}
+
 function backToList() {
   state.view = 'list';
   state.composingNew = false;
@@ -805,7 +848,9 @@ function initComposer() {
   state.editor = new Editor({
     element: els.composerBody,
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        link: { openOnClick: false },
+      }),
       Markdown,
       Placeholder.configure({
         placeholder: t('Write your message...'),
@@ -1421,6 +1466,7 @@ async function boot() {
 
     applyScenarioChrome();
     initComposer();
+    initMailtoCompose();
     initAttachments();
     if (state.config?.scenarioType === 'compose_new') {
       startCompose({ blank: false });

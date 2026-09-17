@@ -439,6 +439,10 @@ body {
   color: var(--Colors-Primary-Default);
 }
 
+.email__body a.js-compose-mailto {
+  cursor: pointer;
+}
+
 /* Outbound (learner) emails get a subtle primary accent that survives the
    .box.non-interactive hover reset. */
 .email--outbound.box,
