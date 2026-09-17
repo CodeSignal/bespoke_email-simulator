@@ -179,11 +179,14 @@ Options: `--latest` (most recent session only), `--output <file>`,
 ```bash
 npm test         # vitest run (unit + API route tests)
 npm run test:watch
+npm run pack     # client + server bundles → dist/ and dist.tar.gz
 ```
 
-CI (`.github/workflows/ci.yml`) runs build + tests on push/PR;
-`.github/workflows/release.yml` tests, builds, and archives a dist tarball on a
-GitHub release (excluding secrets and runtime files).
+CI (`.github/workflows/ci.yml`) runs build + tests on push/PR.
+`.github/workflows/release.yml` tests, then `npm run pack`: a minified client
+bundle, a single-file server bundle (Express + Octavus inlined — no
+`node_modules`), and the static files the server serves. Extract `dist.tar.gz`
+and run `node server.js`. Supply `scenario.json` and `.env` at runtime.
 
 ## Project layout
 
@@ -196,7 +199,7 @@ fixtures/              Seed inbox fixtures referenced by scenarios/examples
 i18n/                  Locale catalogs
 lib/                   Pure logic (scenario, sessions, i18n, helpers)
 public/                Client app (index.html, app.js, app.css)
-scripts/               Agent deploy tooling
+scripts/               Agent deploy + release pack tooling
 tests/                 vitest unit + supertest API tests
 server.js              Express server + API routes
 extract-conversations.js  Transcript/report generator

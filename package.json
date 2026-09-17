@@ -18,7 +18,8 @@
     "extract": "node extract-conversations.js",
     "report": "node extract-conversations.js --mode report --print-settings",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "pack": "node scripts/pack-dist.mjs"
   },
   "dependencies": {
     "@octavus/client-sdk": "^3.2.0",
