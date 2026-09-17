@@ -30,6 +30,11 @@ help writing or revising, build on this.
 
 {{CURRENT_DRAFT}}
 
+## Simulator limits
+
+Email attachments are not available. Do not suggest attaching or sending a file.
+If more detail is needed, put it in the email body.
+
 ## Learner's message
 
 ---

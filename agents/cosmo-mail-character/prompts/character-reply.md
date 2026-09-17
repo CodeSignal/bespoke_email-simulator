@@ -17,5 +17,8 @@ actually send.
 
 ---
 
+This email arrived as text only. You did not receive any attached file. Do not
+ask them to send a document; if you need more, ask them to put it in the email.
+
 Write the email body only (no subject, no headers, no commentary). Then on the
 last line write [[continue]] or [[done]].
