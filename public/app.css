@@ -365,14 +365,77 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
-.email__body {
+.email__body,
+.composer__editor {
   color: var(--Colors-Text-Body-Default);
-  line-height: 1.55;
+  font-size: var(--Fonts-Body-Default-md);
+  line-height: 1.6;
   word-wrap: break-word;
 }
 
-.email__body p:first-child {
+.email__body p,
+.composer__editor p {
+  margin: 0 0 0.8em;
+}
+
+.email__body p:first-child,
+.composer__editor p:first-child {
   margin-top: 0;
+}
+
+.email__body p:last-child,
+.composer__editor p:last-child {
+  margin-bottom: 0;
+}
+
+.email__body ul,
+.email__body ol,
+.composer__editor ul,
+.composer__editor ol {
+  margin: 0 0 0.8em;
+  padding-left: 1.4em;
+}
+
+.email__body blockquote,
+.composer__editor blockquote {
+  margin: 0 0 0.8em;
+  padding: 0 0 0 var(--UI-Spacing-spacing-m);
+  border-left: 3px solid var(--Colors-Stroke-Default);
+  color: var(--Colors-Text-Body-Light);
+}
+
+.email__body h1,
+.email__body h2,
+.email__body h3,
+.composer__editor h1,
+.composer__editor h2,
+.composer__editor h3 {
+  margin: 1em 0 0.4em;
+  color: var(--Colors-Text-Body-Strong);
+  font-size: var(--Fonts-Body-Default-lg);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.email__body h1:first-child,
+.email__body h2:first-child,
+.email__body h3:first-child,
+.composer__editor h1:first-child,
+.composer__editor h2:first-child,
+.composer__editor h3:first-child {
+  margin-top: 0;
+}
+
+.email__body hr,
+.composer__editor hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--Colors-Stroke-Light);
+}
+
+.email__body a,
+.composer__editor a {
+  color: var(--Colors-Primary-Default);
 }
 
 /* Outbound (learner) emails get a subtle primary accent that survives the
@@ -400,9 +463,11 @@ body {
   border-top: none;
 }
 
-.mail-main.is-composing .composer__body {
+.mail-main.is-composing .composer__body,
+.mail-main.is-composing .composer__editor,
+.mail-main.is-composing .composer__body .tiptap {
   flex: 1 1 auto;
-  min-height: 160px;
+  min-height: 12rem;
 }
 
 .composer__fields {
@@ -550,15 +615,57 @@ body {
 }
 
 .composer__body {
-  min-height: 96px;
-  border: 1px solid var(--Colors-Stroke-Default);
+  display: flex;
+  flex-direction: column;
+  min-height: 8rem;
+  padding: 0;
+  overflow: auto;
+  cursor: text;
+  border: 1px solid var(--Colors-Input-Border-Default);
   border-radius: var(--UI-Radius-radius-s);
-  background: var(--Colors-Backgrounds-Main-Top);
-  padding: var(--UI-Spacing-spacing-s);
+  background: var(--Colors-Input-Background-Default);
+}
+
+.composer__body:hover {
+  border-color: var(--Colors-Input-Border-Hover);
+}
+
+.composer__body:focus-within {
+  border-color: var(--Colors-Input-Border-Focus);
+  box-shadow: 0 0 0 4px var(--Colors-Input-Shadow-Focus);
+}
+
+.composer__editor,
+.composer__body .tiptap {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 8rem;
+  padding: var(--UI-Spacing-spacing-m);
+  outline: none;
+  white-space: pre-wrap;
+  font-variant-ligatures: none;
+}
+
+.composer__editor:focus,
+.composer__editor:focus-visible,
+.composer__body .tiptap:focus,
+.composer__body .tiptap:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+.composer__editor p.is-editor-empty:first-child::before,
+.composer__body .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  pointer-events: none;
+  color: var(--Colors-Input-Text-Placeholder);
 }
 
 .composer__placeholder {
-  color: var(--Colors-Text-Body-Lighter);
+  padding: var(--UI-Spacing-spacing-m);
+  color: var(--Colors-Input-Text-Placeholder);
 }
 
 .thread-actions {

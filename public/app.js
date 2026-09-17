@@ -10,6 +10,7 @@ import { OctavusChat, createHttpTransport } from '@octavus/client-sdk';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
+import { Placeholder } from '@tiptap/extensions';
 import {
   MAILBOXES,
   mailboxCounts,
@@ -803,10 +804,29 @@ function initComposer() {
 
   state.editor = new Editor({
     element: els.composerBody,
-    extensions: [StarterKit, Markdown],
+    extensions: [
+      StarterKit,
+      Markdown,
+      Placeholder.configure({
+        placeholder: t('Write your message...'),
+      }),
+    ],
     content: draft.body || '',
     contentType: 'markdown',
+    editorProps: {
+      attributes: {
+        class: 'composer__editor',
+        'aria-label': t('Message'),
+      },
+    },
     onUpdate: scheduleDraftSave,
+  });
+
+  els.composerBody.addEventListener('mousedown', (event) => {
+    if (event.target === els.composerBody) {
+      event.preventDefault();
+      state.editor?.commands.focus('end');
+    }
   });
 
   initRecipientPickers();
