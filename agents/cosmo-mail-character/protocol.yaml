@@ -1,0 +1,95 @@
+input:
+  MODEL:
+    type: string
+    optional: true
+    default: "anthropic/claude-opus-4-7"
+    description: LLM model to use for this session (provider/model-id format).
+  TEMPERATURE:
+    type: number
+    optional: true
+    default: 0.7
+    description: "Sampling temperature (0-2). Lower = more focused, higher = more creative."
+  THINKING:
+    type: string
+    optional: true
+    default: "off"
+    description: "Extended reasoning level. Values: off, low, medium, high, max."
+  LANGUAGE:
+    type: string
+    optional: true
+    default: "English"
+    description: "The language the character should write in."
+  CHARACTER_NAME:
+    type: string
+    optional: true
+    default: ""
+    description: Display name this character signs and speaks as.
+  CHARACTER_EMAIL:
+    type: string
+    optional: true
+    default: ""
+    description: This character's email address.
+  CHARACTER_ROLE:
+    type: string
+    optional: true
+    default: ""
+    description: Job title or in-world role.
+  CHARACTER_CARD:
+    type: string
+    optional: true
+    default: ""
+    description: Compiled persona (personality, motivation, goal, style, knowledge, limits).
+  WORLD:
+    type: string
+    optional: true
+    default: ""
+    description: Shared in-world facts every character in this situation already knows.
+  LEARNER_NAME:
+    type: string
+    optional: true
+    default: "You"
+    description: The name of the person this character is emailing with.
+
+triggers:
+  character-reply:
+    input:
+      LEARNER_EMAIL:
+        type: string
+        description: The email this character just received (Markdown body).
+      THREAD_CONTEXT:
+        type: string
+        optional: true
+        description: The full thread so far (Markdown) for continuity.
+      RECIPIENTS:
+        type: string
+        optional: true
+        description: Who was on From / To / Cc of the email being answered.
+
+agent:
+  model: MODEL
+  system: system
+  input:
+    LANGUAGE: LANGUAGE
+    CHARACTER_NAME: CHARACTER_NAME
+    CHARACTER_EMAIL: CHARACTER_EMAIL
+    CHARACTER_ROLE: CHARACTER_ROLE
+    CHARACTER_CARD: CHARACTER_CARD
+    WORLD: WORLD
+    LEARNER_NAME: LEARNER_NAME
+  temperature: TEMPERATURE
+  thinking: THINKING
+  webSearch: false
+  agentic: false
+
+handlers:
+  character-reply:
+    Add inbound email:
+      block: add-message
+      role: user
+      prompt: character-reply
+      input: [LEARNER_EMAIL, THREAD_CONTEXT, RECIPIENTS]
+      uiContent: LEARNER_EMAIL
+      display: hidden
+
+    Respond:
+      block: next-message

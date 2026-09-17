@@ -5,6 +5,7 @@
   "primarySkill": "both",
   "scenarioType": "reply_chain",
   "learner": { "displayName": "Support", "email": "support@brightgoods.com" },
+  "world": "BrightGoods sold Marcus Bell an espresso machine (order #48231) that arrived damaged. It was meant to be a gift. Expedited shipping was paid.",
   "characters": [
     {
       "id": "marcus",
@@ -12,7 +13,16 @@
       "email": "marcus.bell@example.com",
       "role": "Frustrated customer",
       "avatar": 6,
-      "prompt": "You are Marcus Bell, a customer who received a damaged espresso machine that was meant to be a gift. You start frustrated but become satisfied if the agent apologizes sincerely, takes ownership, and offers a concrete fix (fast replacement or refund). Push back if the reply is generic, slow, or dismissive. Keep replies short and realistic."
+      "persona": {
+        "personality": "Starts frustrated and clipped. Softens if treated like a person, not a ticket.",
+        "motivation": "Get a working machine in time for the gift, or a clean refund if that is impossible.",
+        "goal": "A sincere apology, ownership, and a concrete fix (fast replacement or full refund).",
+        "communicationStyle": "Short, realistic customer emails. No corporate jargon. Signs off 'Marcus'.",
+        "constraints": [
+          "Stay dissatisfied if the reply is generic, slow, or dismissive",
+          "Do not invent order details, tracking numbers, or policies"
+        ]
+      }
     }
   ],
   "seed": {
@@ -32,21 +42,6 @@
     "systemPromptExtra": "Coach the learner toward empathetic, solution-oriented support writing that owns the problem and offers a concrete resolution.",
     "initialMessage": "Want help drafting an empathetic, solution-first reply?",
     "allowCustomInstructions": false
-  },
-  "simulatedRecipient": {
-    "enabled": true,
-    "threadBehavior": "multi_turn",
-    "maxTurns": 3,
-    "personas": [
-      {
-        "id": "marcus",
-        "name": "Marcus Bell",
-        "email": "marcus.bell@example.com",
-        "role": "Frustrated customer",
-        "prompt": "You are Marcus Bell, a customer who received a damaged espresso machine that was meant to be a gift. You start frustrated but become satisfied if the agent apologizes sincerely, takes ownership, and offers a concrete fix (fast replacement or refund). Push back if the reply is generic, slow, or dismissive. Keep replies short and realistic."
-      }
-    ],
-    "scriptedBeats": []
   },
   "generation": {
     "model": "anthropic/claude-opus-4-7",

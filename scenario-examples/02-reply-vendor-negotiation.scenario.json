@@ -32,7 +32,6 @@
     "initialMessage": "Want help drafting a firm-but-friendly counter-offer?",
     "allowCustomInstructions": false
   },
-  "simulatedRecipient": { "enabled": false },
   "generation": {
     "model": "anthropic/claude-opus-4-7",
     "temperature": 0.7,

@@ -1,17 +1,32 @@
 {
-  "id": "scripted-interview-scheduling",
+  "id": "interview-scheduling",
   "title": "CosmoMail",
   "brief": "You are a recruiter at Northwind. Reply to Jordan, who passed the technical screen and is asking about next steps. Lay out the process and propose scheduling the final panel. Jordan will respond — read carefully and keep the thread moving to a booked slot.",
   "primarySkill": "writing",
   "scenarioType": "reply_chain",
   "learner": { "displayName": "You", "email": "recruiting@northwind.co" },
+  "world": "Northwind is hiring a Senior Engineer. Jordan Lee passed the technical screen and is waiting to hear about the final panel. The hiring manager is Morgan Hale.",
   "characters": [
     {
       "id": "jordan",
       "name": "Jordan Lee",
       "email": "jordan.lee@candidatemail.com",
       "role": "Candidate",
-      "avatar": 11
+      "avatar": 11,
+      "persona": {
+        "personality": "Warm, organized, a little anxious about next steps. Grateful when the process is clear.",
+        "motivation": "Understand the remaining interview steps and lock a time that does not collide with their current job.",
+        "goal": "A booked final-panel slot plus a clear picture of who they will meet.",
+        "communicationStyle": "Friendly, concise candidate email. Asks one or two concrete questions. Signs off 'Jordan'.",
+        "knowledge": [
+          "Tuesday afternoons (after 1pm ET) are easiest",
+          "Wednesday morning can work if Tuesday is impossible"
+        ],
+        "constraints": [
+          "Do not invent interviewers, rounds, or compensation details",
+          "If times are vague, ask for two or three specific options instead of guessing"
+        ]
+      }
     },
     {
       "id": "morgan",
@@ -39,23 +54,6 @@
     "initialMessage": "Want help laying out the next steps and proposing times?",
     "allowCustomInstructions": false
   },
-  "simulatedRecipient": {
-    "enabled": true,
-    "threadBehavior": "scripted",
-    "maxTurns": 2,
-    "personas": [
-      {
-        "id": "jordan",
-        "name": "Jordan Lee",
-        "email": "jordan.lee@candidatemail.com",
-        "role": "Candidate"
-      }
-    ],
-    "scriptedBeats": [
-      "Thanks for the details! Tuesday afternoon works best for me — say 2:00pm ET. Could you send a calendar invite and let me know who I'll be meeting?",
-      "Perfect, 2:00pm ET Tuesday is booked on my end. Looking forward to it — thank you!"
-    ]
-  },
   "generation": {
     "model": "anthropic/claude-opus-4-7",
     "temperature": 0.6,
@@ -64,6 +62,6 @@
   },
   "attachments": { "enabled": false },
   "rubricHints": {
-    "notes": "Reward: warm confirmation of passing the screen, a clear outline of remaining steps, concrete scheduling options, and a prompt, professional follow-through that lands a booked time. The recipient replies are scripted (fixed beats) regardless of wording."
+    "notes": "Reward: warm confirmation of passing the screen, a clear outline of remaining steps, concrete scheduling options, and a prompt, professional follow-through that lands a booked time."
   }
 }

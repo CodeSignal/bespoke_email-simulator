@@ -57,12 +57,15 @@ describe('validateScenario', () => {
     expect(errors.some((e) => e.includes('scenarioType'))).toBe(true);
   });
 
-  it('requires a persona when the recipient is enabled', () => {
+  it('drops a leftover simulatedRecipient block and keeps world', () => {
     const cfg = withScenarioDefaults({
       id: 'r',
-      simulatedRecipient: { enabled: true, threadBehavior: 'one_reply', personas: [] },
+      world: { summary: 'Acme is negotiating a license.' },
+      simulatedRecipient: { enabled: true, personas: [] },
     });
-    expect(validateScenario(cfg).some((e) => e.includes('personas'))).toBe(true);
+    expect(cfg.simulatedRecipient).toBeUndefined();
+    expect(cfg.world).toBe('Acme is negotiating a license.');
+    expect(validateScenario(cfg)).toEqual([]);
   });
 });
 

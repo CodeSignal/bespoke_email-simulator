@@ -127,9 +127,14 @@ function settingsHeadingLines() {
     primarySkill: scenario.primarySkill,
     scenarioType: scenario.scenarioType,
     generation: scenario.generation,
-    simulatedRecipient: scenario.simulatedRecipient?.enabled
-      ? { enabled: true, threadBehavior: scenario.simulatedRecipient.threadBehavior, maxTurns: scenario.simulatedRecipient.maxTurns }
-      : { enabled: false },
+    world: scenario.world || '',
+    characters: (scenario.characters || []).map((character) => ({
+      id: character.id,
+      name: character.name,
+      email: character.email,
+      role: character.role || '',
+      responds: character.responds,
+    })),
     submission: scenario.submission,
   };
   return ['# Settings', '', '```json', JSON.stringify(settings, null, 2), '```', '', '---', ''];

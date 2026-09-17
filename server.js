@@ -8,6 +8,12 @@ import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
 import { filterModels } from './lib/helpers.js';
 import { loadScenario } from './lib/scenario.js';
 import { constrainToCharacters, toCharacterAddress } from './lib/characters.js';
+import {
+  selectResponders,
+  compileCharacterCard,
+  parseCharacterReply,
+  buildCharacterReplyHeaders,
+} from './lib/character-replies.js';
 import { resolveStrings } from './lib/i18n.js';
 import {
   newSessionRecord,
@@ -50,6 +56,10 @@ const AGENT_ID =
   (AGENT_TARGET === 'prod'
     ? process.env.OCTAVUS_AGENT_ID_PROD
     : process.env.OCTAVUS_AGENT_ID_DEV) ?? process.env.OCTAVUS_AGENT_ID;
+const CHARACTER_AGENT_ID =
+  (AGENT_TARGET === 'prod'
+    ? process.env.OCTAVUS_CHARACTER_AGENT_ID_PROD
+    : process.env.OCTAVUS_CHARACTER_AGENT_ID_DEV) ?? process.env.OCTAVUS_CHARACTER_AGENT_ID;
 
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json({ limit: '5mb' }));
@@ -185,35 +195,25 @@ function buildGenerationInput(config) {
 // Session input for the assistant (copilot) role.
 function buildAgentSessionInput(config) {
   const input = buildGenerationInput(config);
-  input.MODE = 'assistant';
   if (config.assistant?.systemPromptExtra) input.EXTRA_INSTRUCTIONS = config.assistant.systemPromptExtra;
   return input;
 }
 
-// Session input for the recipient (in-character correspondent) role.
-function buildRecipientSessionInput(config, persona) {
+function buildCharacterSessionInput(config, character) {
   const input = buildGenerationInput(config);
-  input.MODE = 'recipient';
-  input.PERSONA = persona?.prompt || `You are ${persona?.name || 'the recipient'}.`;
-  input.PERSONA_NAME = persona?.name || 'The recipient';
+  input.CHARACTER_NAME = character?.name || '';
+  input.CHARACTER_EMAIL = character?.email || '';
+  input.CHARACTER_ROLE = character?.role || '';
+  input.CHARACTER_CARD = compileCharacterCard(character);
+  if (config.world) input.WORLD = config.world;
+  input.LEARNER_NAME = config.learner?.displayName || 'You';
   return input;
 }
 
-// Whether the simulated recipient may still reply given the thread behavior.
-function recipientAllowed(config, record) {
-  const sr = config.simulatedRecipient;
-  if (!sr?.enabled) return false;
-  const turns = record.recipient_turns || 0;
-  switch (sr.threadBehavior) {
-    case 'one_reply':
-      return turns < 1;
-    case 'multi_turn':
-      return turns < (sr.maxTurns ?? 1);
-    case 'scripted':
-      return turns < (Array.isArray(sr.scriptedBeats) ? sr.scriptedBeats.length : 0);
-    default:
-      return false;
-  }
+function doneCharacterIds(record) {
+  return Object.entries(record.character_done || {})
+    .filter(([, done]) => done)
+    .map(([id]) => id);
 }
 
 // Attach to an Octavus session, execute the payload, and pipe the SSE stream.
@@ -293,11 +293,15 @@ app.post('/api/upload-urls', async (req, res) => {
   }
 });
 
-// ── Send flow & simulated recipient ────────────────────────────
+// ── Send flow & character replies ─────────────────────────────
+
+function publicResponder(character) {
+  return { id: character.id, name: character.name, email: character.email, avatar: character.avatar ?? null };
+}
 
 // POST /api/email/send — simulate sending: append the learner's email to the
-// thread (creating one for compose-new), clear the draft, and report whether a
-// simulated recipient reply is allowed next.
+// thread (creating one for compose-new), clear the draft, and list who will
+// write back.
 app.post('/api/email/send', async (req, res) => {
   const { sessionId, threadId, to, cc, subject, body, attachments } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
@@ -340,105 +344,112 @@ app.post('/api/email/send', async (req, res) => {
     upsertSession(data, record);
     await writeSessions(data);
 
-    res.json({
-      email,
-      thread,
-      recipient: {
-        allowed: recipientAllowed(config, record),
-        behavior: config.simulatedRecipient?.enabled ? config.simulatedRecipient.threadBehavior : null,
-      },
-    });
+    const responders = selectResponders(email, characters, { doneIds: doneCharacterIds(record) }).map(
+      publicResponder,
+    );
+    res.json({ email, thread, responders });
   } catch (err) {
     console.error('[email/send] Error:', err);
     res.status(500).json({ error: 'Failed to send email' });
   }
 });
 
-// POST /api/recipient/session — lazily create the Octavus session that role-plays
-// the simulated recipient persona.
-app.post('/api/recipient/session', async (req, res) => {
-  if (!AGENT_ID) return res.status(503).json({ error: 'Agent is not configured' });
-  const { sessionId } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+// POST /api/character/session — lazily create (or return) the Octavus session
+// that role-plays one scenario character.
+app.post('/api/character/session', async (req, res) => {
+  if (!CHARACTER_AGENT_ID) return res.status(503).json({ error: 'Character agent is not configured' });
+  const { sessionId, characterId } = req.body;
+  if (!sessionId || !characterId) {
+    return res.status(400).json({ error: 'sessionId and characterId are required' });
+  }
   try {
     const data = await readSessions();
     const record = findSession(data, sessionId);
     if (!record) return res.status(404).json({ error: 'Session not found' });
     const { config } = await getScenario();
-    const sr = config.simulatedRecipient;
-    if (!sr?.enabled) return res.status(400).json({ error: 'Simulated recipient is not enabled' });
+    const character = (config.characters || []).find((entry) => entry.id === characterId);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
 
-    if (record.recipient_octavus_session_id) {
-      return res.json({ recipientOctavusSessionId: record.recipient_octavus_session_id });
+    record.character_sessions = record.character_sessions || {};
+    if (record.character_sessions[characterId]) {
+      return res.json({ characterOctavusSessionId: record.character_sessions[characterId] });
     }
 
-    const persona = sr.personas?.[0] ?? {};
-    const input = buildRecipientSessionInput(config, persona);
-    const id = await octavus.agentSessions.create(AGENT_ID, input);
-    record.recipient_octavus_session_id = id;
+    const id = await octavus.agentSessions.create(
+      CHARACTER_AGENT_ID,
+      buildCharacterSessionInput(config, character),
+    );
+    record.character_sessions[characterId] = id;
     upsertSession(data, record);
     await writeSessions(data);
-    res.json({ recipientOctavusSessionId: id });
+    res.json({ characterOctavusSessionId: id });
   } catch (err) {
-    console.error('[recipient/session] Error:', err);
-    res.status(500).json({ error: 'Failed to create recipient session' });
+    console.error('[character/session] Error:', err);
+    res.status(500).json({ error: 'Failed to create character session' });
   }
 });
 
-// POST /api/recipient/trigger — stream an in-character recipient reply via SSE.
-app.post('/api/recipient/trigger', async (req, res) => {
+// POST /api/character/trigger — stream an in-character reply via SSE.
+app.post('/api/character/trigger', async (req, res) => {
   const { sessionId, ...payload } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
   await streamAgent(res, sessionId, payload);
 });
 
-// POST /api/recipient/complete — append a finished recipient reply (LLM- or
-// script-generated) to the thread as an inbound email and count the turn.
-app.post('/api/recipient/complete', async (req, res) => {
-  const { sessionId, threadId, reply } = req.body;
-  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+// POST /api/character/complete — append a finished character reply as inbound
+// mail (reply-all) and record whether that character is done.
+app.post('/api/character/complete', async (req, res) => {
+  const { sessionId, threadId, characterId, reply, inReplyToId } = req.body;
+  if (!sessionId || !characterId) {
+    return res.status(400).json({ error: 'sessionId and characterId are required' });
+  }
   try {
     const data = await readSessions();
     const record = findSession(data, sessionId);
     if (!record) return res.status(404).json({ error: 'Session not found' });
     const { config } = await getScenario();
-    const sr = config.simulatedRecipient;
-    const persona = sr?.personas?.[0] ?? {};
+    const characters = config.characters ?? [];
+    const character = characters.find((entry) => entry.id === characterId);
+    if (!character) return res.status(404).json({ error: 'Character not found' });
 
     const thread = record.threads.find((t) => t.id === threadId) ?? record.threads[0];
     if (!thread) return res.status(404).json({ error: 'Thread not found' });
 
-    // Scripted behavior ignores the streamed reply and uses the author's beat.
-    let bodyText = reply || '';
-    if (sr?.threadBehavior === 'scripted') {
-      const beat = sr.scriptedBeats?.[record.recipient_turns || 0];
-      bodyText = typeof beat === 'string' ? beat : beat?.body || '';
-    }
-
-    const learner = record.threads
-      .flatMap((t) => t.emails)
-      .find((e) => e.outbound);
+    const sent =
+      thread.emails.find((entry) => entry.id === inReplyToId) ??
+      [...thread.emails].reverse().find((entry) => entry.outbound);
+    const { body, done } = parseCharacterReply(reply);
+    const learnerEmail = config.learner?.email || 'you@example.com';
+    const headers = buildCharacterReplyHeaders(sent, character, {
+      learnerEmail,
+      subjectFallback: thread.subject,
+    });
 
     const email = {
       id: `email-${randomUUID()}`,
-      from: { name: persona.name || 'Recipient', email: persona.email || 'recipient@example.com' },
-      to: [{ name: config.learner?.displayName || 'You', email: config.learner?.email || 'you@example.com' }],
-      cc: [],
+      from: { name: character.name, email: character.email },
+      to: headers.to.map((addr) =>
+        addr.toLowerCase() === learnerEmail.toLowerCase()
+          ? { name: config.learner?.displayName || 'You', email: learnerEmail }
+          : toCharacterAddress(addr, characters),
+      ),
+      cc: headers.cc.map((addr) => toCharacterAddress(addr, characters)),
       date: new Date().toISOString(),
-      subject: /^re:/i.test(thread.subject || '') ? thread.subject : `Re: ${thread.subject || ''}`,
-      body: bodyText,
+      subject: headers.subject,
+      body,
       outbound: false,
       attachments: [],
     };
     thread.emails.push(email);
-    record.recipient_turns = (record.recipient_turns || 0) + 1;
+    record.character_done = record.character_done || {};
+    if (done) record.character_done[characterId] = true;
     upsertSession(data, record);
     await writeSessions(data);
 
-    res.json({ email, thread, recipient: { allowed: recipientAllowed(config, record) } });
+    res.json({ email, thread, done });
   } catch (err) {
-    console.error('[recipient/complete] Error:', err);
-    res.status(500).json({ error: 'Failed to record recipient reply' });
+    console.error('[character/complete] Error:', err);
+    res.status(500).json({ error: 'Failed to record character reply' });
   }
 });
 
@@ -468,10 +479,17 @@ app.post('/api/session/save', async (req, res) => {
 if (process.env.NODE_ENV !== 'test') {
   const server = app.listen(PORT, () => {
     console.log(`CosmoMail running at http://localhost:${PORT}`);
-    console.log(`[agent] target=${AGENT_TARGET}${AGENT_ID ? ` (agent ${AGENT_ID})` : ''}`);
+    console.log(`[agent] target=${AGENT_TARGET}${AGENT_ID ? ` (cosmo-mail ${AGENT_ID})` : ''}`);
+    console.log(
+      `[agent] character${CHARACTER_AGENT_ID ? ` ${CHARACTER_AGENT_ID}` : ' (not configured)'}`,
+    );
     if (!AGENT_ID) {
       const expected = `OCTAVUS_AGENT_ID_${AGENT_TARGET.toUpperCase()}`;
       console.warn(`[WARN] ${expected} is not set — the assistant will not work until it is configured.`);
+    }
+    if (!CHARACTER_AGENT_ID) {
+      const expected = `OCTAVUS_CHARACTER_AGENT_ID_${AGENT_TARGET.toUpperCase()}`;
+      console.warn(`[WARN] ${expected} is not set — live character replies will not work until it is configured.`);
     }
   });
   server.on('error', (err) => {

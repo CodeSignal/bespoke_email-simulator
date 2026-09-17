@@ -75,9 +75,7 @@ const state = {
     persisted: [],
     lastInsertable: null,
   },
-  recipient: {
-    octavusSessionId: null,
-  },
+  characterSessions: {},
   attachments: [],
 };
 
@@ -911,7 +909,7 @@ function initAttachments() {
   });
 }
 
-// ── Send flow & simulated recipient ───────────────────────────
+// ── Send flow & character replies ─────────────────────────────
 function replaceThread(thread) {
   const threads = state.session.threads ?? (state.session.threads = []);
   const idx = threads.findIndex((t) => t.id === thread.id);
@@ -919,16 +917,16 @@ function replaceThread(thread) {
   else threads.push(thread);
 }
 
-function appendPendingRecipientEmail() {
+function appendPendingCharacterEmail(character) {
   const article = document.createElement('article');
   article.className = 'email box card non-interactive';
-  const persona = state.config?.simulatedRecipient?.personas?.[0];
-  const person = persona ? personForAddress(persona) : { name: t('Awaiting reply…') };
+  const person = character ? personForAddress(character) : { name: t('Awaiting reply…') };
+  const fromLabel = character?.name ? `${character.name} is writing…` : t('Awaiting reply…');
   article.innerHTML = `
     <div class="email__meta">
       ${avatarMarkup(person, 'md')}
       <div class="email__meta-text">
-        <div class="heading-xxxsmall email__from">Awaiting reply…</div>
+        <div class="heading-xxxsmall email__from">${escapeHtml(fromLabel)}</div>
       </div>
     </div>
     <div class="email__body"><span class="assistant__typing">…</span></div>
@@ -963,7 +961,7 @@ async function sendEmail() {
       }),
     });
     if (!res.ok) throw new Error(`send failed (${res.status})`);
-    const { email, thread, recipient } = await res.json();
+    const { email, thread, responders } = await res.json();
 
     replaceThread(thread);
     state.composingNew = false;
@@ -976,8 +974,8 @@ async function sendEmail() {
     clearAttachments();
     renderShell();
 
-    if (recipient?.allowed) {
-      await runRecipientReply(email.body, thread.id, recipient.behavior);
+    for (const responder of responders || []) {
+      await runCharacterReply(responder, email, thread.id);
     }
   } catch (err) {
     console.error('[CosmoMail] send failed:', err);
@@ -987,11 +985,17 @@ async function sendEmail() {
   }
 }
 
-async function finalizeRecipient(threadId, replyText) {
-  const res = await fetch('/api/recipient/complete', {
+async function finalizeCharacterReply(characterId, threadId, replyText, inReplyToId) {
+  const res = await fetch('/api/character/complete', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: state.session.sessionId, threadId, reply: replyText }),
+    body: JSON.stringify({
+      sessionId: state.session.sessionId,
+      threadId,
+      characterId,
+      reply: replyText,
+      inReplyToId,
+    }),
   });
   if (!res.ok) return;
   const { thread } = await res.json();
@@ -999,62 +1003,71 @@ async function finalizeRecipient(threadId, replyText) {
   renderShell();
 }
 
-async function runRecipientReply(sentBody, threadId, behavior) {
-  // Scripted replies come straight from the author's beats (no LLM).
-  if (behavior === 'scripted') {
-    appendPendingRecipientEmail();
-    await finalizeRecipient(threadId, '');
+async function ensureCharacterSession(characterId) {
+  if (state.characterSessions[characterId]) return state.characterSessions[characterId];
+  const r = await fetch('/api/character/session', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: state.session.sessionId, characterId }),
+  });
+  if (!r.ok) throw new Error(`character session failed (${r.status})`);
+  const { characterOctavusSessionId } = await r.json();
+  state.characterSessions[characterId] = characterOctavusSessionId;
+  return characterOctavusSessionId;
+}
+
+function formatRecipientsContext(email) {
+  const lines = [`From: ${formatAddress(email?.from)}`, `To: ${formatAddressList(email?.to)}`];
+  if (email?.cc?.length) lines.push(`Cc: ${formatAddressList(email.cc)}`);
+  return lines.join('\n');
+}
+
+async function runCharacterReply(character, sentEmail, threadId) {
+  let octavusSessionId;
+  try {
+    octavusSessionId = await ensureCharacterSession(character.id);
+  } catch (err) {
+    console.error('[CosmoMail] character unavailable:', err);
     return;
   }
 
-  // Ensure the recipient Octavus session exists.
-  if (!state.recipient.octavusSessionId) {
-    try {
-      const r = await fetch('/api/recipient/session', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: state.session.sessionId }),
-      });
-      if (!r.ok) throw new Error(`recipient session failed (${r.status})`);
-      state.recipient.octavusSessionId = (await r.json()).recipientOctavusSessionId;
-    } catch (err) {
-      console.error('[CosmoMail] recipient unavailable:', err);
-      return;
-    }
-  }
-
-  const placeholder = appendPendingRecipientEmail();
+  const placeholder = appendPendingCharacterEmail(character);
   const bodyEl = placeholder.querySelector('.email__body');
 
   const transport = createHttpTransport({
     request: (payload) =>
-      fetch('/api/recipient/trigger', {
+      fetch('/api/character/trigger', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: state.recipient.octavusSessionId, ...payload }),
+        body: JSON.stringify({ sessionId: octavusSessionId, ...payload }),
       }),
   });
   const chat = new OctavusChat({ transport });
   const unsub = chat.subscribe(() => {
-    const text = assistantTextFromMessages(chat.messages);
+    const text = assistantTextFromMessages(chat.messages).replace(/\s*\[\[(?:continue|done)\]\]\s*$/i, '');
     bodyEl.innerHTML = renderMarkdown(text) || '<span class="assistant__typing">…</span>';
     els.readingPane.scrollTop = els.readingPane.scrollHeight;
   });
 
+  const sentBody = sentEmail?.body || '';
   try {
     await chat.send(
-      'recipient-reply',
-      { LEARNER_EMAIL: sentBody, THREAD_CONTEXT: serializeThreadContext() },
+      'character-reply',
+      {
+        LEARNER_EMAIL: sentBody,
+        THREAD_CONTEXT: serializeThreadContext(),
+        RECIPIENTS: formatRecipientsContext(sentEmail),
+      },
       { userMessage: { content: sentBody } },
     );
   } catch (err) {
-    console.error('[CosmoMail] recipient reply failed:', err);
+    console.error('[CosmoMail] character reply failed:', err);
   } finally {
     unsub();
   }
 
   const replyText = assistantTextFromMessages(chat.messages);
-  await finalizeRecipient(threadId, replyText);
+  await finalizeCharacterReply(character.id, threadId, replyText, sentEmail?.id);
 }
 
 // ── Assistant (Cosmo) ─────────────────────────────────────────

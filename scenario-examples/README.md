@@ -19,13 +19,13 @@ copy it to `scenario.json`.
 
 ## The examples
 
-| File | Use case | Type | Assistant focus | Simulated recipient |
+| File | Use case | Type | Assistant focus | Live characters |
 | --- | --- | --- | --- | --- |
-| `01-compose-new-outreach` | Write a cold outreach email from scratch | `compose_new` | compose, summarize | off |
-| `02-reply-vendor-negotiation` | Counter a vendor's pricing in an ongoing thread | `reply_chain` | compose, Q&A, summarize, extract | off |
-| `03-qa-summarize-status` | Interrogate a thread and write an exec summary | `reply` | Q&A / search / extract / summarize | off |
-| `04-simulated-recipient-support` | De-escalate and resolve a support ticket | `reply_chain` | compose, Q&A, summarize | `multi_turn` (frustrated customer) |
-| `05-scripted-recipient-scheduling` | Schedule an interview with a candidate | `reply_chain` | compose, summarize | `scripted` (fixed beats) |
+| `01-compose-new-outreach` | Write a cold outreach email from scratch | `compose_new` | compose, summarize | none (Priya is directory-only) |
+| `02-reply-vendor-negotiation` | Counter a vendor's pricing in an ongoing thread | `reply_chain` | compose, Q&A, summarize, extract | none (Dana is directory-only) |
+| `03-qa-summarize-status` | Interrogate a thread and write an exec summary | `reply` | Q&A / search / extract / summarize | none |
+| `04-simulated-recipient-support` | De-escalate and resolve a support ticket | `reply_chain` | compose, Q&A, summarize | Marcus |
+| `05-scripted-recipient-scheduling` | Schedule an interview with a candidate | `reply_chain` | compose, summarize | Jordan (Morgan is directory-only) |
 
 ### What each one demonstrates
 
@@ -37,12 +37,11 @@ copy it to `scenario.json`.
   with concrete facts (owners, dates, budget, a blocker). The task is to use
   Cosmo to answer questions and produce a leadership-ready summary; custom
   instructions are allowed and temperature is lowered for factual accuracy.
-- **04 — Simulated recipient, multi-turn:** The recipient (Marcus) replies
-  in-character over several turns and only relents when the reply is empathetic
-  and offers a concrete fix — good for realistic back-and-forth practice.
-- **05 — Simulated recipient, scripted:** The recipient (Jordan) returns fixed
-  scripted beats regardless of exact wording, useful for deterministic,
-  repeatable exercises.
+- **04 — Live character, support:** Marcus replies in-character until he has a
+  real fix or nothing left to say. Pushback if the learner is generic or cold.
+- **05 — Live character, scheduling:** Jordan replies in-character and works
+  toward a booked slot. Morgan is in the picker but will not write back unless
+  you add a persona (or `responds: true`).
 
 ## Extraction
 

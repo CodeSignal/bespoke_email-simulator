@@ -4,8 +4,8 @@ A lightweight, AI-powered email simulator for teaching and assessing how people
 write and manage email with the help of an AI assistant. Learners read a seeded
 thread, compose replies in a rich editor, and "send" messages — while an AI
 copilot (Cosmo) can help draft, answer questions about the email history,
-summarize, and extract information. Scenarios can optionally simulate a recipient
-who replies in-character for realistic, back-and-forth email threads.
+summarize, and extract information. Live scenario characters can write back
+in-character so the learner practices a real email exchange.
 
 CMail never sends real email; it simulates the experience and captures everything
 for rubric-based assessment.
@@ -14,10 +14,10 @@ for rubric-based assessment.
 
 - Each exercise is a single **scenario** defined in a JSON config (seeded inbox,
   task/brief, and which AI capabilities are enabled).
-- All agentic work is orchestrated by the **Octavus** platform via a single agent
-  (`cosmo-mail`) that switches roles — copilot vs. in-character recipient — using
-  a `MODE` session input. Separate **dev** and **prod** agent profiles let you
-  test configuration before going live.
+- All agentic work is orchestrated by **Octavus**. **Cosmo** (`cosmo-mail`) is
+  the copilot. Live scenario people are a second agent (`cosmo-mail-character`),
+  one Octavus session per character. Separate **dev** and **prod** profiles let
+  you test configuration before going live.
 - The UI uses the shared **`design-system`** submodule.
 - **No database** — short-term state (threads, drafts, assistant messages) is
   stored in a local `sessions.json` file.
@@ -51,8 +51,10 @@ cp .env.example .env
 | `OCTAVUS_API_URL` | Octavus platform URL (default `https://octavus.ai`). |
 | `OCTAVUS_API_KEY` | Your Octavus API key. |
 | `AGENT_TARGET` | Which deployed agent the server talks to: `dev` or `prod` (default `prod`). |
-| `OCTAVUS_AGENT_ID_DEV` | Agent id used when `AGENT_TARGET=dev`. |
-| `OCTAVUS_AGENT_ID_PROD` | Agent id used when `AGENT_TARGET=prod`. |
+| `OCTAVUS_AGENT_ID_DEV` | Cosmo (copilot) agent id used when `AGENT_TARGET=dev`. |
+| `OCTAVUS_AGENT_ID_PROD` | Cosmo (copilot) agent id used when `AGENT_TARGET=prod`. |
+| `OCTAVUS_CHARACTER_AGENT_ID_DEV` | Character agent id used when `AGENT_TARGET=dev`. |
+| `OCTAVUS_CHARACTER_AGENT_ID_PROD` | Character agent id used when `AGENT_TARGET=prod`. |
 
 Set up your scenario:
 
@@ -71,19 +73,25 @@ npm run start:prod
 
 The app serves on port `3000` by default (override with `PORT`).
 
-## Deploying the Octavus agent
+## Deploying the Octavus agents
 
-The agent definition lives in `agents/cosmo-mail/`. Deploy to each target:
+Two agent definitions live under `agents/`:
+
+- `agents/cosmo-mail/` — Cosmo, the email copilot
+- `agents/cosmo-mail-character/` — in-character correspondents
 
 ```bash
-npm run validate:agent     # validate the agent definition
-npm run deploy:agent:dev   # create/update the cosmo-mail-dev agent
-npm run deploy:agent:prod  # create/update the cosmo-mail (prod) agent
+npm run validate:agent              # validate both agent definitions
+npm run deploy:agent:dev            # create/update cosmo-mail-dev
+npm run deploy:agent:prod           # create/update cosmo-mail
+npm run deploy:character-agent:dev  # create/update cosmo-mail-character-dev
+npm run deploy:character-agent:prod # create/update cosmo-mail-character
 ```
 
 The deploy script stages the agent, rewrites `slug`/`name` for the target, then
-runs `octavus validate` + `octavus sync`. Copy the resulting agent id into the
-matching `OCTAVUS_AGENT_ID_*` variable in `.env`.
+runs `octavus validate` + `octavus sync`. Copy the resulting ids into the
+matching `OCTAVUS_AGENT_ID_*` and `OCTAVUS_CHARACTER_AGENT_ID_*` variables in
+`.env`.
 
 ## Scenario authoring
 
@@ -100,7 +108,8 @@ string path to a fixture file relative to the project root.
 | `primarySkill` | `writing` \| `prompting` \| `both` | What the exercise assesses. |
 | `scenarioType` | `compose_new` \| `reply` \| `reply_chain` | Drives composer prefill. |
 | `learner` | `{ displayName, email, avatar }` | Who the learner is in the thread. Optional `avatar` is `0`–`12`; **`0` is the empty face and the default for You**. |
-| `characters` | object[] | People the learner may put on To / Cc. `{ id, name, email }` required; optional `avatar` (`0`–`12`) picks a bundled circle-cropped face (`0` is empty). Extra fields (`role`, `prompt`, …) are kept for future personas. Compose and reply pickers are limited to this list. |
+| `characters` | object[] | People the learner may put on To / Cc. `{ id, name, email }` required; optional `avatar` (`0`–`12`). Optional `persona` (free-form object or string) and/or `prompt` make the character **live** — they reply via `cosmo-mail-character`. `responds: true/false` overrides that. Directory-only people (no persona, `responds` omitted) can be emailed but never write back. |
+| `world` | string \| `{ summary }` | Shared in-world facts every live character already knows. Cosmo does **not** see this. |
 | `seed.inbox` | object \| string | Inline `{ threads }` or a fixture path. Threads may set `"mailbox": "spam"` to land in Spam; otherwise they start in Inbox. Sent is filled automatically when the learner sends. |
 | `seed.activeThreadId` | string | Which mailbox to open on load (the folder that contains this thread). |
 | `seed.focusedEmailId` | string | Email the reply targets. |
@@ -110,11 +119,6 @@ string path to a fixture file relative to the project root.
 | `assistant.systemPromptExtra` | string | Trusted extra instructions for the copilot. |
 | `assistant.initialMessage` | string | Cosmo's opening message. |
 | `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. |
-| `simulatedRecipient.enabled` | boolean | Enable in-character replies. |
-| `simulatedRecipient.threadBehavior` | `one_reply` \| `multi_turn` \| `scripted` | Reply strategy. |
-| `simulatedRecipient.maxTurns` | number | Cap for `multi_turn`. |
-| `simulatedRecipient.personas` | object[] | `{ id, name, email, role, prompt }` (first is used). |
-| `simulatedRecipient.scriptedBeats` | string[] | Fixed replies for `scripted`. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
 | `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support. |
 | `ui` | `{ hideHistory, strings }` | UI overrides + i18n strings. |
@@ -129,13 +133,14 @@ it:
 - **`01-compose-new-outreach`** — write a cold outreach email from scratch
   (no seed inbox, copilot only).
 - **`02-reply-vendor-negotiation`** — reply within a seeded vendor negotiation
-  thread (copilot + attachments, no simulated recipient).
+  thread (copilot + attachments; Dana is directory-only, so she will not write back).
 - **`03-qa-summarize-status`** — use Cosmo to interrogate a project thread and
   write a leadership-ready summary (Q&A / search / extract focus).
-- **`04-simulated-recipient-support`** — a customer-support thread where the
-  recipient replies in-character over multiple turns.
-- **`05-scripted-recipient-scheduling`** — schedule an interview where the
-  candidate returns fixed, scripted replies.
+- **`04-simulated-recipient-support`** — a customer-support thread where Marcus
+  replies in-character until the issue is resolved.
+- **`05-scripted-recipient-scheduling`** — schedule an interview; Jordan replies
+  in-character. Morgan is in the directory but does not write back unless you
+  give her a persona.
 
 ```bash
 cp scenario-examples/04-simulated-recipient-support.scenario.json scenario.json && npm run dev
@@ -180,7 +185,8 @@ GitHub release (excluding secrets and runtime files).
 ## Project layout
 
 ```
-agents/cosmo-mail/     Octavus agent definition (protocol, prompts, settings)
+agents/cosmo-mail/              Cosmo copilot (protocol, prompts, settings)
+agents/cosmo-mail-character/    In-character correspondents
 design-system/         Shared UI submodule
 scenario-examples/     Ready-to-run example scenarios
 fixtures/              Seed inbox fixtures referenced by scenarios/examples

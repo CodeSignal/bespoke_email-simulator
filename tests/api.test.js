@@ -78,8 +78,9 @@ describe('session lifecycle', () => {
     expect(res.status).toBe(200);
     expect(res.body.email.outbound).toBe(true);
     expect(res.body.email.to[0]).toEqual({ name: 'Dana Reyes', email: 'dana@acme-vendor.com' });
-    // scenario.example.json enables a multi_turn simulated recipient
-    expect(res.body.recipient.allowed).toBe(true);
+    expect(res.body.responders).toEqual([
+      expect.objectContaining({ id: 'dana', email: 'dana@acme-vendor.com' }),
+    ]);
   });
 
   it('POST /api/email/send rejects recipients outside the character directory', async () => {

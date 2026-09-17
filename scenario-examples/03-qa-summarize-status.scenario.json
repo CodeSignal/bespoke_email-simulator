@@ -39,7 +39,6 @@
     "initialMessage": "Ask me anything about this thread — status, the blocker, budget, or whether Aug 14 still holds.",
     "allowCustomInstructions": true
   },
-  "simulatedRecipient": { "enabled": false },
   "generation": {
     "model": "anthropic/claude-opus-4-7",
     "temperature": 0.4,

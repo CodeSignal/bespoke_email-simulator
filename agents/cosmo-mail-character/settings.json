@@ -1,0 +1,6 @@
+{
+  "slug": "cosmo-mail-character",
+  "name": "Cosmo Mail Character",
+  "description": "In-character email correspondent for CosmoMail. Replies as a scenario person using their persona, the shared world, and the thread so far.",
+  "format": "interactive"
+}
