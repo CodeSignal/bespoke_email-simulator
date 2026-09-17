@@ -26,6 +26,7 @@ copy it to `scenario.json`.
 | `03-qa-summarize-status` | Interrogate a thread and write an exec summary | `reply` | Q&A / search / extract / summarize | none |
 | `04-simulated-recipient-support` | De-escalate and resolve a support ticket | `reply_chain` | compose, Q&A, summarize | Marcus |
 | `05-scripted-recipient-scheduling` | Schedule an interview with a candidate | `reply_chain` | compose, summarize | Jordan (Morgan is directory-only) |
+| `06-software-sales-prospecting` | Align with a manager on one CRM lead, then book a meeting | `reply_chain` | compose, Q&A, summarize, extract | Alex, Jane, Ryan, Emily, Michael, Sarah |
 
 ### What each one demonstrates
 
@@ -42,6 +43,10 @@ copy it to `scenario.json`.
 - **05 — Live character, scheduling:** Jordan replies in-character and works
   toward a booked slot. Morgan is in the picker but will not write back unless
   you add a persona (or `responds: true`).
+- **06 — Live characters, sales prospecting:** Alex emails a five-lead list.
+  The learner argues for a target; Alex only greenlights Ryan. Then they
+  compose a new note to that prospect. Ryan books a call if the mail is
+  specific; Jane, Emily, Michael, and Sarah deflect.
 
 ## Extraction
 

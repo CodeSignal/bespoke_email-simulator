@@ -141,6 +141,9 @@ it:
 - **`05-scripted-recipient-scheduling`** — schedule an interview; Jordan replies
   in-character. Morgan is in the directory but does not write back unless you
   give her a persona.
+- **`06-software-sales-prospecting`** — align with a sales manager on one CRM
+  lead, then email that prospect and book a meeting (Alex plus five live
+  prospects; Ryan is the right call).
 
 ```bash
 cp scenario-examples/04-simulated-recipient-support.scenario.json scenario.json && npm run dev
