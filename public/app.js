@@ -11,6 +11,7 @@ import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import { Placeholder } from '@tiptap/extensions';
+import Modal from '../design-system/components/modal/modal.js';
 import {
   MAILBOXES,
   mailboxCounts,
@@ -89,6 +90,7 @@ const state = {
   view: 'list', // list | thread
   composingNew: false,
   composeMinimized: false,
+  composeExpanded: false,
   replying: null, // null | 'reply' | 'replyAll'
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
@@ -122,6 +124,7 @@ const els = {
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
   composerMinimizeBtn: document.getElementById('composerMinimizeBtn'),
+  composerExpandBtn: document.getElementById('composerExpandBtn'),
   composerCloseBtn: document.getElementById('composerCloseBtn'),
   assistantHint: document.getElementById('assistantHint'),
   composeToLabel: document.getElementById('composeToLabel'),
@@ -462,13 +465,23 @@ function initRecipientPickers() {
       open(event);
     });
   }
-  document.addEventListener('click', (event) => {
-    if (!state.openRecipientField) return;
-    if (event.target.closest('.recipient-picker')) return;
-    closeRecipientMenus();
-  });
+  // Capture phase: the design-system Modal stops propagation on clicks inside
+  // its dialog (so overlay clicks only close via the overlay itself), which
+  // would otherwise prevent this document-level listener from ever seeing
+  // clicks made while the composer is expanded into that modal.
+  document.addEventListener(
+    'click',
+    (event) => {
+      if (!state.openRecipientField) return;
+      if (event.target.closest('.recipient-picker')) return;
+      closeRecipientMenus();
+    },
+    true,
+  );
   document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && state.openRecipientField) closeRecipientMenus();
+    if (event.key !== 'Escape' || !state.openRecipientField) return;
+    event.stopImmediatePropagation();
+    closeRecipientMenus();
   });
 }
 
@@ -507,10 +520,35 @@ function renderShell() {
 
 const MINIMIZE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg>';
 const RESTORE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></svg>';
+const EXPAND_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5H12.5V9.5"/><path d="M12.5 3.5 3.5 12.5"/></svg>';
+const COLLAPSE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 12.5H3.5V6.5"/><path d="M3.5 12.5 12.5 3.5"/></svg>';
+
+let composeModal = null;
+let syncingComposeModal = false;
 
 function composeOverlayTitle() {
   const subject = els.composeSubject?.value?.trim();
   return subject || t('New message');
+}
+
+function ensureComposeModal() {
+  if (composeModal) return composeModal;
+  composeModal = new Modal({
+    size: 'xlarge',
+    title: null,
+    showCloseButton: false,
+    closeOnOverlayClick: false,
+    closeOnEscape: true,
+    onClose: () => {
+      if (syncingComposeModal) return;
+      if (!state.composeExpanded) return;
+      state.composeExpanded = false;
+      applyView();
+    },
+  });
+  composeModal.dialog.classList.add('compose-modal-dialog');
+  composeModal.overlay.setAttribute('aria-label', t('New message'));
+  return composeModal;
 }
 
 function parkComposer() {
@@ -520,20 +558,48 @@ function parkComposer() {
   }
 }
 
+function dockComposer() {
+  if (!els.composer || !els.mailMain) return;
+  if (els.composer.parentElement !== els.mailMain) {
+    els.mailMain.insertBefore(els.composer, els.mailToasts ?? null);
+  }
+}
+
 function placeComposer() {
   if (!els.composer) return;
   const overlayCompose = Boolean(state.composingNew);
+  const expanded = overlayCompose && state.composeExpanded;
   const inlineReply = state.view === 'thread' && Boolean(state.replying);
-  els.composer.classList.toggle('is-overlay', overlayCompose);
-  els.composer.classList.toggle('box', overlayCompose);
-  els.composer.classList.toggle('card', overlayCompose);
-  els.composer.classList.toggle('non-interactive', overlayCompose);
+  els.composer.classList.toggle('is-overlay', overlayCompose && !expanded);
+  els.composer.classList.toggle('box', overlayCompose && !expanded);
+  els.composer.classList.toggle('card', overlayCompose && !expanded);
+  els.composer.classList.toggle('non-interactive', overlayCompose && !expanded);
+  els.composer.classList.toggle('is-expanded', expanded);
   els.composer.classList.toggle('is-inline', inlineReply);
-  els.composer.classList.toggle('is-minimized', overlayCompose && state.composeMinimized);
+  els.composer.classList.toggle('is-minimized', overlayCompose && !expanded && state.composeMinimized);
+
+  if (expanded) {
+    const modal = ensureComposeModal();
+    modal.overlay.setAttribute('aria-label', composeOverlayTitle());
+    modal.content.appendChild(els.composer);
+    if (!modal.isOpen) {
+      syncingComposeModal = true;
+      modal.open();
+      syncingComposeModal = false;
+    }
+    return;
+  }
+
+  if (composeModal?.isOpen) {
+    syncingComposeModal = true;
+    composeModal.close();
+    syncingComposeModal = false;
+  }
+
   if (inlineReply && els.readingPane && !els.readingPane.hidden) {
     els.readingPane.appendChild(els.composer);
   } else {
-    parkComposer();
+    dockComposer();
   }
 }
 
@@ -558,6 +624,12 @@ function applyView() {
     const minimized = overlayCompose && state.composeMinimized;
     els.composerMinimizeBtn.setAttribute('aria-label', minimized ? t('Restore') : t('Minimize'));
     els.composerMinimizeBtn.innerHTML = minimized ? RESTORE_ICON : MINIMIZE_ICON;
+  }
+  if (els.composerExpandBtn) {
+    const expanded = overlayCompose && state.composeExpanded;
+    els.composerExpandBtn.setAttribute('aria-label', expanded ? t('Collapse') : t('Expand'));
+    els.composerExpandBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    els.composerExpandBtn.innerHTML = expanded ? COLLAPSE_ICON : EXPAND_ICON;
   }
   if (els.composerCloseBtn) els.composerCloseBtn.setAttribute('aria-label', t('Close'));
   if (els.discardBtn) {
@@ -747,6 +819,7 @@ function startReply(mode) {
   state.view = 'thread';
   state.composingNew = false;
   state.composeMinimized = false;
+  state.composeExpanded = false;
   state.replying = mode;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
@@ -769,6 +842,7 @@ function startCompose({ blank = true } = {}) {
   const wasReplying = Boolean(state.replying);
   state.composingNew = true;
   state.composeMinimized = false;
+  state.composeExpanded = false;
   state.replying = null;
   if (state.view === 'compose') state.view = 'list';
   if (blank) {
@@ -789,14 +863,29 @@ function closeComposeOverlay() {
   void saveDraftNow();
   state.composingNew = false;
   state.composeMinimized = false;
+  state.composeExpanded = false;
   applyView();
 }
 
 function toggleComposeMinimized() {
   if (!state.composingNew) return;
-  state.composeMinimized = !state.composeMinimized;
+  if (state.composeExpanded) {
+    state.composeExpanded = false;
+    state.composeMinimized = true;
+  } else {
+    state.composeMinimized = !state.composeMinimized;
+  }
   applyView();
   if (!state.composeMinimized) els.composeToAdd?.focus();
+}
+
+function toggleComposeExpanded() {
+  if (!state.composingNew) return;
+  state.composeMinimized = false;
+  state.composeExpanded = !state.composeExpanded;
+  applyView();
+  if (state.composeExpanded) state.editor?.commands.focus();
+  else els.composeToAdd?.focus();
 }
 
 function composeNewTo(email) {
@@ -961,6 +1050,9 @@ function initComposer() {
     if (els.composerTitle && state.composingNew) {
       els.composerTitle.textContent = composeOverlayTitle();
     }
+    if (state.composeExpanded && composeModal) {
+      composeModal.overlay.setAttribute('aria-label', composeOverlayTitle());
+    }
   });
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
@@ -969,6 +1061,10 @@ function initComposer() {
   els.composerMinimizeBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     toggleComposeMinimized();
+  });
+  els.composerExpandBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleComposeExpanded();
   });
   els.composerCloseBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1207,6 +1303,7 @@ async function sendEmail() {
     replaceThread(thread);
     state.composingNew = false;
     state.composeMinimized = false;
+    state.composeExpanded = false;
     state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;

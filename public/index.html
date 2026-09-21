@@ -68,13 +68,24 @@
 
       <section class="reading-pane" id="readingPane" aria-label="Conversation" aria-live="polite" hidden></section>
 
-      <section class="composer" id="composer" aria-label="Compose" hidden>
+      <!-- A <div>, not a <section>: when expanded, this is appended into the design-system
+           Modal's .modal-content, whose CSS styles "section h2/h3/p/ol/ul" descendants as
+           long-form rich-text content. Being a <section> pulled in that unrelated styling
+           (e.g. a large margin/padding/border under the composer title). role="group" keeps
+           the same accessible semantics a <section aria-label> would have had. -->
+      <div class="composer" id="composer" role="group" aria-label="Compose" hidden>
         <header class="composer__chrome" id="composerChrome" hidden>
           <h2 class="heading-xxxsmall composer__title" id="composerTitle">New message</h2>
           <div class="composer__chrome-actions">
             <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerMinimizeBtn" aria-label="Minimize">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                 <path d="M3.5 8h9"/>
+              </svg>
+            </button>
+            <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerExpandBtn" aria-label="Expand" aria-expanded="false">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6.5 3.5H12.5V9.5"/>
+                <path d="M12.5 3.5 3.5 12.5"/>
               </svg>
             </button>
             <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerCloseBtn" aria-label="Close">
@@ -121,7 +132,7 @@
             <button type="button" class="button button-primary button-small" id="sendBtn" disabled>Send</button>
           </div>
         </div>
-      </section>
+      </div>
       <div class="mail-toasts" id="mailToasts" aria-live="polite" aria-relevant="additions"></div>
     </main>
 
