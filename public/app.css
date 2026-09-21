@@ -462,17 +462,117 @@ body {
   gap: var(--UI-Spacing-spacing-s);
 }
 
-.mail-main.is-composing .composer {
-  flex: 1 1 auto;
+.composer__panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
   min-height: 0;
-  border-top: none;
+  flex: 1 1 auto;
 }
 
-.mail-main.is-composing .composer__body,
-.mail-main.is-composing .composer__editor,
-.mail-main.is-composing .composer__body .tiptap {
+.composer.is-overlay {
+  position: absolute;
+  right: var(--UI-Spacing-spacing-m);
+  bottom: 0;
+  z-index: 50;
+  width: min(30rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
+  height: min(30rem, calc(100% - 10rem));
+  padding: 0;
+  gap: 0;
+  border: 1px solid var(--Colors-Stroke-Default);
+  border-bottom: none;
+  border-radius: var(--UI-Radius-radius-m) var(--UI-Radius-radius-m) 0 0;
+  box-shadow: 0 12px 38px 0 var(--Colors-Shadow-Float);
+  background: var(--Colors-Backgrounds-Main-Top);
+}
+
+.composer.is-overlay.is-minimized {
+  height: auto;
+  width: min(20rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
+}
+
+.composer.is-overlay .composer__panel {
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
+}
+
+.composer.is-overlay .composer__body,
+.composer.is-overlay .composer__editor,
+.composer.is-overlay .composer__body .tiptap {
   flex: 1 1 auto;
-  min-height: 12rem;
+  min-height: 8rem;
+}
+
+.composer.is-overlay .recipient-picker__menu {
+  z-index: 60;
+}
+
+.composer.is-minimized .composer__panel {
+  display: none;
+}
+
+.composer__chrome {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+  min-height: var(--UI-Input-xs);
+  padding: var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-m);
+  background: var(--Colors-Backgrounds-Main-Medium);
+  border-radius: inherit;
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+  flex: 0 0 auto;
+}
+
+.composer.is-minimized .composer__chrome {
+  cursor: pointer;
+}
+
+.composer__title {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.composer__chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xxs);
+}
+
+.composer__chrome-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--UI-Radius-radius-xs);
+  background: transparent;
+  color: var(--Colors-Icon-Medium);
+  cursor: pointer;
+}
+
+.composer__chrome-btn:hover,
+.composer__chrome-btn:focus-visible {
+  background: var(--Colors-Backgrounds-Main-Strong);
+  color: var(--Colors-Icon-Strong);
+}
+
+.composer__chrome-btn:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 1px;
+}
+
+.composer__chrome-btn svg {
+  width: 14px;
+  height: 14px;
+  display: block;
 }
 
 .composer__fields {

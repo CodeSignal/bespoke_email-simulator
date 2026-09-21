@@ -51,7 +51,7 @@
       <nav class="rail__mailboxes" id="mailboxList" aria-label="Folders"></nav>
     </aside>
 
-    <!-- ── MAIN: list, or a conversation / compose that takes it over ── -->
+    <!-- ── MAIN: list or conversation; new mail floats as a PiP overlay ── -->
     <main class="mail-main" id="mailMain">
       <header class="mail-toolbar" id="mailToolbar">
         <button type="button" class="button button-text button-small mail-toolbar__back" id="backBtn" hidden aria-label="Back to mail list">
@@ -69,40 +69,57 @@
       <section class="reading-pane" id="readingPane" aria-label="Conversation" aria-live="polite" hidden></section>
 
       <section class="composer" id="composer" aria-label="Compose" hidden>
-        <div class="composer__fields">
-          <div class="composer__field">
-            <span class="label-small composer__label" id="composeToLabel">To</span>
-            <div class="recipient-picker" id="composeToPicker" data-field="to" role="group" aria-labelledby="composeToLabel">
-              <div class="recipient-picker__chips" id="composeToChips"></div>
-              <button type="button" class="recipient-picker__add body-small" id="composeToAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeToMenu">Select a recipient</button>
-              <ul class="recipient-picker__menu" id="composeToMenu" role="listbox" hidden></ul>
+        <header class="composer__chrome" id="composerChrome" hidden>
+          <h2 class="heading-xxxsmall composer__title" id="composerTitle">New message</h2>
+          <div class="composer__chrome-actions">
+            <button type="button" class="composer__chrome-btn" id="composerMinimizeBtn" aria-label="Minimize">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="M3.5 8h9"/>
+              </svg>
+            </button>
+            <button type="button" class="composer__chrome-btn" id="composerCloseBtn" aria-label="Close">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+                <path d="m4 4 8 8M12 4l-8 8"/>
+              </svg>
+            </button>
+          </div>
+        </header>
+        <div class="composer__panel">
+          <div class="composer__fields">
+            <div class="composer__field">
+              <span class="label-small composer__label" id="composeToLabel">To</span>
+              <div class="recipient-picker" id="composeToPicker" data-field="to" role="group" aria-labelledby="composeToLabel">
+                <div class="recipient-picker__chips" id="composeToChips"></div>
+                <button type="button" class="recipient-picker__add body-small" id="composeToAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeToMenu">Select a recipient</button>
+                <ul class="recipient-picker__menu" id="composeToMenu" role="listbox" hidden></ul>
+              </div>
             </div>
-          </div>
-          <div class="composer__field">
-            <span class="label-small composer__label" id="composeCcLabel">Cc</span>
-            <div class="recipient-picker" id="composeCcPicker" data-field="cc" role="group" aria-labelledby="composeCcLabel">
-              <div class="recipient-picker__chips" id="composeCcChips"></div>
-              <button type="button" class="recipient-picker__add body-small" id="composeCcAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeCcMenu">Select a recipient</button>
-              <ul class="recipient-picker__menu" id="composeCcMenu" role="listbox" hidden></ul>
+            <div class="composer__field">
+              <span class="label-small composer__label" id="composeCcLabel">Cc</span>
+              <div class="recipient-picker" id="composeCcPicker" data-field="cc" role="group" aria-labelledby="composeCcLabel">
+                <div class="recipient-picker__chips" id="composeCcChips"></div>
+                <button type="button" class="recipient-picker__add body-small" id="composeCcAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeCcMenu">Select a recipient</button>
+                <ul class="recipient-picker__menu" id="composeCcMenu" role="listbox" hidden></ul>
+              </div>
             </div>
+            <label class="composer__field">
+              <span class="label-small composer__label">Subject</span>
+              <input type="text" class="input composer__input" id="composeSubject" placeholder="Subject" />
+            </label>
           </div>
-          <label class="composer__field">
-            <span class="label-small composer__label">Subject</span>
-            <input type="text" class="input composer__input" id="composeSubject" placeholder="Subject" />
-          </label>
-        </div>
-        <div class="composer__body" id="composerBody">
-          <!-- TipTap editor mounts here (Stage 4) -->
-          <div class="composer__placeholder body-small" id="composerPlaceholder">Write your message...</div>
-        </div>
-        <div class="composer__attachments" id="attachmentPreview" hidden></div>
-        <input type="file" id="fileInput" multiple hidden />
-        <div class="composer__toolbar">
-          <div class="composer__toolbar-start">
-            <button type="button" class="button button-text button-small composer__attach" id="attachBtn" hidden>Attach</button>
-            <button type="button" class="button button-text button-small" id="discardBtn" hidden>Discard</button>
+          <div class="composer__body" id="composerBody">
+            <!-- TipTap editor mounts here (Stage 4) -->
+            <div class="composer__placeholder body-small" id="composerPlaceholder">Write your message...</div>
           </div>
-          <button type="button" class="button button-primary button-small" id="sendBtn" disabled>Send</button>
+          <div class="composer__attachments" id="attachmentPreview" hidden></div>
+          <input type="file" id="fileInput" multiple hidden />
+          <div class="composer__toolbar">
+            <div class="composer__toolbar-start">
+              <button type="button" class="button button-text button-small composer__attach" id="attachBtn" hidden>Attach</button>
+              <button type="button" class="button button-text button-small" id="discardBtn" hidden>Discard</button>
+            </div>
+            <button type="button" class="button button-primary button-small" id="sendBtn" disabled>Send</button>
+          </div>
         </div>
       </section>
       <div class="mail-toasts" id="mailToasts" aria-live="polite" aria-relevant="additions"></div>

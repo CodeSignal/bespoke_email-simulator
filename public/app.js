@@ -84,8 +84,9 @@ const state = {
   session: null,
   activeMailbox: 'inbox',
   activeThreadId: null,
-  view: 'list', // list | thread | compose
+  view: 'list', // list | thread
   composingNew: false,
+  composeMinimized: false,
   replying: null, // null | 'reply' | 'replyAll'
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
@@ -116,6 +117,10 @@ const els = {
   backBtn: document.getElementById('backBtn'),
   readingPane: document.getElementById('readingPane'),
   composer: document.getElementById('composer'),
+  composerChrome: document.getElementById('composerChrome'),
+  composerTitle: document.getElementById('composerTitle'),
+  composerMinimizeBtn: document.getElementById('composerMinimizeBtn'),
+  composerCloseBtn: document.getElementById('composerCloseBtn'),
   assistantHint: document.getElementById('assistantHint'),
   composeToLabel: document.getElementById('composeToLabel'),
   composeCcLabel: document.getElementById('composeCcLabel'),
@@ -485,22 +490,45 @@ const MAILBOX_ICONS = {
 };
 
 function renderShell() {
+  if (state.view === 'compose') state.view = 'list';
   renderMailboxes();
   applyView();
   if (state.view === 'list') renderMailList();
   else if (state.view === 'thread') renderThread(state.activeThreadId);
 }
 
+const MINIMIZE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg>';
+const RESTORE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></svg>';
+
+function composeOverlayTitle() {
+  const subject = els.composeSubject?.value?.trim();
+  return subject || t('New message');
+}
+
 function applyView() {
+  if (state.view === 'compose') state.view = 'list';
   const view = state.view;
   const isList = view === 'list';
   const isThread = view === 'thread';
-  const isCompose = view === 'compose';
+  const overlayCompose = Boolean(state.composingNew);
+  const inlineReply = isThread && Boolean(state.replying);
 
   if (els.mailList) els.mailList.hidden = !isList;
   if (els.readingPane) els.readingPane.hidden = !isThread;
-  const showComposer = isCompose || (isThread && Boolean(state.replying));
-  if (els.composer) els.composer.hidden = !showComposer;
+  const showComposer = overlayCompose || inlineReply;
+  if (els.composer) {
+    els.composer.hidden = !showComposer;
+    els.composer.classList.toggle('is-overlay', overlayCompose);
+    els.composer.classList.toggle('is-minimized', overlayCompose && state.composeMinimized);
+  }
+  if (els.composerChrome) els.composerChrome.hidden = !overlayCompose;
+  if (els.composerTitle) els.composerTitle.textContent = composeOverlayTitle();
+  if (els.composerMinimizeBtn) {
+    const minimized = overlayCompose && state.composeMinimized;
+    els.composerMinimizeBtn.setAttribute('aria-label', minimized ? t('Restore') : t('Minimize'));
+    els.composerMinimizeBtn.innerHTML = minimized ? RESTORE_ICON : MINIMIZE_ICON;
+  }
+  if (els.composerCloseBtn) els.composerCloseBtn.setAttribute('aria-label', t('Close'));
   if (els.discardBtn) {
     els.discardBtn.hidden = !state.replying;
     els.discardBtn.textContent = t('Discard');
@@ -509,11 +537,9 @@ function applyView() {
     els.backBtn.hidden = isList;
     els.backBtn.setAttribute('aria-label', t('Back to list'));
   }
-  if (els.mailMain) els.mailMain.classList.toggle('is-composing', isCompose);
 
   if (els.mailToolbarTitle) {
-    if (isCompose) els.mailToolbarTitle.textContent = t('New message');
-    else if (isThread) {
+    if (isThread) {
       const thread = (state.session?.threads ?? []).find((th) => th.id === state.activeThreadId);
       els.mailToolbarTitle.textContent = thread?.subject || t('Inbox');
     } else {
@@ -672,7 +698,6 @@ function applyThreadComposer(threadId, mode = state.replying || 'reply') {
 function selectMailbox(mailbox) {
   state.activeMailbox = mailbox;
   state.view = 'list';
-  state.composingNew = false;
   state.replying = null;
   state.activeThreadId = null;
   renderShell();
@@ -680,7 +705,6 @@ function selectMailbox(mailbox) {
 
 function selectThread(threadId) {
   state.view = 'thread';
-  state.composingNew = false;
   state.replying = null;
   state.activeThreadId = threadId;
   renderShell();
@@ -689,6 +713,7 @@ function selectThread(threadId) {
 function startReply(mode) {
   state.view = 'thread';
   state.composingNew = false;
+  state.composeMinimized = false;
   state.replying = mode;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
@@ -702,10 +727,17 @@ function cancelReply() {
 }
 
 function startCompose({ blank = true } = {}) {
-  state.view = 'compose';
+  if (state.composingNew) {
+    state.composeMinimized = false;
+    applyView();
+    els.composeToAdd?.focus();
+    return;
+  }
+  const wasReplying = Boolean(state.replying);
   state.composingNew = true;
+  state.composeMinimized = false;
   state.replying = null;
-  state.activeThreadId = null;
+  if (state.view === 'compose') state.view = 'list';
   if (blank) {
     applyRecipientDraft({ to: [], cc: [] });
     els.composeSubject.value = '';
@@ -713,8 +745,25 @@ function startCompose({ blank = true } = {}) {
     clearAttachments();
   }
   scheduleDraftSave();
-  renderShell();
+  if (wasReplying && state.view === 'thread') renderThread(state.activeThreadId);
+  applyView();
   els.composeToAdd?.focus();
+}
+
+function closeComposeOverlay() {
+  if (!state.composingNew) return;
+  clearTimeout(state.draftSaveTimer);
+  void saveDraftNow();
+  state.composingNew = false;
+  state.composeMinimized = false;
+  applyView();
+}
+
+function toggleComposeMinimized() {
+  if (!state.composingNew) return;
+  state.composeMinimized = !state.composeMinimized;
+  applyView();
+  if (!state.composeMinimized) els.composeToAdd?.focus();
 }
 
 function composeNewTo(email) {
@@ -740,7 +789,6 @@ function initMailtoCompose() {
 
 function backToList() {
   state.view = 'list';
-  state.composingNew = false;
   state.replying = null;
   state.activeThreadId = null;
   renderShell();
@@ -875,11 +923,31 @@ function initComposer() {
   });
 
   initRecipientPickers();
-  els.composeSubject.addEventListener('input', scheduleDraftSave);
+  els.composeSubject.addEventListener('input', () => {
+    scheduleDraftSave();
+    if (els.composerTitle && state.composingNew) {
+      els.composerTitle.textContent = composeOverlayTitle();
+    }
+  });
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);
   els.discardBtn?.addEventListener('click', cancelReply);
+  els.composerMinimizeBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleComposeMinimized();
+  });
+  els.composerCloseBtn?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    closeComposeOverlay();
+  });
+  els.composerChrome?.addEventListener('click', () => {
+    if (state.composeMinimized) {
+      state.composeMinimized = false;
+      applyView();
+      els.composeToAdd?.focus();
+    }
+  });
   updateSendEnabled();
 }
 
@@ -1105,6 +1173,7 @@ async function sendEmail() {
 
     replaceThread(thread);
     state.composingNew = false;
+    state.composeMinimized = false;
     state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
@@ -1321,7 +1390,10 @@ function renderAssistant(liveMessages = []) {
 }
 
 function insertIntoComposer(markdown) {
-  if (state.view === 'list') startCompose({ blank: false });
+  if (state.composingNew) {
+    state.composeMinimized = false;
+    applyView();
+  } else if (state.view === 'list') startCompose({ blank: false });
   else if (state.view === 'thread' && !state.replying) startReply('reply');
   setEditorMarkdown(markdown);
   scheduleDraftSave();
