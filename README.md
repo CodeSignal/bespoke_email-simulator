@@ -50,7 +50,7 @@ cp .env.example .env
 | --- | --- |
 | `OCTAVUS_API_URL` | Octavus platform URL (default `https://octavus.ai`). |
 | `OCTAVUS_API_KEY` | Your Octavus API key. |
-| `AGENT_TARGET` | Which deployed agent the server talks to: `dev` or `prod` (default `prod`). |
+| `AGENT_TARGET` | Which pair of agents to use: `dev` or `prod` (default `prod`). Selects runtime IDs and the target for `npm run deploy:agent`. |
 | `OCTAVUS_AGENT_ID_DEV` | Cosmo (copilot) agent id used when `AGENT_TARGET=dev`. |
 | `OCTAVUS_AGENT_ID_PROD` | Cosmo (copilot) agent id used when `AGENT_TARGET=prod`. |
 | `OCTAVUS_CHARACTER_AGENT_ID_DEV` | Character agent id used when `AGENT_TARGET=dev`. |
@@ -66,32 +66,72 @@ cp scenario.example.json scenario.json
 ## Running
 
 ```bash
-npm run dev     # builds the client, watches, runs against the DEV agent
-npm start       # one-off build + server against the default (prod) agent
-npm run start:prod
+npm run dev     # builds the client, watches; uses AGENT_TARGET from .env
+npm start       # one-off build + server; uses AGENT_TARGET from .env
+npm run start:prod  # force the prod pair regardless of .env
 ```
 
 The app serves on port `3000` by default (override with `PORT`).
 
-## Deploying the Octavus agents
+## Agent deployment (dev vs prod)
 
-Two agent definitions live under `agents/`:
+Two agent definitions live under `agents/` and are the **single source of truth**:
 
 - `agents/cosmo-mail/` — Cosmo, the email copilot
 - `agents/cosmo-mail-character/` — in-character correspondents
 
-```bash
-npm run validate:agent              # validate both agent definitions
-npm run deploy:agent:dev            # create/update cosmo-mail-dev
-npm run deploy:agent:prod           # create/update cosmo-mail
-npm run deploy:character-agent:dev  # create/update cosmo-mail-character-dev
-npm run deploy:character-agent:prod # create/update cosmo-mail-character
-```
+Each definition is deployed to two Octavus agents, distinguished by slug:
 
-The deploy script stages the agent, rewrites `slug`/`name` for the target, then
-runs `octavus validate` + `octavus sync`. Copy the resulting ids into the
-matching `OCTAVUS_AGENT_ID_*` and `OCTAVUS_CHARACTER_AGENT_ID_*` variables in
-`.env`.
+| Agent     | Target | Slug                       | Used by                               |
+| --------- | ------ | -------------------------- | ------------------------------------- |
+| copilot   | dev    | `cosmo-mail-dev`           | local development / testing (default) |
+| copilot   | prod   | `cosmo-mail`               | real users                            |
+| character | dev    | `cosmo-mail-character-dev` | local development / testing (default) |
+| character | prod   | `cosmo-mail-character`     | real users                            |
+
+There are **two independent switches**:
+
+1. **Deploy** — which agents the CLI writes your edited files to. The Octavus CLI
+   targets an agent by the `slug` in `settings.json`, so `scripts/deploy-agent.mjs`
+   stages a copy of each definition and rewrites only the slug/name for the chosen
+   target (prompts and `protocol.yaml` are never duplicated, so dev and prod cannot
+   drift):
+
+   ```bash
+   npm run deploy:agent                 # both agents, target from AGENT_TARGET in .env
+   npm run deploy:agent:dev             # both agents → *-dev slugs
+   npm run deploy:agent:prod            # both agents → prod slugs (asks for confirmation)
+   npm run deploy:character-agent:dev   # character agent only → cosmo-mail-character-dev
+   npm run deploy:character-agent:prod  # character agent only → cosmo-mail-character
+   npm run validate:agent               # dry-run validation only
+   ```
+
+   `deploy:agent:prod` requires confirmation: answer the interactive prompt, or
+   pass `--yes` for CI (`node scripts/deploy-agent.mjs prod --yes`).
+
+2. **Runtime** — which deployed pair the running server talks to, selected by
+   `AGENT_TARGET` in `.env` (defaults to `prod`):
+
+   ```bash
+   npm run dev          # watch mode; talks to whatever AGENT_TARGET is in .env
+   npm start            # same, without watch
+   npm run start:prod   # force the prod pair regardless of .env
+   ```
+
+   The server reads `OCTAVUS_AGENT_ID_DEV` / `OCTAVUS_CHARACTER_AGENT_ID_DEV` or
+   the `*_PROD` pair based on `AGENT_TARGET`. Find the IDs with
+   `npx octavus --env .env list`.
+
+   **Backward compatibility:** the default is `prod`, and when a target-specific
+   ID is missing the server falls back to the legacy `OCTAVUS_AGENT_ID` /
+   `OCTAVUS_CHARACTER_AGENT_ID`. An existing `.env` that only defines those
+   keeps working unchanged.
+
+Typical workflow: set `AGENT_TARGET=dev` in `.env`, edit `agents/cosmo-mail/*`
+and/or `agents/cosmo-mail-character/*`, run `npm run deploy:agent`, and test
+with `npm run dev`. Flip `AGENT_TARGET` to `prod` and deploy again once you're
+happy. Copy new ids into the matching `OCTAVUS_AGENT_ID_*` and
+`OCTAVUS_CHARACTER_AGENT_ID_*` variables in `.env`.
 
 ## Scenario authoring
 
