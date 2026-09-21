@@ -510,6 +510,32 @@ body {
   display: none;
 }
 
+.composer.is-inline {
+  flex: 0 0 auto;
+  min-height: auto;
+  border: 2px solid var(--Colors-Stroke-Strong);
+  border-radius: var(--UI-Radius-radius-s);
+  padding: var(--UI-Spacing-spacing-ms);
+  background: var(--Colors-Box-Background);
+  box-shadow: 0 12px 38px 0 var(--Colors-Shadow-Float);
+}
+
+.composer.is-inline .composer__panel {
+  flex: 0 0 auto;
+  min-height: auto;
+}
+
+.composer.is-inline .composer__body {
+  overflow: visible;
+}
+
+.composer.is-inline .composer__body,
+.composer.is-inline .composer__editor,
+.composer.is-inline .composer__body .tiptap {
+  flex: 0 0 auto;
+  min-height: 8rem;
+}
+
 .composer__chrome {
   display: flex;
   align-items: center;

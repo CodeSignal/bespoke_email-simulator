@@ -492,9 +492,9 @@ const MAILBOX_ICONS = {
 function renderShell() {
   if (state.view === 'compose') state.view = 'list';
   renderMailboxes();
-  applyView();
   if (state.view === 'list') renderMailList();
   else if (state.view === 'thread') renderThread(state.activeThreadId);
+  applyView();
 }
 
 const MINIMIZE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg>';
@@ -503,6 +503,27 @@ const RESTORE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor"
 function composeOverlayTitle() {
   const subject = els.composeSubject?.value?.trim();
   return subject || t('New message');
+}
+
+function parkComposer() {
+  if (!els.composer || !els.mailMain) return;
+  if (els.composer.parentElement === els.readingPane) {
+    els.mailMain.insertBefore(els.composer, els.mailToasts ?? null);
+  }
+}
+
+function placeComposer() {
+  if (!els.composer) return;
+  const overlayCompose = Boolean(state.composingNew);
+  const inlineReply = state.view === 'thread' && Boolean(state.replying);
+  els.composer.classList.toggle('is-overlay', overlayCompose);
+  els.composer.classList.toggle('is-inline', inlineReply);
+  els.composer.classList.toggle('is-minimized', overlayCompose && state.composeMinimized);
+  if (inlineReply && els.readingPane && !els.readingPane.hidden) {
+    els.readingPane.appendChild(els.composer);
+  } else {
+    parkComposer();
+  }
 }
 
 function applyView() {
@@ -518,9 +539,8 @@ function applyView() {
   const showComposer = overlayCompose || inlineReply;
   if (els.composer) {
     els.composer.hidden = !showComposer;
-    els.composer.classList.toggle('is-overlay', overlayCompose);
-    els.composer.classList.toggle('is-minimized', overlayCompose && state.composeMinimized);
   }
+  placeComposer();
   if (els.composerChrome) els.composerChrome.hidden = !overlayCompose;
   if (els.composerTitle) els.composerTitle.textContent = composeOverlayTitle();
   if (els.composerMinimizeBtn) {
@@ -645,6 +665,7 @@ function renderThread(threadId) {
   const thread = threads.find((th) => th.id === threadId);
   const learnerAddr = learnerEmail();
 
+  parkComposer();
   els.readingPane.innerHTML = '';
   if (!thread) {
     backToList();
@@ -654,6 +675,7 @@ function renderThread(threadId) {
     els.readingPane.appendChild(renderEmail(email, learnerAddr));
   }
   if (!state.replying) els.readingPane.appendChild(renderThreadActions());
+  else placeComposer();
 }
 
 function renderThreadActions() {
@@ -717,7 +739,7 @@ function startReply(mode) {
   state.replying = mode;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
-  els.composerBody?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   state.editor?.commands.focus();
 }
 
@@ -1397,7 +1419,7 @@ function insertIntoComposer(markdown) {
   else if (state.view === 'thread' && !state.replying) startReply('reply');
   setEditorMarkdown(markdown);
   scheduleDraftSave();
-  els.composerBody.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 function persistAssistant() {
