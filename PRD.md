@@ -164,8 +164,9 @@ composer; `prompting` foregrounds the assistant) but both surfaces are present.
 
 One scenario per deployment, defined in a JSON config at the project root
 (`scenario.json`, with `scenario.example.json` committed as the template — mirrors
-ChatCPT's `chat-config.json`). Seed email data may be **inline** or referenced
-from **separate fixture files** (both supported).
+ChatCPT's `chat-config.json`). Seed email data is **inline** in `seed.inbox` by
+default. For a large mailbox, `seed.inbox` may instead be a path to a JSON file
+of the same shape.
 
 ### 6.1 Config shape (illustrative)
 
@@ -180,7 +181,15 @@ from **separate fixture files** (both supported).
   "learner": { "displayName": "You" },
 
   "seed": {
-    "inbox": "fixtures/vendor-thread.json",
+    "inbox": {
+      "threads": [
+        {
+          "id": "thread-1",
+          "subject": "Proposal for annual license",
+          "emails": [ /* ... */ ]
+        }
+      ]
+    },
     "activeThreadId": "thread-1",
     "focusedEmailId": "email-3"
   },
@@ -235,7 +244,10 @@ from **separate fixture files** (both supported).
 }
 ```
 
-### 6.2 Seed email/fixture shape (illustrative)
+### 6.2 Seed email shape (illustrative)
+
+This object lives in `seed.inbox`. For a large mailbox, the same JSON may live
+in a separate file and `seed.inbox` can be a path to it.
 
 ```json
 {
@@ -263,7 +275,8 @@ from **separate fixture files** (both supported).
 ### 6.3 Config capabilities summary
 - Define the task/brief and `primarySkill` (writing / prompting / both).
 - Choose `scenarioType` (`compose_new` / `reply` / `reply_chain`).
-- Seed the inbox/threads (inline or fixture file); set the active/focused email.
+- Seed the inbox/threads (inline by default; optional JSON file for large
+  inboxes); set the active/focused email.
 - Prefill an initial draft.
 - Enable/disable the assistant and choose its capabilities; add trusted
   `systemPromptExtra` and an optional opening message; opt into learner custom
@@ -353,7 +366,7 @@ draft revisions, the assistant chat transcript, and the final submission.
 
 ### 7.6 API routes (extending ChatCPT)
 - `GET /api/config` — scenario config + resolved i18n strings.
-- `GET /api/scenario` — seed inbox/threads + brief (resolved inline or from fixtures).
+- `GET /api/scenario` — seed inbox/threads + brief (inline, or from a file path).
 - `GET /api/session` / `POST /api/sessions` / `DELETE /api/sessions/:id` — lifecycle
   (session creation seeds the inbox into the record).
 - `POST /api/assistant/trigger` — assistant turn (SSE stream).

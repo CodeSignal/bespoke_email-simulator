@@ -15,7 +15,46 @@
     }
   ],
   "seed": {
-    "inbox": "fixtures/vendor-thread.json",
+    "inbox": {
+      "threads": [
+        {
+          "id": "thread-1",
+          "subject": "Proposal for annual license",
+          "emails": [
+            {
+              "id": "email-1",
+              "from": { "name": "Dana Reyes", "email": "dana@acme-vendor.com" },
+              "to": [{ "name": "You", "email": "you@company.com" }],
+              "cc": [],
+              "date": "2026-07-10T14:02:00Z",
+              "subject": "Proposal for annual license",
+              "body": "Hi,\n\nThanks for your interest in Acme. Our standard **annual license** is **$48,000**, billed up front, and includes priority support and up to 50 seats.\n\nHappy to answer any questions.\n\nBest,\nDana",
+              "attachments": []
+            },
+            {
+              "id": "email-2",
+              "from": { "name": "You", "email": "you@company.com" },
+              "to": [{ "name": "Dana Reyes", "email": "dana@acme-vendor.com" }],
+              "cc": [],
+              "date": "2026-07-11T09:15:00Z",
+              "subject": "Re: Proposal for annual license",
+              "body": "Hi Dana,\n\nThanks for sending this over. The feature set looks like a good fit. Before we move forward, I'd like to understand flexibility on pricing and term length.\n\nCould you share options?\n\nThanks,\nYou",
+              "attachments": []
+            },
+            {
+              "id": "email-3",
+              "from": { "name": "Dana Reyes", "email": "dana@acme-vendor.com" },
+              "to": [{ "name": "You", "email": "you@company.com" }],
+              "cc": [],
+              "date": "2026-07-12T16:40:00Z",
+              "subject": "Re: Proposal for annual license",
+              "body": "Hi,\n\nWe can hold the **$48,000** rate for a 12-month term. For a longer commitment we have some room to move, but I'd need to take it to my team.\n\nWhat term were you considering?\n\nBest,\nDana",
+              "attachments": []
+            }
+          ]
+        }
+      ]
+    },
     "activeThreadId": "thread-1",
     "focusedEmailId": "email-3"
   },

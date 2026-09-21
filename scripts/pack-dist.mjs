@@ -83,7 +83,6 @@ copy(path.join(ROOT, 'design-system'), path.join(DIST, 'design-system'), (src) =
   return !rel.split(path.sep).includes('.git');
 });
 copy(path.join(ROOT, 'i18n'), path.join(DIST, 'i18n'));
-copy(path.join(ROOT, 'fixtures'), path.join(DIST, 'fixtures'));
 copy(path.join(ROOT, 'current-models.txt'), path.join(DIST, 'current-models.txt'));
 copy(path.join(ROOT, '.env.example'), path.join(DIST, '.env.example'));
 copy(path.join(ROOT, 'scenario.example.json'), path.join(DIST, 'scenario.example.json'));
@@ -135,7 +134,6 @@ const entries = [
   'public/app.bundle.js',
   'public',
   'design-system',
-  'fixtures',
   'i18n',
 ];
 console.log('Packed dist/ (no node_modules):');

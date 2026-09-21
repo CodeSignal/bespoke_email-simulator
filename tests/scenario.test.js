@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import path from 'path';
+import os from 'os';
+import { mkdtemp, writeFile, rm } from 'fs/promises';
 import { fileURLToPath } from 'url';
 import {
   withScenarioDefaults,
@@ -84,8 +86,21 @@ describe('resolveInbox', () => {
   });
 
   it('resolves an inbox from a fixture file path', async () => {
-    const inbox = await resolveInbox({ inbox: 'fixtures/vendor-thread.json' }, ROOT);
-    expect(inbox.threads).toHaveLength(1);
-    expect(inbox.threads[0].emails).toHaveLength(3);
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'cmail-inbox-'));
+    const fixturePath = path.join(dir, 'thread.json');
+    await writeFile(
+      fixturePath,
+      JSON.stringify({
+        threads: [{ id: 'from-file', emails: [{ id: 'e1' }, { id: 'e2' }, { id: 'e3' }] }],
+      }),
+    );
+    try {
+      const inbox = await resolveInbox({ inbox: fixturePath }, ROOT);
+      expect(inbox.threads).toHaveLength(1);
+      expect(inbox.threads[0].id).toBe('from-file');
+      expect(inbox.threads[0].emails).toHaveLength(3);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

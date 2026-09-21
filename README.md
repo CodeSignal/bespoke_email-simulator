@@ -97,8 +97,9 @@ matching `OCTAVUS_AGENT_ID_*` and `OCTAVUS_CHARACTER_AGENT_ID_*` variables in
 
 A scenario config drives one exercise. Only fields you want to override need to
 be present — everything else falls back to sane defaults (see
-`lib/scenario.js`). The seed inbox may be inline (`{ "threads": [...] }`) or a
-string path to a fixture file relative to the project root.
+`lib/scenario.js`). Put the seed inbox inline as `{ "threads": [...] }`. For a
+large mailbox, `seed.inbox` may instead be a string path to a JSON file of that
+shape, relative to the project root.
 
 | Field | Type | Notes |
 | --- | --- | --- |
@@ -110,7 +111,7 @@ string path to a fixture file relative to the project root.
 | `learner` | `{ displayName, email, avatar }` | Who the learner is in the thread. Optional `avatar` is `0`–`12`; **`0` is the empty face and the default for You**. |
 | `characters` | object[] | People the learner may put on To / Cc. `{ id, name, email }` required; optional `avatar` (`0`–`12`). Optional `persona` (free-form object or string) and/or `prompt` make the character **live** — they reply via `cosmo-mail-character`. `responds: true/false` overrides that. Directory-only people (no persona, `responds` omitted) can be emailed but never write back. |
 | `world` | string \| `{ summary }` | Shared in-world facts every live character already knows. Cosmo does **not** see this. |
-| `seed.inbox` | object \| string | Inline `{ threads }` or a fixture path. Threads may set `"mailbox": "spam"` to land in Spam; otherwise they start in Inbox. Sent is filled automatically when the learner sends. |
+| `seed.inbox` | object \| string | Inline `{ threads }` by default. Optionally a path to a JSON file of the same shape for large inboxes. Threads may set `"mailbox": "spam"` to land in Spam; otherwise they start in Inbox. Sent is filled automatically when the learner sends. |
 | `seed.activeThreadId` | string | Which mailbox to open on load (the folder that contains this thread). |
 | `seed.focusedEmailId` | string | Email the reply targets. |
 | `initialDraft` | `{ to, cc, subject, body }` | Optional composer prefill. |
@@ -126,9 +127,8 @@ string path to a fixture file relative to the project root.
 
 ### Example scenarios
 
-Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/) (their
-seed data lives in [`fixtures/`](fixtures/)). Copy one to `scenario.json` to try
-it:
+Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/). Copy
+one to `scenario.json` to try it:
 
 - **`01-compose-new-outreach`** — write a cold outreach email from scratch
   (no seed inbox, copilot only).
@@ -195,7 +195,6 @@ agents/cosmo-mail/              Cosmo copilot (protocol, prompts, settings)
 agents/cosmo-mail-character/    In-character correspondents
 design-system/         Shared UI submodule
 scenario-examples/     Ready-to-run example scenarios
-fixtures/              Seed inbox fixtures referenced by scenarios/examples
 i18n/                  Locale catalogs
 lib/                   Pure logic (scenario, sessions, i18n, helpers)
 public/                Client app (index.html, app.js, app.css)
