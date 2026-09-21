@@ -12,8 +12,8 @@
  *   node extract-conversations.js [--mode <mode>] [--latest] [--output <file>] [--print-settings]
  *
  * Modes:
- *   full        (default) Everything: the email thread(s), the current draft,
- *               and the assistant conversation (if enabled for the scenario).
+ *   full        (default) Everything: the email thread(s) and the assistant
+ *               conversation (if enabled for the scenario).
  *   submission  Only the participant's selected submission (falls back to the most
  *               recent sent email when none is chosen).
  *   thread      Only the email thread(s).
@@ -72,7 +72,7 @@ if (args.includes('--help') || args.includes('-h')) {
 
 Options:
   --mode <mode>    Output mode (default: full)
-                     full        Thread(s) + draft + assistant
+                     full        Thread(s) + assistant
                      submission  Only the selected submission (or latest send)
                      thread      Only the email thread(s)
                      assistant   Only the Cosmo assistant conversation
@@ -99,7 +99,7 @@ const modeIdx = args.indexOf('--mode');
 if (modeIdx !== -1) {
   const provided = args[modeIdx + 1];
   if (!provided || !VALID_MODES.includes(provided)) {
-    console.error(`Error: --mode must be one of: ${VALID_MODES.join(', ')}`);
+    console.log(`Error: --mode must be one of: ${VALID_MODES.join(', ')}`);
     process.exit(1);
   }
   mode = provided;
@@ -109,7 +109,7 @@ const orderIdx = args.indexOf('--order');
 if (orderIdx !== -1) {
   const provided = args[orderIdx + 1];
   if (!provided || !VALID_ORDERS.includes(provided)) {
-    console.error(`Error: --order must be one of: ${VALID_ORDERS.join(', ')}`);
+    console.log(`Error: --order must be one of: ${VALID_ORDERS.join(', ')}`);
     process.exit(1);
   }
   order = provided;
@@ -135,7 +135,7 @@ try {
   if (err.code === 'ENOENT') {
     data = { sessions: [] };
   } else {
-    console.error(`Could not read ${SESSIONS_FILE}: ${err.message}`);
+    console.log(`Could not read ${SESSIONS_FILE}: ${err.message}`);
     process.exit(1);
   }
 }
@@ -273,17 +273,6 @@ function emailHistoryLines(session) {
   return order === 'chronological' ? chronologicalLines(session) : threadLines(session);
 }
 
-function draftLines(session) {
-  const draft = session.drafts?.[0];
-  if (!draft) return [];
-  const lines = ['### Current draft', ''];
-  if (draft.to?.length) lines.push(`**To:** ${draft.to.join(', ')}  `);
-  if (draft.cc?.length) lines.push(`**Cc:** ${draft.cc.join(', ')}  `);
-  if (draft.subject) lines.push(`**Subject:** ${draft.subject}  `);
-  lines.push('', String(draft.body || '_(empty)_'), '');
-  return lines;
-}
-
 function assistantLines(session) {
   const lines = ['### Assistant conversation (Cosmo)', ''];
   if (!assistantEnabled) {
@@ -372,8 +361,6 @@ function renderSession(session, index, total) {
     // full
     lines.push(...emailHistoryLines(session));
     lines.push('---', '');
-    lines.push(...draftLines(session));
-    lines.push('---', '');
     lines.push(...assistantLines(session));
   }
   return lines;
@@ -383,7 +370,7 @@ function renderSession(session, index, total) {
 function emit(text) {
   if (outputFile) {
     writeFileSync(outputFile, text);
-    console.error(`Written to ${outputFile}`);
+    console.log(`Written to ${outputFile}`);
   } else {
     console.log(text);
   }
