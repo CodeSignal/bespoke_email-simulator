@@ -75,6 +75,20 @@ await esbuild.build({
   logLevel: 'warning',
 });
 
+await esbuild.build({
+  absWorkingDir: ROOT,
+  entryPoints: ['extract-conversations.js'],
+  bundle: true,
+  outfile: 'dist/extract-conversations.js',
+  format: 'esm',
+  platform: 'node',
+  minify: true,
+  banner: {
+    js: "import { createRequire } from 'module'; const require = createRequire(import.meta.url);",
+  },
+  logLevel: 'warning',
+});
+
 copy(path.join(ROOT, 'public/index.html'), path.join(DIST, 'public/index.html'));
 copy(path.join(ROOT, 'public/app.css'), path.join(DIST, 'public/app.css'));
 copy(path.join(ROOT, 'public/avatars'), path.join(DIST, 'public/avatars'));
@@ -96,14 +110,26 @@ fs.writeFileSync(
       version: pkg.version,
       private: true,
       type: 'module',
-      scripts: { start: 'node server.js' },
+      scripts: {
+        start: 'node server.js',
+        extract: 'node extract-conversations.js',
+        report: 'node extract-conversations.js --mode report --print-settings',
+        'report:chronological':
+          'node extract-conversations.js --mode report --print-settings --order chronological',
+      },
     },
     null,
     2,
   )}\n`,
 );
 
-for (const rel of ['public/app.bundle.js', 'public/app.css', 'public/index.html', 'server.js']) {
+for (const rel of [
+  'public/app.bundle.js',
+  'public/app.css',
+  'public/index.html',
+  'server.js',
+  'extract-conversations.js',
+]) {
   if (!fs.existsSync(path.join(DIST, rel))) throw new Error(`missing ${rel} in dist/`);
 }
 
@@ -131,6 +157,7 @@ execFileSync('tar', ['-czf', TAR, '-C', DIST, '.'], { cwd: ROOT });
 
 const entries = [
   'server.js',
+  'extract-conversations.js',
   'public/app.bundle.js',
   'public',
   'design-system',

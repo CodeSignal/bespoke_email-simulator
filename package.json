@@ -18,6 +18,7 @@
     "deploy:character-agent:prod": "node scripts/deploy-agent.mjs prod --agent cosmo-mail-character",
     "extract": "node extract-conversations.js",
     "report": "node extract-conversations.js --mode report --print-settings",
+    "report:chronological": "node extract-conversations.js --mode report --print-settings --order chronological",
     "test": "vitest run",
     "test:watch": "vitest",
     "pack": "node scripts/pack-dist.mjs"

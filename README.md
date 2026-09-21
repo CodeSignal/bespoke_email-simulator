@@ -199,20 +199,46 @@ language via `generation.language`, and per-scenario overrides can be supplied i
 
 ## Extraction & reporting
 
-Turn captured sessions (`sessions.json`) into readable Markdown for an AI tutor
-or an assessment rubric:
+Turn captured sessions (`sessions.json`) into readable Markdown for a human
+grader or an AI tutor:
 
 ```bash
-npm run extract                                    # full transcript, newest first
-node extract-conversations.js --mode submission    # only the final (most recent) sent email
-node extract-conversations.js --mode thread        # the email thread(s)
-node extract-conversations.js --mode assistant     # the Cosmo conversation
-npm run report                                      # Markdown report (rubric hints in header)
-node extract-conversations.js --mode report --output report.md --print-settings
+npm run report                                      # writes report.md, threads grouped (oldest first)
+npm run report:chronological                        # writes report.md, one merged timeline instead
+npm run extract                                     # full transcript to stdout, newest first
+node extract-conversations.js --mode submission     # only the final (most recent) sent email
+node extract-conversations.js --mode thread         # the email thread(s)
+node extract-conversations.js --mode assistant      # the Cosmo conversation
+node extract-conversations.js --mode report --stdout # preview the report without writing a file
 ```
 
-Options: `--latest` (most recent session only), `--output <file>`,
-`--print-settings` (include scenario settings in the heading), `--help`.
+`npm run report` is the one to hand to a grader. With `--print-settings` (the
+default for `npm run report`), it opens with a plain-language **World** blurb
+and a **Characters** list (name, role, email, and whether they're a live
+correspondent or directory-only) — no model config, IDs, or rubric hints,
+just enough context to follow the conversation. It then walks each session
+(numbering them only if there's more than one — in practice there's just the
+one) and renders the email(s) and the current draft, plus — only when the
+scenario's `assistant.enabled` is `true` — a summary and full transcript of
+the participant's conversation with the Cosmo assistant. When the assistant
+is disabled for a scenario, the report says so plainly instead of showing an
+empty section. If `sessions.json` doesn't exist yet (the participant never
+opened the scenario), the report still generates cleanly and says so.
+
+The emails can be ordered two ways with `--order` (applies to `full`,
+`thread`, and `report`):
+
+- `thread` (default) — grouped by conversation thread, each thread's emails
+  in send order. Good for reading one exchange start-to-finish.
+- `chronological` — every thread merged into a single timeline by send time,
+  each email tagged with which thread it belongs to. Good for seeing how the
+  participant moved between conversations (e.g. emailing a prospect mid-way
+  through a still-open exchange with their manager).
+
+Options: `--latest` (most recent session only), `--order <thread|chronological>`,
+`--output <file>` (override the destination; `report.md` is the default for
+`--mode report`), `--stdout` (print instead of writing a file),
+`--print-settings` (include the World/Characters summary), `--help`.
 
 ## Testing
 
@@ -225,8 +251,12 @@ npm run pack     # client + server bundles → dist/ and dist.tar.gz
 CI (`.github/workflows/ci.yml`) runs build + tests on push/PR.
 `.github/workflows/release.yml` tests, then `npm run pack`: a minified client
 bundle, a single-file server bundle (Express + Octavus inlined — no
-`node_modules`), and the static files the server serves. Extract `dist.tar.gz`
-and run `node server.js`. Supply `scenario.json` and `.env` at runtime.
+`node_modules`), a single-file `extract-conversations.js` (for the `report` /
+`extract` scripts, with `lib/character-replies.js` inlined the same way), and
+the static files the server serves. Extract `dist.tar.gz` and run
+`node server.js`. Supply `scenario.json` and `.env` at runtime; use
+`npm run report` (or `node extract-conversations.js ...` directly) against
+the `sessions.json` it produces.
 
 ## Project layout
 

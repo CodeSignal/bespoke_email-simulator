@@ -6,6 +6,7 @@ public/app.bundle.js
 public/hljs-*.css
 sessions.json
 scenario.json
+report.md
 .agent-build
 dist
 dist.tar.gz
