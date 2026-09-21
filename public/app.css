@@ -470,20 +470,32 @@ body {
   flex: 1 1 auto;
 }
 
-.composer.is-overlay {
+.composer.is-overlay.box {
   position: absolute;
   right: var(--UI-Spacing-spacing-m);
   bottom: 0;
   z-index: 50;
   width: min(30rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
   height: min(30rem, calc(100% - 10rem));
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   padding: 0;
   gap: 0;
-  border: 1px solid var(--Colors-Stroke-Default);
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.composer.is-overlay.box.card,
+.composer.is-overlay.box.card:hover,
+.composer.is-overlay.box.card:focus,
+.composer.is-overlay.box.non-interactive.card:hover,
+.composer.is-overlay.box.non-interactive.card:focus {
+  border: 2px solid var(--Colors-Stroke-Strong);
   border-bottom: none;
-  border-radius: var(--UI-Radius-radius-m) var(--UI-Radius-radius-m) 0 0;
+  background: var(--Colors-Box-Background);
   box-shadow: 0 12px 38px 0 var(--Colors-Shadow-Float);
-  background: var(--Colors-Backgrounds-Main-Top);
 }
 
 .composer.is-overlay.is-minimized {
@@ -500,10 +512,6 @@ body {
 .composer.is-overlay .composer__body .tiptap {
   flex: 1 1 auto;
   min-height: 8rem;
-}
-
-.composer.is-overlay .recipient-picker__menu {
-  z-index: 60;
 }
 
 .composer.is-minimized .composer__panel {
@@ -570,29 +578,8 @@ body {
 }
 
 .composer__chrome-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  margin: 0;
-  padding: 0;
-  border: none;
-  border-radius: var(--UI-Radius-radius-xs);
-  background: transparent;
-  color: var(--Colors-Icon-Medium);
-  cursor: pointer;
-}
-
-.composer__chrome-btn:hover,
-.composer__chrome-btn:focus-visible {
-  background: var(--Colors-Backgrounds-Main-Strong);
-  color: var(--Colors-Icon-Strong);
-}
-
-.composer__chrome-btn:focus-visible {
-  outline: 2px solid var(--Colors-Stroke-Primary);
-  outline-offset: 1px;
+  min-width: var(--UI-Input-xs);
+  min-height: var(--UI-Input-xs);
 }
 
 .composer__chrome-btn svg {
@@ -643,6 +630,7 @@ body {
 }
 
 .recipient-picker.is-open,
+.recipient-picker.open,
 .recipient-picker:focus-within {
   border-color: var(--Colors-Input-Border-Focus);
   box-shadow: 0 0 0 4px var(--Colors-Input-Shadow-Focus);
@@ -661,20 +649,6 @@ body {
   padding: 2px var(--UI-Spacing-spacing-xs);
 }
 
-.recipient-picker__remove {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: none;
-  color: inherit;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-}
-
 .recipient-picker__add {
   flex: 1 1 8rem;
   min-width: 7rem;
@@ -687,42 +661,40 @@ body {
   cursor: pointer;
 }
 
+.recipient-picker__add:focus {
+  outline: none;
+}
+
 .recipient-picker__add:focus-visible {
   outline: 2px solid var(--Colors-Stroke-Primary);
   outline-offset: 2px;
 }
 
-.recipient-picker__menu {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  z-index: 20;
-  margin: 0;
-  padding: var(--UI-Spacing-spacing-mxs);
-  list-style: none;
-  background: var(--Colors-Dropdown-Panel);
-  border: 1px solid var(--Colors-Dropdown-Panel-Stroke);
-  border-radius: var(--UI-Radius-radius-s);
-  box-shadow: 0 12px 38px 0 var(--Colors-Shadow-Float);
-  max-height: 240px;
-  overflow-y: auto;
+.recipient-picker__remove,
+.mail-toast__close {
+  min-width: var(--UI-Input-min);
+  min-height: var(--UI-Input-min);
 }
 
-.recipient-picker__option {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-s);
-  width: 100%;
+.recipient-picker .dropdown-menu {
+  width: auto;
+  left: 0;
+  right: 0;
+  max-height: 240px;
+  overflow-y: auto;
+  list-style: none;
   margin: 0;
-  padding: var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-s);
-  border: none;
-  border-radius: var(--UI-Radius-radius-s);
-  background: transparent;
-  color: var(--Colors-Text-Body-Default);
-  text-align: left;
-  cursor: pointer;
+}
+
+.recipient-picker.dropdown-container.open .dropdown-menu {
+  display: flex;
+  flex-direction: column;
+}
+
+.recipient-picker .dropdown-menu-item {
+  width: 100%;
+  height: auto !important;
+  min-height: var(--UI-Input-sm) !important;
 }
 
 .recipient-picker__option-text {
@@ -730,15 +702,6 @@ body {
   flex-direction: column;
   align-items: flex-start;
   min-width: 0;
-}
-
-.recipient-picker__option:hover,
-.recipient-picker__option:focus-visible {
-  background: var(--Colors-Menu-Option-Hover);
-}
-
-.recipient-picker__option-name {
-  font-weight: 500;
 }
 
 .recipient-picker__option-meta {
@@ -911,12 +874,21 @@ body {
   line-height: 1.5;
 }
 
-.assistant__msg--user {
+.assistant__msg--user.box {
+  display: block;
+  text-align: left;
   padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
   border-radius: var(--UI-Radius-radius-ml);
   background: var(--Colors-Backgrounds-Main-Medium);
   color: var(--Colors-Text-Body-Strong);
   max-width: 85%;
+}
+
+.assistant__msg--user.box:hover,
+.assistant__msg--user.box:focus {
+  background: var(--Colors-Backgrounds-Main-Medium);
+  border-color: transparent;
+  box-shadow: inherit;
 }
 
 /* AI message — built on the design-system .box component */
@@ -1047,17 +1019,4 @@ body {
 .mail-toast__close {
   flex: 0 0 auto;
   align-self: flex-start;
-  margin: 0;
-  padding: 0 var(--UI-Spacing-spacing-xxs);
-  border: none;
-  background: transparent;
-  color: var(--Colors-Text-Body-Secondary);
-  font-size: 1.25rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.mail-toast__close:hover,
-.mail-toast__close:focus-visible {
-  color: var(--Colors-Text-Body-Strong);
 }

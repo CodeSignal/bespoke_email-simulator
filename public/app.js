@@ -353,7 +353,7 @@ function renderRecipientChip(field, email) {
 
   const remove = document.createElement('button');
   remove.type = 'button';
-  remove.className = 'recipient-picker__remove';
+  remove.className = 'button button-text button-xsmall recipient-picker__remove';
   remove.setAttribute('aria-label', `${t('Remove')} ${label.textContent}`);
   remove.textContent = '×';
   remove.addEventListener('click', (event) => {
@@ -371,7 +371,10 @@ function renderRecipientMenu(field) {
   const remaining = availableCharacters(directory, { selected: selectedRecipientEmails() });
   const open = state.openRecipientField === field && remaining.length > 0;
 
-  if (picker) picker.classList.toggle('is-open', open);
+  if (picker) {
+    picker.classList.toggle('is-open', open);
+    picker.classList.toggle('open', open);
+  }
   if (add) {
     add.hidden = remaining.length === 0;
     add.disabled = remaining.length === 0;
@@ -390,14 +393,16 @@ function renderRecipientMenu(field) {
     item.setAttribute('role', 'presentation');
     const option = document.createElement('button');
     option.type = 'button';
-    option.className = 'recipient-picker__option';
+    option.className = 'dropdown-menu-item recipient-picker__option';
     option.setAttribute('role', 'option');
     option.dataset.email = character.email;
-    option.insertAdjacentHTML('afterbegin', avatarMarkup(character, 'sm'));
+    const content = document.createElement('span');
+    content.className = 'dropdown-menu-item-content';
+    content.insertAdjacentHTML('afterbegin', avatarMarkup(character, 'sm'));
     const text = document.createElement('span');
     text.className = 'recipient-picker__option-text';
     const name = document.createElement('span');
-    name.className = 'recipient-picker__option-name';
+    name.className = 'dropdown-menu-item-label';
     name.textContent = characterLabel(character);
     text.appendChild(name);
     if (character.role) {
@@ -406,7 +411,8 @@ function renderRecipientMenu(field) {
       meta.textContent = character.role;
       text.appendChild(meta);
     }
-    option.appendChild(text);
+    content.appendChild(text);
+    option.appendChild(content);
     option.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -517,6 +523,9 @@ function placeComposer() {
   const overlayCompose = Boolean(state.composingNew);
   const inlineReply = state.view === 'thread' && Boolean(state.replying);
   els.composer.classList.toggle('is-overlay', overlayCompose);
+  els.composer.classList.toggle('box', overlayCompose);
+  els.composer.classList.toggle('card', overlayCompose);
+  els.composer.classList.toggle('non-interactive', overlayCompose);
   els.composer.classList.toggle('is-inline', inlineReply);
   els.composer.classList.toggle('is-minimized', overlayCompose && state.composeMinimized);
   if (inlineReply && els.readingPane && !els.readingPane.hidden) {
@@ -1139,7 +1148,7 @@ function showMailToast(thread, email) {
         <span class="body-xsmall mail-toast__snippet">${escapeHtml(subject)}${snippet ? ` · ${escapeHtml(snippet)}` : ''}</span>
       </span>
     </button>
-    <button type="button" class="mail-toast__close" aria-label="${escapeHtml(t('Dismiss'))}">
+    <button type="button" class="button button-text button-xsmall mail-toast__close" aria-label="${escapeHtml(t('Dismiss'))}">
       <span aria-hidden="true">×</span>
     </button>
   `;
@@ -1358,7 +1367,7 @@ function makeBubble(role, contentHtml) {
 
   const bubble = document.createElement('div');
   bubble.className = isUser
-    ? 'assistant__msg assistant__msg--user'
+    ? 'assistant__msg assistant__msg--user box non-interactive'
     : 'assistant__msg assistant__msg--ai box non-interactive';
   bubble.innerHTML = contentHtml;
   row.appendChild(bubble);

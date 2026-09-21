@@ -72,12 +72,12 @@
         <header class="composer__chrome" id="composerChrome" hidden>
           <h2 class="heading-xxxsmall composer__title" id="composerTitle">New message</h2>
           <div class="composer__chrome-actions">
-            <button type="button" class="composer__chrome-btn" id="composerMinimizeBtn" aria-label="Minimize">
+            <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerMinimizeBtn" aria-label="Minimize">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                 <path d="M3.5 8h9"/>
               </svg>
             </button>
-            <button type="button" class="composer__chrome-btn" id="composerCloseBtn" aria-label="Close">
+            <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerCloseBtn" aria-label="Close">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
                 <path d="m4 4 8 8M12 4l-8 8"/>
               </svg>
@@ -88,18 +88,18 @@
           <div class="composer__fields">
             <div class="composer__field">
               <span class="label-small composer__label" id="composeToLabel">To</span>
-              <div class="recipient-picker" id="composeToPicker" data-field="to" role="group" aria-labelledby="composeToLabel">
+              <div class="recipient-picker dropdown-container" id="composeToPicker" data-field="to" role="group" aria-labelledby="composeToLabel">
                 <div class="recipient-picker__chips" id="composeToChips"></div>
-                <button type="button" class="recipient-picker__add body-small" id="composeToAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeToMenu">Select a recipient</button>
-                <ul class="recipient-picker__menu" id="composeToMenu" role="listbox" hidden></ul>
+                <button type="button" class="body-small recipient-picker__add" id="composeToAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeToMenu">Select a recipient</button>
+                <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeToMenu" role="listbox" hidden></ul>
               </div>
             </div>
             <div class="composer__field">
               <span class="label-small composer__label" id="composeCcLabel">Cc</span>
-              <div class="recipient-picker" id="composeCcPicker" data-field="cc" role="group" aria-labelledby="composeCcLabel">
+              <div class="recipient-picker dropdown-container" id="composeCcPicker" data-field="cc" role="group" aria-labelledby="composeCcLabel">
                 <div class="recipient-picker__chips" id="composeCcChips"></div>
-                <button type="button" class="recipient-picker__add body-small" id="composeCcAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeCcMenu">Select a recipient</button>
-                <ul class="recipient-picker__menu" id="composeCcMenu" role="listbox" hidden></ul>
+                <button type="button" class="body-small recipient-picker__add" id="composeCcAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeCcMenu">Select a recipient</button>
+                <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeCcMenu" role="listbox" hidden></ul>
               </div>
             </div>
             <label class="composer__field">
