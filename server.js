@@ -43,9 +43,9 @@ const octavus = new OctavusClient({
   apiKey: process.env.OCTAVUS_API_KEY || '',
 });
 
-// Which deployed agent the server talks to. Defaults to "prod" so existing
-// deployments that only set the legacy OCTAVUS_AGENT_ID keep working. Local
-// development opts into the dev agent via `npm run dev` (AGENT_TARGET=dev).
+// Which deployed pair the server talks to, from AGENT_TARGET in .env.
+// Defaults to "prod" so existing deployments that only set the legacy
+// OCTAVUS_AGENT_ID keep working.
 const AGENT_TARGET = (process.env.AGENT_TARGET ?? 'prod').toLowerCase();
 if (AGENT_TARGET !== 'prod' && AGENT_TARGET !== 'dev') {
   throw new Error(

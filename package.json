@@ -9,7 +9,7 @@
     "build:watch": "esbuild public/app.js --bundle --outfile=public/app.bundle.js --format=esm --platform=browser --watch",
     "start": "npm run build && node server.js",
     "start:prod": "npm run build && cross-env AGENT_TARGET=prod node server.js",
-    "dev": "npm run build && concurrently -k -n client,server -c blue,green \"npm:build:watch\" \"cross-env AGENT_TARGET=dev node --watch server.js\"",
+    "dev": "npm run build && concurrently -k -n client,server -c blue,green \"npm:build:watch\" \"node --watch server.js\"",
     "validate:agent": "octavus --env .env validate ./agents/cosmo-mail && octavus --env .env validate ./agents/cosmo-mail-character",
     "deploy:agent": "node scripts/deploy-agent.mjs",
     "deploy:agent:dev": "node scripts/deploy-agent.mjs dev",

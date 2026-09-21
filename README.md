@@ -66,9 +66,9 @@ cp scenario.example.json scenario.json
 ## Running
 
 ```bash
-npm run dev     # builds the client, watches, runs against the DEV agent pair
-npm start       # one-off build + server against the default (prod) agent pair
-npm run start:prod
+npm run dev     # builds the client, watches; uses AGENT_TARGET from .env
+npm start       # one-off build + server; uses AGENT_TARGET from .env
+npm run start:prod  # force the prod pair regardless of .env
 ```
 
 The app serves on port `3000` by default (override with `PORT`).
@@ -110,11 +110,12 @@ There are **two independent switches**:
    pass `--yes` for CI (`node scripts/deploy-agent.mjs prod --yes`).
 
 2. **Runtime** — which deployed pair the running server talks to, selected by
-   `AGENT_TARGET` (defaults to `prod`):
+   `AGENT_TARGET` in `.env` (defaults to `prod`):
 
    ```bash
-   npm run dev          # talks to the dev agents (the script sets AGENT_TARGET=dev)
-   npm start            # talks to the prod agents (AGENT_TARGET defaults to prod)
+   npm run dev          # watch mode; talks to whatever AGENT_TARGET is in .env
+   npm start            # same, without watch
+   npm run start:prod   # force the prod pair regardless of .env
    ```
 
    The server reads `OCTAVUS_AGENT_ID_DEV` / `OCTAVUS_CHARACTER_AGENT_ID_DEV` or
@@ -126,11 +127,11 @@ There are **two independent switches**:
    `OCTAVUS_CHARACTER_AGENT_ID`. An existing `.env` that only defines those
    keeps working unchanged.
 
-Typical workflow: edit `agents/cosmo-mail/*` and/or `agents/cosmo-mail-character/*`,
-run `npm run deploy:agent:dev`, test locally (`npm run dev` talks to the dev
-pair), and only run `npm run deploy:agent:prod` once you're happy. Copy new ids
-into the matching `OCTAVUS_AGENT_ID_*` and `OCTAVUS_CHARACTER_AGENT_ID_*`
-variables in `.env`.
+Typical workflow: set `AGENT_TARGET=dev` in `.env`, edit `agents/cosmo-mail/*`
+and/or `agents/cosmo-mail-character/*`, run `npm run deploy:agent`, and test
+with `npm run dev`. Flip `AGENT_TARGET` to `prod` and deploy again once you're
+happy. Copy new ids into the matching `OCTAVUS_AGENT_ID_*` and
+`OCTAVUS_CHARACTER_AGENT_ID_*` variables in `.env`.
 
 ## Scenario authoring
 
