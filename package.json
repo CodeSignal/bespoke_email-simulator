@@ -23,8 +23,8 @@
     "pack": "node scripts/pack-dist.mjs"
   },
   "dependencies": {
-    "@octavus/client-sdk": "^3.2.0",
-    "@octavus/server-sdk": "^3.2.0",
+    "@octavus/client-sdk": "^6.10.0",
+    "@octavus/server-sdk": "^6.10.0",
     "@tiptap/core": "^3.0.0",
     "@tiptap/markdown": "^3.0.0",
     "@tiptap/pm": "^3.0.0",
@@ -36,7 +36,7 @@
     "marked-highlight": "^2.2.4"
   },
   "devDependencies": {
-    "@octavus/cli": "^3.2.0",
+    "@octavus/cli": "^6.10.0",
     "concurrently": "^10.0.1",
     "cross-env": "^7.0.3",
     "esbuild": "^0.28.0",
