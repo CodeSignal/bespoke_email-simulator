@@ -71,8 +71,10 @@ marked.use({
       const email = parseMailto(href);
       if (!email) return false;
       const text = this.parser.parseInline(tokens);
-      if (!constrainToCharacters([email], directoryCharacters())[0]) return text;
-      return `<a href="mailto:${escapeHtml(email)}" class="js-compose-mailto">${text}</a>`;
+      const canonical = constrainToCharacters([email], directoryCharacters())[0];
+      if (!canonical) return text;
+      // Stay in-app: mailto: is intercepted by browser/OS mail handlers and extensions.
+      return `<a href="#" class="js-compose-mailto" data-email="${escapeHtml(canonical)}">${text}</a>`;
     },
   },
 });
@@ -808,11 +810,11 @@ function composeNewTo(email) {
 function initMailtoCompose() {
   document.addEventListener('click', (event) => {
     const el = event.target instanceof Element ? event.target : event.target.parentElement;
-    const link = el?.closest('a[href^="mailto:"]');
+    const link = el?.closest('a.js-compose-mailto');
     if (!link) return;
     event.preventDefault();
     if (!link.closest('.email__body, .assistant__msg')) return;
-    const canonical = constrainToCharacters([parseMailto(link.getAttribute('href'))], directoryCharacters())[0];
+    const canonical = constrainToCharacters([link.getAttribute('data-email')], directoryCharacters())[0];
     if (!canonical) return;
     composeNewTo(canonical);
   });

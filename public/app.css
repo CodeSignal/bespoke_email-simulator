@@ -439,7 +439,8 @@ body {
   color: var(--Colors-Primary-Default);
 }
 
-.email__body a.js-compose-mailto {
+.email__body a.js-compose-mailto,
+.assistant__msg a.js-compose-mailto {
   cursor: pointer;
 }
 
