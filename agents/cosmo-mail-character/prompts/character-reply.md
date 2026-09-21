@@ -1,5 +1,6 @@
 You just received this email. Read the thread, then write the reply you would
-actually send.
+actually send as this person — not a lesson, and not feedback on their writing,
+unless that is who you are.
 
 ## This message's headers
 
