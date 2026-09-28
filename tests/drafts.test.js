@@ -90,4 +90,42 @@ describe('parseInsertedDraft', () => {
     expect(parsed.to).toEqual([]);
     expect(parsed.body).toBe('Here is a note with no recipient.');
   });
+
+  it('does not substitute a thread recipient when an explicit To header is unresolved', () => {
+    const parsed = parseInsertedDraft(
+      'To: Unknown Person\nSubject: Re: Atlas migration — weekly status\n\nPriya,\n\nHello.',
+      context,
+    );
+    expect(parsed.to).toEqual([]);
+    expect(parsed.subject).toBe('Re: Atlas migration — weekly status');
+  });
+
+  it('uses the intended thread id when the subject matches more than one thread', () => {
+    const threads = [
+      THREADS[0],
+      {
+        id: 'thread-2',
+        subject: 'Atlas migration — weekly status',
+        emails: [
+          {
+            from: { name: 'Sam Okafor', email: 'sam@brightlabs.io' },
+            to: [{ name: 'You', email: 'you@brightlabs.io' }],
+            subject: 'Re: Atlas migration — weekly status',
+            body: 'Different thread.',
+          },
+        ],
+      },
+    ];
+    const ambiguous = parseInsertedDraft(
+      'Subject: Re: Atlas migration — weekly status\n\nHello.',
+      { ...context, threads },
+    );
+    expect(ambiguous.to).toEqual([]);
+
+    const targeted = parseInsertedDraft(
+      'Subject: Re: Atlas migration — weekly status\n\nHello.',
+      { ...context, threads, threadId: 'thread-2' },
+    );
+    expect(targeted.to).toEqual(['sam@brightlabs.io']);
+  });
 });

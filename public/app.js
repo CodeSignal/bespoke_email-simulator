@@ -1608,6 +1608,8 @@ function insertIntoComposer(markdown) {
     characters: directoryCharacters(),
     threads: state.session?.threads ?? [],
     learnerEmail: learnerEmail(),
+    // New-message inserts stay unscoped; inline replies use the open thread.
+    threadId: state.composingNew ? null : state.activeThreadId,
   });
   if (parsed.to.length || parsed.cc.length) applyRecipientDraft(parsed);
   if (parsed.subject) {
