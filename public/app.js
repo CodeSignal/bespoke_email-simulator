@@ -27,6 +27,8 @@ import {
   avatarPath,
   initialsFromName,
 } from '../lib/characters.js';
+import { buildMailboxContext } from '../lib/assistant.js';
+import { draftForScope, parseInsertedDraft, removeScopedDraft, upsertScopedDraft } from '../lib/drafts.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -102,6 +104,7 @@ const state = {
     octavusSessionId: null,
     persisted: [],
     lastInsertable: null,
+    lastContextHash: null, // hash of the mailbox state last sent in full to Cosmo
   },
   characterSessions: {},
   attachments: [],
@@ -148,6 +151,7 @@ const els = {
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
+  assistantClearBtn: document.getElementById('assistantClearBtn'),
   mailToasts: document.getElementById('mailToasts'),
 };
 
@@ -797,6 +801,9 @@ function applyThreadComposer(threadId, mode = state.replying || 'reply') {
   });
   applyRecipientDraft(headers);
   els.composeSubject.value = headers.subject;
+  // Only this thread's own reply draft. A new-message draft must not land here.
+  const saved = draftForScope(state.session?.drafts, { scope: 'reply', threadId });
+  setEditorMarkdown(saved?.body || '');
   scheduleDraftSave();
 }
 
@@ -828,7 +835,13 @@ function startReply(mode) {
 }
 
 function cancelReply() {
+  const threadId = state.activeThreadId;
   state.replying = null;
+  if (threadId) {
+    state.session.drafts = removeScopedDraft(state.session?.drafts, { scope: 'reply', threadId });
+    void persistDrafts();
+  }
+  setEditorMarkdown('');
   renderShell();
 }
 
@@ -940,39 +953,34 @@ function setEditorMarkdown(md) {
   state.editor.commands.setContent(String(md ?? ''), { contentType: 'markdown' });
 }
 
-// Determines the starting To/Cc/Subject/body for the composer: a saved draft
-// wins, then the scenario's initialDraft, then a reply prefill derived from the
-// focused email for reply/reply_chain scenarios.
+// Starting contents for a new message: a saved new-message draft, otherwise the
+// scenario's initialDraft. Reply bodies are loaded per thread in applyThreadComposer.
 function computeInitialDraft() {
-  const saved = state.session?.drafts?.[0];
+  const saved = draftForScope(state.session?.drafts, { scope: 'new' });
   if (saved) return saved;
 
   const initial = state.config?.initialDraft;
-  const base = { to: [], cc: [], subject: '', body: '' };
-
-  const type = state.config?.scenarioType;
-  if (type === 'reply' || type === 'reply_chain') {
-    const thread = state.session?.threads?.find((t) => t.id === state.activeThreadId);
-    const focusedId = state.scenario?.focusedEmailId;
-    const emails = thread?.emails ?? [];
-    const focused = emails.find((e) => e.id === focusedId) ?? emails[emails.length - 1];
-    if (focused) {
-      base.to = [focused.from?.email].filter(Boolean);
-      const subj = focused.subject || thread?.subject || '';
-      base.subject = /^re:/i.test(subj) ? subj : `Re: ${subj}`;
-    }
-  }
-
   return {
-    to: initial?.to?.length ? initial.to : base.to,
-    cc: initial?.cc?.length ? initial.cc : base.cc,
-    subject: initial?.subject || base.subject,
-    body: initial?.body || base.body,
+    to: initial?.to ?? [],
+    cc: initial?.cc ?? [],
+    subject: initial?.subject || '',
+    body: initial?.body || '',
   };
 }
 
+function draftScope() {
+  if (state.composingNew) return { scope: 'new' };
+  if (state.replying && state.activeThreadId) {
+    return { scope: 'reply', threadId: state.activeThreadId };
+  }
+  return null;
+}
+
 function currentDraft() {
+  const scope = draftScope();
   return {
+    scope: scope?.scope || 'new',
+    threadId: scope?.threadId || null,
     to: [...state.recipients.to],
     cc: [...state.recipients.cc],
     subject: els.composeSubject.value || '',
@@ -987,19 +995,23 @@ function updateSendEnabled() {
   els.sendBtn.disabled = !hasContent || draft.to.length === 0;
 }
 
-async function saveDraftNow() {
+async function persistDrafts() {
   if (!state.session?.sessionId) return;
-  const draft = currentDraft();
-  state.session.drafts = [draft];
   try {
     await fetch('/api/session/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: state.session.sessionId, drafts: [draft] }),
+      body: JSON.stringify({ sessionId: state.session.sessionId, drafts: state.session.drafts ?? [] }),
     });
   } catch (err) {
     console.error('[CosmoMail] draft save failed:', err);
   }
+}
+
+async function saveDraftNow() {
+  if (!state.session?.sessionId || !draftScope()) return;
+  state.session.drafts = upsertScopedDraft(state.session.drafts, currentDraft());
+  await persistDrafts();
 }
 
 function scheduleDraftSave() {
@@ -1283,7 +1295,8 @@ async function sendEmail() {
   els.sendBtn.disabled = true;
   els.sendBtn.textContent = 'Sending…';
   try {
-    const composingNew = state.composingNew || !state.activeThreadId;
+    const sentScope = draftScope() || { scope: 'new' };
+    const composingNew = sentScope.scope === 'new';
     const res = await fetch('/api/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1308,7 +1321,8 @@ async function sendEmail() {
     state.view = 'thread';
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
-    state.session.drafts = [];
+    state.session.drafts = removeScopedDraft(state.session.drafts, sentScope);
+    void persistDrafts();
     setEditorMarkdown('');
     clearAttachments();
     renderShell();
@@ -1405,7 +1419,7 @@ async function runCharacterReply(character, sentEmail, threadId) {
 }
 
 // ── Assistant (Cosmo) ─────────────────────────────────────────
-// Serializes the active thread into Markdown context for the agent.
+// Serializes one thread into Markdown context (used for character replies).
 function serializeThreadContext(threadId = state.activeThreadId) {
   const threads = state.session?.threads ?? [];
   const thread = threads.find((th) => th.id === threadId) ?? threads[0];
@@ -1424,6 +1438,21 @@ function serializeThreadContext(threadId = state.activeThreadId) {
     lines.push('\n---\n');
   }
   return lines.join('\n');
+}
+
+// Whole-mailbox context for Cosmo. The full mailbox is only included when it
+// changed since the last turn; see buildMailboxContext.
+function assistantMailboxContext() {
+  return buildMailboxContext({
+    threads: state.session?.threads ?? [],
+    learnerEmail: state.config?.learner?.email || '',
+    viewing: {
+      threadId: state.view === 'thread' ? state.activeThreadId : null,
+      composingNew: state.composingNew && !state.composeMinimized,
+      mailbox: state.activeMailbox,
+    },
+    previousHash: state.assistant.lastContextHash,
+  });
 }
 
 function customInstructionsValue() {
@@ -1485,12 +1514,15 @@ function renderAssistant(liveMessages = []) {
     hint.textContent = state.config?.assistant?.initialMessage
       || t('Ask Cosmo to help draft, summarize, or answer questions about this thread.');
     container.appendChild(hint);
+    updateAssistantClearBtn();
     return;
   }
 
   for (const m of persisted) {
     const html = m.role === 'user' ? escapeHtml(m.content) : renderMarkdown(m.content);
-    container.appendChild(makeBubble(m.role, html));
+    const row = makeBubble(m.role, html);
+    if (m.role === 'assistant') appendInsertButton(row, m.content);
+    container.appendChild(row);
   }
 
   // Live (this page load) turns from OctavusChat.
@@ -1502,30 +1534,89 @@ function renderAssistant(liveMessages = []) {
     } else if (m.role === 'assistant') {
       const text = (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('');
       const row = makeBubble('ai', renderMarkdown(text) || '<span class="assistant__typing">…</span>');
-      // Offer an "insert into composer" action when the reply contains an email.
-      const code = extractLastCodeBlock(text);
-      if (code && m.status !== 'streaming') {
-        const btn = document.createElement('button');
-        btn.type = 'button';
-        btn.className = 'button button-text-primary button-xsmall assistant__insert';
-        btn.textContent = 'Insert into composer';
-        btn.addEventListener('click', () => insertIntoComposer(code));
-        row.querySelector('.assistant__msg').appendChild(btn);
-      }
+      if (m.status !== 'streaming') appendInsertButton(row, text);
       container.appendChild(row);
     }
   }
 
   container.scrollTop = container.scrollHeight;
+  updateAssistantClearBtn();
 }
 
+// The clear button is only actionable when there is something to clear and
+// Cosmo is not mid-reply.
+function updateAssistantClearBtn() {
+  const btn = els.assistantClearBtn;
+  if (!btn) return;
+  const hasAny = state.assistant.persisted.length > 0
+    || (state.assistant.chat?.messages?.length ?? 0) > 0;
+  btn.disabled = !hasAny || state.assistant.chat?.status === 'streaming';
+}
+
+// Wipe the conversation (persisted + live) and start Cosmo on a fresh session.
+async function clearAssistant() {
+  const chat = state.assistant.chat;
+  if (chat?.status === 'streaming') return;
+  els.assistantClearBtn.disabled = true;
+  try {
+    const res = await fetch('/api/assistant/clear', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: state.session.sessionId }),
+    });
+    if (!res.ok) throw new Error(`assistant clear failed (${res.status})`);
+    const { octavusSessionId } = await res.json();
+
+    state.assistant.persisted = [];
+    state.session.assistantMessages = [];
+    state.assistant.lastContextHash = null; // resend the full mailbox on the next turn
+    if (octavusSessionId) state.assistant.octavusSessionId = octavusSessionId;
+    // Replacing the live message list notifies subscribers, which re-renders.
+    if (chat) chat.replaceMessages([]);
+    else renderAssistant([]);
+    els.assistantInput?.focus();
+  } catch (err) {
+    console.error('[CosmoMail] assistant clear failed:', err);
+    updateAssistantClearBtn();
+  }
+}
+
+function appendInsertButton(row, markdown) {
+  const code = extractLastCodeBlock(markdown);
+  if (!code) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'button button-text-primary button-xsmall assistant__insert';
+  btn.textContent = 'Insert into composer';
+  btn.addEventListener('click', () => insertIntoComposer(code));
+  row.querySelector('.assistant__msg').appendChild(btn);
+}
+
+// Insert fills whatever the user is working in: the open new-message window, an
+// inline reply on the open thread (started if needed), or a new message from the
+// inbox list. Drafts are scoped, so the text stays with that message or thread.
 function insertIntoComposer(markdown) {
   if (state.composingNew) {
     state.composeMinimized = false;
     applyView();
-  } else if (state.view === 'list') startCompose({ blank: false });
-  else if (state.view === 'thread' && !state.replying) startReply('reply');
-  setEditorMarkdown(markdown);
+  } else if (state.view === 'thread' && state.activeThreadId) {
+    if (!state.replying) startReply('reply');
+  } else {
+    startCompose({ blank: true });
+  }
+  const parsed = parseInsertedDraft(markdown, {
+    characters: directoryCharacters(),
+    threads: state.session?.threads ?? [],
+    learnerEmail: learnerEmail(),
+  });
+  if (parsed.to.length || parsed.cc.length) applyRecipientDraft(parsed);
+  if (parsed.subject) {
+    els.composeSubject.value = parsed.subject;
+    if (els.composerTitle && state.composingNew) {
+      els.composerTitle.textContent = composeOverlayTitle();
+    }
+  }
+  setEditorMarkdown(parsed.body);
   scheduleDraftSave();
   els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
@@ -1555,6 +1646,7 @@ function setAssistantEnabled(enabled) {
 async function initAssistant() {
   state.assistant.persisted = state.session?.assistantMessages ?? [];
   renderAssistant([]);
+  els.assistantClearBtn?.addEventListener('click', clearAssistant);
 
   if (state.config?.assistant?.enabled === false) {
     document.getElementById('assistantPanel')?.setAttribute('hidden', '');
@@ -1626,18 +1718,22 @@ async function sendAssistant() {
   els.assistantInput.value = '';
   setAssistantEnabled(false);
 
+  const context = assistantMailboxContext();
+  state.assistant.lastContextHash = context.hash;
   try {
     await chat.send(
       'assistant-message',
       {
         USER_MESSAGE: text,
         CUSTOM_INSTRUCTIONS: customInstructionsValue(),
-        THREAD_CONTEXT: serializeThreadContext(),
+        THREAD_CONTEXT: context.text,
         CURRENT_DRAFT: getEditorMarkdown() || '(empty)',
       },
       { userMessage: { content: text } },
     );
   } catch (err) {
+    // The turn may not have reached the model; resend the full mailbox next time.
+    state.assistant.lastContextHash = null;
     console.error('[CosmoMail] assistant send failed:', err);
     setAssistantEnabled(true);
   }

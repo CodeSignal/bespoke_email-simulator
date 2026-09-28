@@ -147,6 +147,7 @@ shape, relative to the project root.
 | `title` | string | App title. |
 | `brief` | string | The exercise task/prompt. Presented by the host harness; CosmoMail no longer renders it in-app. |
 | `primarySkill` | `writing` \| `prompting` \| `both` | What the exercise assesses. |
+| `audience` | `learner` \| `candidate` | Default `learner`. `candidate` is for assessments: unless you set them, the assistant model is pinned and the temperature is lowered to `0.2`, and `assistant.allowCustomInstructions` is forced off. Cosmo behaves the same for both audiences: a neutral assistant that does not coach. |
 | `scenarioType` | `compose_new` \| `reply` \| `reply_chain` | Drives composer prefill. |
 | `learner` | `{ displayName, email, avatar }` | Who the learner is in the thread. Optional `avatar` is `0`–`12`; **`0` is the empty face and the default for You**. |
 | `characters` | object[] | People the learner may put on To / Cc. `{ id, name, email }` required; optional `avatar` (`0`–`12`). Optional `persona` (free-form object or string) and/or `prompt` make the character **live** — they reply via `cosmo-mail-character`. Live characters reply as ordinary people (busy, self-interested, incomplete) unless the persona explicitly says they coach, mentor, or manage the learner's development. `responds: true/false` overrides live vs directory-only. Directory-only people (no persona, `responds` omitted) can be emailed but never write back. |
@@ -156,10 +157,10 @@ shape, relative to the project root.
 | `seed.focusedEmailId` | string | Email the reply targets. |
 | `initialDraft` | `{ to, cc, subject, body }` | Optional composer prefill. |
 | `assistant.enabled` | boolean | When `false`, hide the Cosmo copilot panel. |
-| `assistant.capabilities` | string[] | `compose`, `qa_search`, `summarize`, `extract`. |
+| `assistant.capabilities` | string[] | Which features Cosmo has: `compose`, `qa_search`, `summarize`, `extract`. Omitted ones are turned off and Cosmo politely declines them (for example, drop `compose` so Cosmo won't draft). Defaults to all. |
 | `assistant.systemPromptExtra` | string | Trusted extra instructions for the copilot. |
 | `assistant.initialMessage` | string | Cosmo's opening message. |
-| `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. |
+| `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. Ignored (always off) when `audience` is `candidate`. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
 | `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support. |
 | `ui` | `{ hideHistory, strings }` | UI overrides + i18n strings. |

@@ -891,6 +891,18 @@ body {
   color: var(--Colors-Text-Body-Strong);
 }
 
+.assistant__clear {
+  margin-left: auto;
+  min-width: var(--UI-Input-xs);
+  min-height: var(--UI-Input-xs);
+  padding: 0;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__clear:hover:not(:disabled) {
+  color: var(--Colors-Text-Body-Strong);
+}
+
 .assistant__messages {
   flex: 1 1 auto;
   min-height: 0;
@@ -976,11 +988,24 @@ body {
   margin-bottom: 0;
 }
 
+/* Drafted emails render as a quote block, matching the design-system
+   `.box.input-group` look rather than a dark code block. */
 .assistant__msg--ai pre {
-  background: var(--Colors-Backgrounds-Main-Dark);
-  padding: var(--UI-Spacing-spacing-s);
+  margin: var(--UI-Spacing-spacing-s) 0;
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-ml);
   border-radius: var(--UI-Radius-radius-s);
-  overflow-x: auto;
+  border-left: 5px solid var(--Colors-Primary-Default);
+  background: var(--Colors-Backgrounds-Box-Default);
+  color: var(--Colors-Text-Body-Strong);
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.assistant__msg--ai pre code {
+  font-family: inherit;
+  color: inherit;
+  background: none;
 }
 
 .assistant__insert {

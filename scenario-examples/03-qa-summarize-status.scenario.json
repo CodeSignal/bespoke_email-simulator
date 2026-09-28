@@ -4,6 +4,7 @@
   "brief": "Priya needs a crisp, leadership-ready summary of the Atlas migration before Thursday's review. Use Cosmo to read the thread and answer questions (status, blockers, budget, timeline risk), then reply to Priya with a scannable bullet summary.",
   "primarySkill": "prompting",
   "scenarioType": "reply",
+  "audience": "candidate",
   "learner": { "displayName": "You", "email": "you@brightlabs.io" },
   "characters": [
     {
@@ -59,6 +60,22 @@
               "attachments": []
             }
           ]
+        },
+        {
+          "id": "thread-2",
+          "subject": "Q3 planning — budget asks",
+          "emails": [
+            {
+              "id": "email-4",
+              "from": { "name": "Dev Patel", "email": "dev@brightlabs.io" },
+              "to": [{ "name": "You", "email": "you@brightlabs.io" }],
+              "cc": [{ "name": "Priya Nair", "email": "priya@brightlabs.io" }],
+              "date": "2026-07-08T13:45:00Z",
+              "subject": "Q3 planning — budget asks",
+              "body": "Hi,\n\nFor the Q3 planning doc, the **Helios** analytics project is asking for **$120,000** and a go-live of **September 30**. Two engineers, no external vendors.\n\nThis is separate from Atlas. Please don't mix the numbers.\n\nDev",
+              "attachments": []
+            }
+          ]
         }
       ]
     },
@@ -73,19 +90,17 @@
   },
   "assistant": {
     "enabled": true,
-    "capabilities": ["qa_search", "summarize", "extract", "compose"],
-    "systemPromptExtra": "Help the learner interrogate the thread for facts (dates, owners, budget, blockers) and produce a concise, executive-ready summary. Encourage them to verify details against the emails.",
-    "initialMessage": "Ask me anything about this thread — status, the blocker, budget, or whether Aug 14 still holds.",
-    "allowCustomInstructions": true
+    "capabilities": ["qa_search", "summarize", "extract"],
+    "systemPromptExtra": "Answer from the mailbox only, and say which email (sender and date) a fact comes from.",
+    "initialMessage": "Ask me anything about your mailbox — status, the blocker, budget, or whether Aug 14 still holds.",
+    "allowCustomInstructions": false
   },
   "generation": {
-    "model": "anthropic/claude-opus-4-7",
-    "temperature": 0.4,
     "thinking": "off",
     "language": "English"
   },
   "attachments": { "enabled": false },
   "rubricHints": {
-    "notes": "Reward accurate use of thread facts: 7/12 services migrated, auth service blocked by a deprecated token signing scheme (Sam building a shim, ~5 business days), August 14 go-live at risk, budget $85k approved / $22k spent. Reward a scannable, bullet-form summary and effective use of Cosmo for Q&A. Penalize invented facts."
+    "notes": "Reward accurate use of thread facts: 7/12 services migrated, auth service blocked by a deprecated token signing scheme (Sam building a shim, ~5 business days), August 14 go-live at risk, budget $85k approved / $22k spent. Reward a scannable, bullet-form summary and effective use of Cosmo for Q&A. Penalize invented facts, and penalize mixing in the unrelated Helios numbers from the Q3 planning thread ($120,000, September 30)."
   }
 }

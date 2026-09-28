@@ -14,6 +14,7 @@ import {
   parseCharacterReply,
   buildCharacterReplyHeaders,
 } from './lib/character-replies.js';
+import { buildCapabilityInstructions } from './lib/assistant.js';
 import { resolveStrings } from './lib/i18n.js';
 import {
   newSessionRecord,
@@ -196,6 +197,9 @@ function buildGenerationInput(config) {
 function buildAgentSessionInput(config) {
   const input = buildGenerationInput(config);
   if (config.assistant?.systemPromptExtra) input.EXTRA_INSTRUCTIONS = config.assistant.systemPromptExtra;
+  input.CAPABILITIES = buildCapabilityInstructions(config.assistant?.capabilities);
+  input.LEARNER_NAME = config.learner?.displayName || 'You';
+  input.LEARNER_EMAIL = config.learner?.email || 'you@example.com';
   return input;
 }
 
@@ -242,6 +246,16 @@ async function streamAgent(res, octavusSessionId, payload) {
   }
 }
 
+// Create a fresh Octavus agent session for the assistant and store it on the
+// CMail session record (caller persists the record).
+async function createAssistantSession(record) {
+  const { config } = await getScenario();
+  const input = buildAgentSessionInput(config);
+  const octavusSessionId = await octavus.agentSessions.create(AGENT_ID, input);
+  record.octavus_session_id = octavusSessionId;
+  return octavusSessionId;
+}
+
 // POST /api/assistant/session — lazily create (or return) the Octavus agent
 // session backing a CMail session's assistant conversation.
 app.post('/api/assistant/session', async (req, res) => {
@@ -257,16 +271,36 @@ app.post('/api/assistant/session', async (req, res) => {
       return res.json({ octavusSessionId: record.octavus_session_id });
     }
 
-    const { config } = await getScenario();
-    const input = buildAgentSessionInput(config);
-    const octavusSessionId = await octavus.agentSessions.create(AGENT_ID, input);
-    record.octavus_session_id = octavusSessionId;
+    const octavusSessionId = await createAssistantSession(record);
     upsertSession(data, record);
     await writeSessions(data);
     res.json({ octavusSessionId });
   } catch (err) {
     console.error('[assistant/session] Error:', err);
     res.status(500).json({ error: 'Failed to create assistant session' });
+  }
+});
+
+// POST /api/assistant/clear — wipe the persisted assistant transcript and
+// start a fresh Octavus session so Cosmo has no memory of the old chat.
+// Works even when the agent is not configured (octavusSessionId is null).
+app.post('/api/assistant/clear', async (req, res) => {
+  const { sessionId } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  try {
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+
+    record.assistant_messages = [];
+    record.octavus_session_id = null;
+    const octavusSessionId = AGENT_ID ? await createAssistantSession(record) : null;
+    upsertSession(data, record);
+    await writeSessions(data);
+    res.json({ ok: true, octavusSessionId });
+  } catch (err) {
+    console.error('[assistant/clear] Error:', err);
+    res.status(500).json({ error: 'Failed to clear assistant conversation' });
   }
 });
 

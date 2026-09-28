@@ -29,6 +29,21 @@ input:
     optional: true
     default: "English"
     description: "The language the agent should speak in when responding."
+  CAPABILITIES:
+    type: string
+    optional: true
+    default: ""
+    description: "Prompt block listing which assistant capabilities are enabled and which must be declined. Built by the server from the scenario's assistant.capabilities."
+  LEARNER_NAME:
+    type: string
+    optional: true
+    default: ""
+    description: "Display name of the person whose mailbox this is (the user Cosmo assists)."
+  LEARNER_EMAIL:
+    type: string
+    optional: true
+    default: ""
+    description: "Email address of the person whose mailbox this is."
 
 triggers:
   assistant-message:
@@ -42,7 +57,7 @@ triggers:
       THREAD_CONTEXT:
         type: string
         optional: true
-        description: Serialized inbox/thread the learner is working in (Markdown), refreshed each turn so Cosmo can answer, summarize, and extract.
+        description: The whole mailbox (Markdown) plus which thread is open. The full mailbox is sent only when it changed since the previous turn; otherwise a short 'unchanged' marker is sent.
       CURRENT_DRAFT:
         type: string
         optional: true
@@ -58,9 +73,11 @@ agent:
     EXTRA_INSTRUCTIONS: EXTRA_INSTRUCTIONS
     VERBOSITY_INSTRUCTIONS: VERBOSITY_INSTRUCTIONS
     LANGUAGE: LANGUAGE
+    CAPABILITIES: CAPABILITIES
+    LEARNER_NAME: LEARNER_NAME
+    LEARNER_EMAIL: LEARNER_EMAIL
   temperature: TEMPERATURE
   thinking: THINKING
-  webSearch: true
   agentic: true
 
 handlers:

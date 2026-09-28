@@ -4,6 +4,7 @@
   "brief": "You are a sales representative at BestCRM. Your manager, Alex Rivera, emailed you a short list of referral leads. Discuss who to prioritize — the contact with the most pressing need, the fastest path to value from BestCRM, and enough influence to buy a CRM. Once you and Alex align, compose a new email to that prospect asking for a meeting. Keep it concise and tie BestCRM to their priorities. You can only run a real sequence on one contact.",
   "primarySkill": "both",
   "scenarioType": "reply_chain",
+  "audience": "candidate",
   "learner": { "displayName": "You", "email": "you@bestcrm.com" },
   "world": "BestCRM is a CRM company competing with Salesforce and HubSpot. It specializes in high-impact automation and deep analytics for growing companies outgrowing outdated tools. Strengths: advanced sales analytics with real-time pipeline tracking and forecasting; an intuitive user experience with short adoption cycles; and quick scalability from startup pace to enterprise-grade operations without switching systems. The learner is a BestCRM sales representative. Alex Rivera is their sales manager. None of the prospects work at BestCRM. They have only the secondhand impressions in their own character cards. They do not know BestCRM's internal targeting criteria or how they were ranked against other leads.",
   "characters": [
@@ -208,7 +209,7 @@
   "assistant": {
     "enabled": true,
     "capabilities": ["compose", "qa_search", "summarize", "extract"],
-    "systemPromptExtra": "Help the learner work this as a two-step sales motion: (1) reply to Alex with a reasoned recommendation using urgency of need, speed-to-value from BestCRM's sales analytics/automation, and buying influence; (2) after they align, draft a concise new outreach email to that one prospect with a specific value tie-in and a clear ask for a meeting. Ask questions rather than naming a winner unless they explicitly ask you to recommend. Do not write as if they should email more than one contact. Never suggest attaching a deck or file.",
+    "systemPromptExtra": "Help the user work this as a two-step sales motion: (1) reply to Alex with a reasoned recommendation using urgency of need, speed-to-value from BestCRM's sales analytics/automation, and buying influence; (2) after they align, draft a concise new outreach email to that one prospect with a specific value tie-in and a clear ask for a meeting. Ask questions rather than naming a winner unless they explicitly ask you to recommend. Do not write as if they should email more than one contact. Never suggest attaching a deck or file.",
     "initialMessage": "Want help comparing these leads against Alex's criteria, or drafting your reply?",
     "allowCustomInstructions": false
   },
