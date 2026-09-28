@@ -101,6 +101,30 @@ describe('session lifecycle', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST /api/email/send removes only the matching scoped draft', async () => {
+    await request(app).post('/api/session/save').send({
+      sessionId,
+      drafts: [
+        { scope: 'new', to: [], cc: [], subject: 'Keep me', body: 'new message draft' },
+        { scope: 'reply', threadId: 'thread-1', to: ['dana@acme-vendor.com'], cc: [], subject: 'Re: Proposal', body: 'reply draft' },
+      ],
+    });
+
+    const res = await request(app).post('/api/email/send').send({
+      sessionId,
+      threadId: 'thread-1',
+      to: ['dana@acme-vendor.com'],
+      subject: 'Re: Proposal',
+      body: 'Sent reply.',
+    });
+    expect(res.status).toBe(200);
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.drafts).toEqual([
+      expect.objectContaining({ scope: 'new', subject: 'Keep me' }),
+    ]);
+  });
+
   it('POST /api/session/save persists drafts and assistant messages', async () => {
     const save = await request(app)
       .post('/api/session/save')

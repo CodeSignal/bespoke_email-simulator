@@ -15,6 +15,7 @@ import {
   buildCharacterReplyHeaders,
 } from './lib/character-replies.js';
 import { buildCapabilityInstructions } from './lib/assistant.js';
+import { removeScopedDraft } from './lib/drafts.js';
 import { resolveStrings } from './lib/i18n.js';
 import {
   newSessionRecord,
@@ -189,7 +190,9 @@ function buildGenerationInput(config) {
   input.LANGUAGE = typeof g.language === 'string' && g.language.trim() ? g.language.trim() : 'English';
   const thinking = g.thinking ?? 'off';
   input.THINKING = thinking;
-  if (thinking === 'off' && g.temperature !== undefined) input.TEMPERATURE = g.temperature;
+  // Always forward an authored/normalized temperature (including candidate
+  // defaults) so it is not dropped when thinking is enabled.
+  if (g.temperature !== undefined) input.TEMPERATURE = g.temperature;
   return input;
 }
 
@@ -309,6 +312,14 @@ app.post('/api/assistant/clear', async (req, res) => {
 app.post('/api/assistant/trigger', async (req, res) => {
   const { sessionId, ...payload } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  try {
+    const { config } = await getScenario();
+    // Candidates must not supply custom instructions, even if the client tries.
+    if (config.audience === 'candidate') delete payload.CUSTOM_INSTRUCTIONS;
+  } catch (err) {
+    console.error('[assistant/trigger] Error:', err);
+    return res.status(500).json({ error: 'Failed to load scenario config' });
+  }
   await streamAgent(res, sessionId, payload);
 });
 
@@ -374,7 +385,11 @@ app.post('/api/email/send', async (req, res) => {
       attachments: Array.isArray(attachments) ? attachments : [],
     };
     thread.emails.push(email);
-    record.drafts = [];
+    // Drop only the draft that was sent; keep other scoped drafts.
+    record.drafts = removeScopedDraft(
+      record.drafts,
+      threadId ? { scope: 'reply', threadId } : { scope: 'new' },
+    );
     upsertSession(data, record);
     await writeSessions(data);
 

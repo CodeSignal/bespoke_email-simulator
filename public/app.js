@@ -799,10 +799,10 @@ function applyThreadComposer(threadId, mode = state.replying || 'reply') {
     learnerEmail: learnerEmail(),
     subjectFallback: thread.subject || '',
   });
-  applyRecipientDraft(headers);
-  els.composeSubject.value = headers.subject;
   // Only this thread's own reply draft. A new-message draft must not land here.
   const saved = draftForScope(state.session?.drafts, { scope: 'reply', threadId });
+  applyRecipientDraft(saved ?? headers);
+  els.composeSubject.value = saved?.subject || headers.subject;
   setEditorMarkdown(saved?.body || '');
   scheduleDraftSave();
 }
@@ -1445,7 +1445,7 @@ function serializeThreadContext(threadId = state.activeThreadId) {
 function assistantMailboxContext() {
   return buildMailboxContext({
     threads: state.session?.threads ?? [],
-    learnerEmail: state.config?.learner?.email || '',
+    learnerEmail: state.config?.learner?.email || 'you@example.com',
     viewing: {
       threadId: state.view === 'thread' ? state.activeThreadId : null,
       composingNew: state.composingNew && !state.composeMinimized,
