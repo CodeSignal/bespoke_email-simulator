@@ -12,6 +12,11 @@ const SESSIONS_FILE = join(tmpdir(), `cmail-sessions-${process.pid}-${Date.now()
 process.env.NODE_ENV = 'test';
 process.env.SESSIONS_FILE = SESSIONS_FILE;
 process.env.SCENARIO_FILE = join(__dirname, '..', 'scenario.example.json');
+// Keep API tests off the live Octavus service: dotenv does not override
+// pre-set vars, so blanking these makes the server treat the agent as unset.
+process.env.OCTAVUS_AGENT_ID_PROD = '';
+process.env.OCTAVUS_AGENT_ID_DEV = '';
+process.env.OCTAVUS_AGENT_ID = '';
 
 let app;
 beforeAll(async () => {
@@ -96,6 +101,30 @@ describe('session lifecycle', () => {
     expect(res.status).toBe(400);
   });
 
+  it('POST /api/email/send removes only the matching scoped draft', async () => {
+    await request(app).post('/api/session/save').send({
+      sessionId,
+      drafts: [
+        { scope: 'new', to: [], cc: [], subject: 'Keep me', body: 'new message draft' },
+        { scope: 'reply', threadId: 'thread-1', to: ['dana@acme-vendor.com'], cc: [], subject: 'Re: Proposal', body: 'reply draft' },
+      ],
+    });
+
+    const res = await request(app).post('/api/email/send').send({
+      sessionId,
+      threadId: 'thread-1',
+      to: ['dana@acme-vendor.com'],
+      subject: 'Re: Proposal',
+      body: 'Sent reply.',
+    });
+    expect(res.status).toBe(200);
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.drafts).toEqual([
+      expect.objectContaining({ scope: 'new', subject: 'Keep me' }),
+    ]);
+  });
+
   it('POST /api/session/save persists drafts and assistant messages', async () => {
     const save = await request(app)
       .post('/api/session/save')
@@ -110,6 +139,25 @@ describe('session lifecycle', () => {
     expect(reload.status).toBe(200);
     expect(reload.body.drafts[0].subject).toBe('WIP');
     expect(reload.body.assistantMessages[0].content).toBe('help me');
+  });
+
+  it('POST /api/assistant/clear wipes the assistant transcript', async () => {
+    const clear = await request(app).post('/api/assistant/clear').send({ sessionId });
+    expect(clear.status).toBe(200);
+    expect(clear.body.ok).toBe(true);
+    // No agent configured under test → no backing Octavus session is created.
+    expect(clear.body.octavusSessionId).toBeNull();
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.status).toBe(200);
+    expect(reload.body.assistantMessages).toEqual([]);
+    // Drafts are untouched.
+    expect(reload.body.drafts[0].subject).toBe('WIP');
+  });
+
+  it('POST /api/assistant/clear rejects unknown sessions', async () => {
+    const res = await request(app).post('/api/assistant/clear').send({ sessionId: 'nope' });
+    expect(res.status).toBe(404);
   });
 
   it('DELETE /api/sessions/:id removes the session', async () => {

@@ -4,6 +4,7 @@
   "brief": "You are a recruiter at Northwind. Reply to Jordan, who passed the technical screen and is asking about next steps. Lay out the process and propose scheduling the final panel. Jordan will respond — read carefully and keep the thread moving to a booked slot.",
   "primarySkill": "writing",
   "scenarioType": "reply_chain",
+  "audience": "learner",
   "learner": { "displayName": "You", "email": "recruiting@northwind.co" },
   "world": "Northwind is hiring a Senior Engineer. Jordan Lee passed the technical screen and is waiting to hear about the final panel. The hiring manager is Morgan Hale.",
   "characters": [
@@ -69,7 +70,7 @@
   "assistant": {
     "enabled": true,
     "capabilities": ["compose", "summarize"],
-    "systemPromptExtra": "Coach the learner toward clear, candidate-friendly scheduling communication with concrete options and next steps.",
+    "systemPromptExtra": "Prefer clear, candidate-friendly scheduling communication with concrete options and next steps.",
     "initialMessage": "Want help laying out the next steps and proposing times?",
     "allowCustomInstructions": false
   },

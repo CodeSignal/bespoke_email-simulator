@@ -4,6 +4,7 @@
   "brief": "Write a cold outreach email to a potential partner, Priya Nair (priya@brightlabs.io), introducing our company and proposing a 30-minute intro call next week. Keep it warm, specific, and under 150 words.",
   "primarySkill": "writing",
   "scenarioType": "compose_new",
+  "audience": "learner",
   "learner": { "displayName": "You", "email": "you@company.com" },
   "characters": [
     {
@@ -28,7 +29,7 @@
   "assistant": {
     "enabled": true,
     "capabilities": ["compose", "summarize"],
-    "systemPromptExtra": "Coach the learner toward a concise, warm, specific outreach email with a single clear ask.",
+    "systemPromptExtra": "Prefer concise, warm, specific outreach emails with a single clear ask.",
     "initialMessage": "Want help outlining a warm, specific intro email?",
     "allowCustomInstructions": false
   },

@@ -4,6 +4,7 @@
   "brief": "You are a customer support agent at BrightGoods. Reply to Marcus, who received a damaged espresso machine. De-escalate, apologize, and resolve his issue. He may reply — keep working the thread until it's resolved.",
   "primarySkill": "both",
   "scenarioType": "reply_chain",
+  "audience": "learner",
   "learner": { "displayName": "Support", "email": "support@brightgoods.com" },
   "world": "BrightGoods sold Marcus Bell an espresso machine (order #48231) that arrived damaged. It was meant to be a gift. Expedited shipping was paid.",
   "characters": [
@@ -58,7 +59,7 @@
   "assistant": {
     "enabled": true,
     "capabilities": ["compose", "qa_search", "summarize"],
-    "systemPromptExtra": "Coach the learner toward empathetic, solution-oriented support writing that owns the problem and offers a concrete resolution.",
+    "systemPromptExtra": "Prefer empathetic, solution-oriented support writing that owns the problem and offers a concrete resolution.",
     "initialMessage": "Want help drafting an empathetic, solution-first reply?",
     "allowCustomInstructions": false
   },

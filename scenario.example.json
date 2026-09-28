@@ -4,6 +4,7 @@
   "brief": "Reply to Dana's latest email. Push back on the $48,000 price and propose a 24-month term in exchange for a discount. Keep it firm but friendly.",
   "primarySkill": "both",
   "scenarioType": "reply_chain",
+  "audience": "learner",
 
   "learner": { "displayName": "You" },
   "world": "Acme is negotiating an annual software license. The current proposal is $48,000 for 12 months. Implementation can start two weeks after signature.",
@@ -87,7 +88,7 @@
   "assistant": {
     "enabled": true,
     "capabilities": ["compose", "qa_search", "summarize", "extract"],
-    "systemPromptExtra": "Coach the learner toward a concise, professional, firm-but-friendly tone.",
+    "systemPromptExtra": "Prefer a concise, professional, firm-but-friendly tone in drafts.",
     "initialMessage": "Want help drafting a firm-but-friendly counter-offer?",
     "allowCustomInstructions": false
   },
