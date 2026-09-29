@@ -677,6 +677,7 @@ function applyView() {
     }
   }
   renderAssistantChips();
+  renderQuickResultPanel();
 }
 
 // ── Rendering ─────────────────────────────────────────────────
@@ -1797,12 +1798,17 @@ function renderAssistantChips() {
   }
 }
 
+function quickDraftBelongsToActiveThread(draft) {
+  if (!draft?.sourceThreadId) return true;
+  return state.view === 'thread' && state.activeThreadId === draft.sourceThreadId;
+}
+
 function renderQuickResultPanel() {
   const host = els.assistantQuickResult;
   if (!host) return;
   host.innerHTML = '';
   const draft = state.assistant.quickDraft;
-  if (!draft) {
+  if (!draft || !quickDraftBelongsToActiveThread(draft)) {
     host.hidden = true;
     return;
   }
@@ -1872,12 +1878,17 @@ async function runQuickAction(action, detail = '') {
   state.assistant.quickActionBusy = true;
   renderAssistantChips();
 
-  const thread = (state.session?.threads ?? []).find((th) => th.id === state.activeThreadId);
+  // Capture before the await — the learner may change threads while the request runs.
+  // New-message compose is unscoped; reply chips bind to the open thread.
+  const sourceThreadId = state.composingNew
+    ? null
+    : (state.view === 'thread' ? state.activeThreadId : null);
+  const thread = (state.session?.threads ?? []).find((th) => th.id === sourceThreadId);
   const context = buildMailboxContext({
     threads: state.session?.threads ?? [],
     learnerEmail: learnerEmail(),
     viewing: {
-      threadId: state.view === 'thread' ? state.activeThreadId : null,
+      threadId: sourceThreadId,
       composingNew: state.composingNew && !state.composeMinimized,
       mailbox: state.activeMailbox,
     },
@@ -1895,7 +1906,7 @@ async function runQuickAction(action, detail = '') {
         threadContext: context.text,
         focusedEmail: thread ? focusedEmailMarkdown(thread) : '',
         currentDraft: getEditorMarkdown() || currentDraftMarkdownWithHeaders(),
-        threadId: state.activeThreadId || null,
+        threadId: sourceThreadId || null,
       }),
     });
     if (!res.ok) {
@@ -1911,20 +1922,28 @@ async function runQuickAction(action, detail = '') {
     if (action === 'suggested_replies' && body.replies?.length) {
       const focus = thread ? replyTargetEmail(thread) : null;
       state.assistant.suggestedReplies = {
-        threadId: state.activeThreadId,
+        threadId: sourceThreadId,
         emailId: focus?.id || null,
         replies: body.replies,
       };
       state.assistant.quickDraft = null;
-      if (state.view === 'thread') renderThread(state.activeThreadId);
+      if (state.view === 'thread' && state.activeThreadId === sourceThreadId) {
+        renderThread(sourceThreadId);
+      }
     } else if (action === 'subject_recipients' && body.headers) {
-      await applyHeaderSuggestion(body.headers, body.draftId);
+      const stillOnSourceThread = sourceThreadId
+        ? state.view === 'thread' && state.activeThreadId === sourceThreadId
+        : Boolean(state.composingNew);
+      if (stillOnSourceThread) {
+        await applyHeaderSuggestion(body.headers, body.draftId);
+      }
       state.assistant.quickDraft = null;
       renderQuickResultPanel();
     } else if (body.draft) {
       state.assistant.quickDraft = {
         draftId: body.draftId || newDraftId(),
         source: QUICK_ACTION_SOURCE,
+        sourceThreadId: sourceThreadId || null,
         ...normalizeDraftFields(body.draft),
       };
       state.assistant.suggestedReplies = null;
@@ -2116,6 +2135,18 @@ async function appendProvenanceEvents(events) {
 // inline reply on the open thread (started if needed), or a new message from the
 // inbox list. Drafts are scoped, so the text stays with that message or thread.
 async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, rawMarkdown = null } = {}) {
+  const quick = state.assistant.quickDraft;
+  if (
+    quick
+    && draftLike?.draftId
+    && quick.draftId === draftLike.draftId
+    && quick.sourceThreadId
+    && (state.view !== 'thread' || state.activeThreadId !== quick.sourceThreadId)
+  ) {
+    // Quick-action drafts stay bound to the thread they were generated for.
+    return;
+  }
+
   if (composerIsDirty()) {
     const ok = await confirmReplaceDraft();
     if (!ok) return;

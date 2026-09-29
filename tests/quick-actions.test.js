@@ -9,7 +9,10 @@ import {
   resolveQuickActionChips,
 } from '../lib/quick-actions.js';
 import { EVENT_TYPES, makeQuickActionEvent } from '../lib/provenance.js';
-import { withScenarioDefaults, validateScenario } from '../lib/scenario.js';
+import { withScenarioDefaults, validateScenario, loadScenario } from '../lib/scenario.js';
+import path from 'path';
+import os from 'os';
+import { mkdtemp, writeFile, rm } from 'fs/promises';
 
 describe('normalizeQuickActionsConfig', () => {
   it('defaults to every action for true / undefined', () => {
@@ -137,18 +140,25 @@ describe('scenario quickActions', () => {
     expect(cfg.assistant.quickActions).toEqual([]);
   });
 
-  it('rejects unknown action ids', () => {
-    const cfg = withScenarioDefaults({
-      id: 'x',
-      assistant: { quickActions: ['telepathy'] },
-    });
-    // Unknowns dropped during normalize; validate an unnormalized shape.
-    expect(
-      validateScenario({
-        ...cfg,
-        assistant: { ...cfg.assistant, quickActions: ['telepathy'] },
-      }).some((e) => e.includes('quickActions')),
-    ).toBe(true);
+  it('rejects unknown action ids on the real load path', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'cmail-qa-'));
+    const file = path.join(dir, 'scenario.json');
+    await writeFile(
+      file,
+      JSON.stringify({
+        id: 'x',
+        primarySkill: 'both',
+        scenarioType: 'reply',
+        audience: 'learner',
+        assistant: { quickActions: ['telepathy'] },
+      }),
+    );
+    try {
+      const { errors } = await loadScenario(file, dir);
+      expect(errors.some((e) => e.includes('quickActions') && e.includes('telepathy'))).toBe(true);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('exposes chip metadata for UI labels', () => {
