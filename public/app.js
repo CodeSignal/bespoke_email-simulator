@@ -86,6 +86,10 @@ function parseMailto(href) {
 
 marked.use({
   renderer: {
+    // marked preserves raw HTML by default; escape so sinks using innerHTML stay safe.
+    html({ text }) {
+      return escapeHtml(text);
+    },
     link({ href, tokens }) {
       const email = parseMailto(href);
       if (!email) return false;
