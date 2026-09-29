@@ -141,6 +141,58 @@ describe('session lifecycle', () => {
     expect(reload.body.assistantMessages[0].content).toBe('help me');
   });
 
+  it('POST /api/session/events appends provenance events', async () => {
+    const append = await request(app)
+      .post('/api/session/events')
+      .send({
+        sessionId,
+        events: [
+          {
+            type: 'draft_proposed',
+            timestamp: '2026-01-02T00:01:00.000Z',
+            draftId: 'draft-1',
+            source: 'propose-draft',
+            toolCallId: 'call-1',
+            draft: {
+              to: ['dana@acme-vendor.com'],
+              cc: [],
+              subject: 'Re: Proposal',
+              body: 'Thanks.',
+            },
+          },
+        ],
+      });
+    expect(append.status).toBe(200);
+    expect(append.body.events).toHaveLength(1);
+
+    // Duplicate toolCallId is ignored.
+    const again = await request(app)
+      .post('/api/session/events')
+      .send({
+        sessionId,
+        events: [
+          {
+            type: 'draft_proposed',
+            draftId: 'draft-2',
+            toolCallId: 'call-1',
+            draft: { to: ['dana@acme-vendor.com'], subject: 'Re: Proposal', body: 'Thanks.' },
+          },
+          {
+            type: 'draft_inserted',
+            draftId: 'draft-1',
+            source: 'propose-draft',
+            scope: { scope: 'reply', threadId: 'thread-1' },
+            draft: { to: ['dana@acme-vendor.com'], subject: 'Re: Proposal', body: 'Thanks.' },
+          },
+        ],
+      });
+    expect(again.status).toBe(200);
+    expect(again.body.events.map((e) => e.type)).toEqual(['draft_proposed', 'draft_inserted']);
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.events).toHaveLength(2);
+  });
+
   it('POST /api/assistant/clear wipes the assistant transcript', async () => {
     const clear = await request(app).post('/api/assistant/clear').send({ sessionId });
     expect(clear.status).toBe(200);

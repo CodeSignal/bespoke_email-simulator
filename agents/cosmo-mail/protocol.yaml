@@ -66,6 +66,37 @@ triggers:
         type: file[]
         optional: true
 
+# propose-draft hands a ready-to-send email to the CosmoMail UI as a draft card
+# (Insert button). Implemented as a server passthrough so Cosmo can keep talking
+# after proposing; the host app renders the tool args.
+tools:
+  propose-draft:
+    display: stream
+    title: Draft email
+    description: >
+      Propose a complete email the user can insert into the CosmoMail composer.
+      Use this whenever you draft a full ready-to-send email (new message or reply).
+      Prefer this tool over putting the email in a fenced code block.
+    parameters:
+      to:
+        type: string
+        description: >
+          Comma-separated recipient email addresses from the mailbox (real
+          addresses only). Leave empty only when the open thread already implies
+          the recipient and you truly cannot determine an address.
+      cc:
+        type: string
+        optional: true
+        description: Comma-separated Cc addresses, or empty if none.
+      subject:
+        type: string
+        description: "Email subject line (include Re: when replying)."
+      body:
+        type: string
+        description: >
+          Full email body in Markdown. Do not repeat To/Cc/Subject header lines
+          inside the body.
+
 agent:
   model: MODEL
   system: system
@@ -79,6 +110,8 @@ agent:
   temperature: TEMPERATURE
   thinking: THINKING
   agentic: true
+  tools:
+    - propose-draft
 
 handlers:
   assistant-message:

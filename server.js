@@ -16,6 +16,7 @@ import {
 } from './lib/character-replies.js';
 import { buildCapabilityInstructions } from './lib/assistant.js';
 import { removeScopedDraft } from './lib/drafts.js';
+import { appendSessionEvents, normalizeDraftFields, PROPOSE_DRAFT_TOOL } from './lib/provenance.js';
 import { resolveStrings } from './lib/i18n.js';
 import {
   newSessionRecord,
@@ -27,6 +28,15 @@ import {
   removeSession,
   toClientSession,
 } from './lib/sessions.js';
+
+// propose-draft is a passthrough: Cosmo emits structured fields; the UI renders
+// a draft card. Returning the fields lets the model continue talking afterward.
+const ASSISTANT_TOOLS = {
+  [PROPOSE_DRAFT_TOOL]: async (args = {}) => {
+    const draft = normalizeDraftFields(args);
+    return { ok: true, ...draft, to: draft.to.join(', '), cc: draft.cc.join(', ') };
+  },
+};
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCENARIO_FILE = process.env.SCENARIO_FILE || path.join(__dirname, 'scenario.json');
@@ -224,8 +234,11 @@ function doneCharacterIds(record) {
 }
 
 // Attach to an Octavus session, execute the payload, and pipe the SSE stream.
-async function streamAgent(res, octavusSessionId, payload) {
-  const session = octavus.agentSessions.attach(octavusSessionId);
+async function streamAgent(res, octavusSessionId, payload, { tools } = {}) {
+  const session = octavus.agentSessions.attach(
+    octavusSessionId,
+    tools ? { tools } : undefined,
+  );
   const events = session.execute(payload);
   const stream = toSSEStream(events);
 
@@ -320,7 +333,7 @@ app.post('/api/assistant/trigger', async (req, res) => {
     console.error('[assistant/trigger] Error:', err);
     return res.status(500).json({ error: 'Failed to load scenario config' });
   }
-  await streamAgent(res, sessionId, payload);
+  await streamAgent(res, sessionId, payload, { tools: ASSISTANT_TOOLS });
 });
 
 // POST /api/upload-urls — proxy presigned upload URL requests to Octavus.
@@ -502,9 +515,9 @@ app.post('/api/character/complete', async (req, res) => {
   }
 });
 
-// POST /api/session/save — persist threads / drafts / assistant messages.
+// POST /api/session/save — persist threads / drafts / assistant messages / events.
 app.post('/api/session/save', async (req, res) => {
-  const { sessionId, threads, drafts, assistantMessages } = req.body;
+  const { sessionId, threads, drafts, assistantMessages, events } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
   try {
     const data = await readSessions();
@@ -514,6 +527,7 @@ app.post('/api/session/save', async (req, res) => {
     if (Array.isArray(threads)) record.threads = threads;
     if (Array.isArray(drafts)) record.drafts = drafts;
     if (Array.isArray(assistantMessages)) record.assistant_messages = assistantMessages;
+    if (Array.isArray(events)) record.events = events;
 
     upsertSession(data, record);
     await writeSessions(data);
@@ -521,6 +535,28 @@ app.post('/api/session/save', async (req, res) => {
   } catch (err) {
     console.error('[session/save] Error:', err);
     res.status(500).json({ error: 'Failed to save session' });
+  }
+});
+
+// POST /api/session/events — append AI provenance events (draft_proposed, etc.).
+app.post('/api/session/events', async (req, res) => {
+  const { sessionId, events } = req.body;
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  if (!Array.isArray(events) || events.length === 0) {
+    return res.status(400).json({ error: 'events[] is required' });
+  }
+  try {
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+
+    record.events = appendSessionEvents(record.events, events);
+    upsertSession(data, record);
+    await writeSessions(data);
+    res.json({ ok: true, events: record.events });
+  } catch (err) {
+    console.error('[session/events] Error:', err);
+    res.status(500).json({ error: 'Failed to append session events' });
   }
 });
 

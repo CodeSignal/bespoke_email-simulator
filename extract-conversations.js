@@ -57,8 +57,8 @@ import { fileURLToPath } from 'url';
 import { characterIsLive, normalizeWorld } from './lib/character-replies.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const SESSIONS_FILE = join(__dirname, 'sessions.json');
-const SCENARIO_FILE = join(__dirname, 'scenario.json');
+const SESSIONS_FILE = process.env.SESSIONS_FILE || join(__dirname, 'sessions.json');
+const SCENARIO_FILE = process.env.SCENARIO_FILE || join(__dirname, 'scenario.json');
 
 const VALID_MODES = ['full', 'submission', 'thread', 'assistant', 'report'];
 const VALID_ORDERS = ['thread', 'chronological'];
@@ -273,6 +273,68 @@ function emailHistoryLines(session) {
   return order === 'chronological' ? chronologicalLines(session) : threadLines(session);
 }
 
+function addrListPlain(list) {
+  if (!Array.isArray(list)) return String(list || '');
+  return list.join(', ');
+}
+
+function draftFieldLines(draft, indent = '') {
+  if (!draft) return [];
+  const lines = [];
+  if (draft.to?.length) lines.push(`${indent}- **To:** ${addrListPlain(draft.to)}`);
+  if (draft.cc?.length) lines.push(`${indent}- **Cc:** ${addrListPlain(draft.cc)}`);
+  if (draft.subject) lines.push(`${indent}- **Subject:** ${draft.subject}`);
+  if (draft.body) {
+    lines.push(`${indent}- **Body:**`, '');
+    for (const line of String(draft.body).split('\n')) {
+      lines.push(`${indent}  ${line}`);
+    }
+  }
+  return lines;
+}
+
+// AI draft provenance: propose → insert → (optional) send-with-edit-distance.
+function provenanceLines(session) {
+  const events = session.events ?? [];
+  const lines = ['### AI draft provenance', ''];
+  if (!events.length) {
+    lines.push('_No AI draft events recorded in this session._', '');
+    return lines;
+  }
+
+  for (const event of events) {
+    const when = formatDate(event.timestamp);
+    if (event.type === 'draft_proposed') {
+      lines.push(`- **Draft proposed** (${event.source || 'propose-draft'}${when ? ` · ${when}` : ''})`);
+      lines.push(`  - draftId: \`${event.draftId}\``);
+      lines.push(...draftFieldLines(event.draft, '  '));
+    } else if (event.type === 'draft_inserted') {
+      const scope = event.scope?.scope === 'reply'
+        ? `reply on ${event.scope.threadId || 'thread'}`
+        : 'new message';
+      lines.push(`- **Draft inserted** into composer (${scope}${when ? ` · ${when}` : ''})`);
+      lines.push(`  - draftId: \`${event.draftId}\``);
+    } else if (event.type === 'draft_sent') {
+      const dist = event.editDistance;
+      const distSummary = dist
+        ? `body edit distance ${dist.body}, subject ${dist.subject}, total ${dist.total}`
+        : 'no insert baseline';
+      lines.push(`- **Draft sent** (${distSummary}${when ? ` · ${when}` : ''})`);
+      if (event.draftId) lines.push(`  - draftId: \`${event.draftId}\``);
+      if (event.emailId) lines.push(`  - emailId: \`${event.emailId}\``);
+      if (dist) {
+        lines.push(
+          `  - recipients: to ±${dist.to?.total ?? 0}, cc ±${dist.cc?.total ?? 0}`,
+        );
+      }
+    } else {
+      lines.push(`- **${event.type}**${when ? ` · ${when}` : ''}`);
+    }
+    lines.push('');
+  }
+  return lines;
+}
+
 function assistantLines(session) {
   const lines = ['### Assistant conversation (Cosmo)', ''];
   if (!assistantEnabled) {
@@ -289,6 +351,7 @@ function assistantLines(session) {
       '_The assistant was available, but the participant did not use it in this session._',
       '',
     );
+    lines.push(...provenanceLines(session));
     return lines;
   }
 
@@ -306,9 +369,14 @@ function assistantLines(session) {
       lines.push(...String(m.content || '').split('\n').map((l) => `> ${l}`));
     } else {
       lines.push('', String(m.content || ''));
+      for (const draft of m.drafts ?? []) {
+        lines.push('', '_Proposed draft (structured):_');
+        lines.push(...draftFieldLines(draft));
+      }
     }
     lines.push('');
   }
+  lines.push(...provenanceLines(session));
   return lines;
 }
 

@@ -29,6 +29,18 @@ import {
 } from '../lib/characters.js';
 import { buildMailboxContext } from '../lib/assistant.js';
 import { draftForScope, parseInsertedDraft, removeScopedDraft, upsertScopedDraft } from '../lib/drafts.js';
+import {
+  appendSessionEvents,
+  draftFieldsToMarkdown,
+  draftsFromMessageParts,
+  EVENT_TYPES,
+  makeDraftInsertedEvent,
+  makeDraftProposedEvent,
+  makeDraftSentEvent,
+  newDraftId,
+  normalizeDraftFields,
+  PROPOSE_DRAFT_TOOL,
+} from '../lib/provenance.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -105,6 +117,9 @@ const state = {
     persisted: [],
     lastInsertable: null,
     lastContextHash: null, // hash of the mailbox state last sent in full to Cosmo
+    // Last AI draft the learner Inserted — used for draft_sent provenance on send.
+    lastInserted: null,
+    seenToolCallIds: new Set(),
   },
   characterSessions: {},
   attachments: [],
@@ -1297,6 +1312,7 @@ async function sendEmail() {
   try {
     const sentScope = draftScope() || { scope: 'new' };
     const composingNew = sentScope.scope === 'new';
+    const inserted = state.assistant.lastInserted;
     const res = await fetch('/api/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1312,6 +1328,24 @@ async function sendEmail() {
     });
     if (!res.ok) throw new Error(`send failed (${res.status})`);
     const { email, thread, responders } = await res.json();
+
+    if (inserted?.draft) {
+      void appendProvenanceEvents([
+        makeDraftSentEvent({
+          draftId: inserted.draftId,
+          emailId: email?.id,
+          threadId: thread?.id,
+          inserted: inserted.draft,
+          sent: {
+            to: draft.to,
+            cc: draft.cc,
+            subject: draft.subject,
+            body: draft.body,
+          },
+        }),
+      ]);
+      state.assistant.lastInserted = null;
+    }
 
     replaceThread(thread);
     state.composingNew = false;
@@ -1481,6 +1515,24 @@ function extractLastCodeBlock(md) {
   return matches[matches.length - 1][1].trim();
 }
 
+function messageText(message) {
+  if (!message) return '';
+  if (message.parts) {
+    return (message.parts ?? [])
+      .filter((p) => p.type === 'text')
+      .map((p) => p.text)
+      .join('');
+  }
+  return message.content || '';
+}
+
+function draftsFromLiveMessage(message) {
+  if (!message?.parts) return [];
+  return draftsFromMessageParts(message.parts, {
+    seenToolCallIds: new Set(), // display-only; persistence dedupes via state
+  }).drafts;
+}
+
 function makeBubble(role, contentHtml) {
   const isUser = role === 'user';
   const row = document.createElement('div');
@@ -1498,8 +1550,92 @@ function makeBubble(role, contentHtml) {
     ? 'assistant__msg assistant__msg--user box non-interactive'
     : 'assistant__msg assistant__msg--ai box non-interactive';
   bubble.innerHTML = contentHtml;
-  row.appendChild(bubble);
+
+  if (isUser) {
+    row.appendChild(bubble);
+    return row;
+  }
+
+  // AI turns stack commentary + draft in a column so the draft can use the
+  // full panel width instead of sitting inside a second nested box.
+  const turn = document.createElement('div');
+  turn.className = 'assistant__turn';
+  turn.appendChild(bubble);
+  row.appendChild(turn);
   return row;
+}
+
+function appendDraftField(list, label, value) {
+  const dt = document.createElement('dt');
+  dt.className = 'body-xsmall assistant__draft-field-label';
+  dt.textContent = label;
+  const dd = document.createElement('dd');
+  dd.className = 'body-xsmall assistant__draft-field-value';
+  dd.textContent = value;
+  list.appendChild(dt);
+  list.appendChild(dd);
+}
+
+function appendDraftCard(row, draft, { streaming = false } = {}) {
+  const turn = row.querySelector('.assistant__turn');
+  const bubble = row.querySelector('.assistant__msg');
+  if (!turn) return;
+
+  const card = document.createElement('article');
+  card.className = 'assistant__draft';
+  card.dataset.draftId = draft.draftId || '';
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'assistant__draft-toolbar';
+  const label = document.createElement('div');
+  label.className = 'body-xsmall assistant__draft-label';
+  label.textContent = streaming ? t('Drafting email…') : t('Draft');
+  toolbar.appendChild(label);
+  if (!streaming) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'button button-text-primary button-xsmall assistant__insert';
+    btn.textContent = t('Insert');
+    btn.setAttribute('aria-label', t('Insert into composer'));
+    btn.addEventListener('click', () => {
+      void insertProposedDraft(draft, { source: draft.source || PROPOSE_DRAFT_TOOL });
+    });
+    toolbar.appendChild(btn);
+  }
+  card.appendChild(toolbar);
+
+  const fields = document.createElement('dl');
+  fields.className = 'assistant__draft-fields';
+  if (draft.to?.length) appendDraftField(fields, t('To'), draft.to.join(', '));
+  if (draft.cc?.length) appendDraftField(fields, t('Cc'), draft.cc.join(', '));
+  if (draft.subject) appendDraftField(fields, t('Subject'), draft.subject);
+  if (fields.childElementCount) card.appendChild(fields);
+
+  if (draft.body) {
+    const bodyEl = document.createElement('div');
+    bodyEl.className = 'assistant__draft-body body-small';
+    bodyEl.innerHTML = renderMarkdown(draft.body);
+    card.appendChild(bodyEl);
+  }
+
+  turn.appendChild(card);
+  if (bubble && !bubble.textContent.trim()) bubble.hidden = true;
+}
+
+function appendFenceInsertFallback(row, markdown) {
+  // Only when this bubble has no structured draft card yet.
+  if (row.querySelector('.assistant__draft')) return;
+  const code = extractLastCodeBlock(markdown);
+  if (!code) return;
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'button button-text-primary button-xsmall assistant__insert';
+  btn.textContent = t('Insert into composer');
+  btn.addEventListener('click', () => {
+    // Parse after the composer/reply scope is opened inside insertProposedDraft.
+    void insertProposedDraft({ source: 'fence' }, { source: 'fence', rawMarkdown: code });
+  });
+  row.querySelector('.assistant__msg')?.appendChild(btn);
 }
 
 function renderAssistant(liveMessages = []) {
@@ -1521,20 +1657,30 @@ function renderAssistant(liveMessages = []) {
   for (const m of persisted) {
     const html = m.role === 'user' ? escapeHtml(m.content) : renderMarkdown(m.content);
     const row = makeBubble(m.role, html);
-    if (m.role === 'assistant') appendInsertButton(row, m.content);
+    if (m.role === 'assistant') {
+      for (const draft of m.drafts ?? []) appendDraftCard(row, draft);
+      appendFenceInsertFallback(row, m.content);
+    }
     container.appendChild(row);
   }
 
   // Live (this page load) turns from OctavusChat.
   for (const m of liveMessages) {
     if (m.role === 'user') {
-      const text = (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('')
-        || m.content || '';
+      const text = messageText(m) || m.content || '';
       container.appendChild(makeBubble('user', escapeHtml(text)));
     } else if (m.role === 'assistant') {
-      const text = (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('');
-      const row = makeBubble('ai', renderMarkdown(text) || '<span class="assistant__typing">…</span>');
-      if (m.status !== 'streaming') appendInsertButton(row, text);
+      const text = messageText(m);
+      const drafts = draftsFromLiveMessage(m);
+      const streaming = m.status === 'streaming';
+      const row = makeBubble(
+        'ai',
+        renderMarkdown(text) || (drafts.length || streaming
+          ? ''
+          : '<span class="assistant__typing">…</span>'),
+      );
+      for (const draft of drafts) appendDraftCard(row, draft, { streaming });
+      if (!streaming) appendFenceInsertFallback(row, text);
       container.appendChild(row);
     }
   }
@@ -1581,21 +1727,97 @@ async function clearAssistant() {
   }
 }
 
-function appendInsertButton(row, markdown) {
-  const code = extractLastCodeBlock(markdown);
-  if (!code) return;
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.className = 'button button-text-primary button-xsmall assistant__insert';
-  btn.textContent = 'Insert into composer';
-  btn.addEventListener('click', () => insertIntoComposer(code));
-  row.querySelector('.assistant__msg').appendChild(btn);
+function insertParseContext() {
+  return {
+    characters: directoryCharacters(),
+    threads: state.session?.threads ?? [],
+    learnerEmail: learnerEmail(),
+    // New-message inserts stay unscoped; inline replies use the open thread.
+    threadId: state.composingNew ? null : state.activeThreadId,
+  };
+}
+
+function composerIsOpen() {
+  return Boolean(state.composingNew || state.replying);
+}
+
+// Confirm before overwrite only when the open composer has user content.
+// Reply mode pre-fills To/Subject from the thread, so those alone are not dirty.
+function composerIsDirty() {
+  if (!composerIsOpen()) return false;
+  const draft = currentDraft();
+  if (draft.body.trim()) return true;
+  if (state.composingNew) {
+    return Boolean(draft.subject.trim() || draft.to.length || draft.cc.length);
+  }
+  return false;
+}
+
+function confirmReplaceDraft() {
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const modal = new Modal({
+      size: 'small',
+      title: t('Replace current draft?'),
+      content: `<p class="body-medium">${escapeHtml(
+        t("You're already writing an email. Replace it with Cosmo's draft?"),
+      )}</p>`,
+      closeOnOverlayClick: false,
+      footerButtons: [
+        {
+          label: t('Cancel'),
+          type: 'secondary',
+          onClick: () => {
+            finish(false);
+            modal.close();
+          },
+        },
+        {
+          label: t('Replace'),
+          type: 'primary',
+          onClick: () => {
+            finish(true);
+            modal.close();
+          },
+        },
+      ],
+      onClose: () => finish(false),
+    });
+    modal.open();
+  });
+}
+
+async function appendProvenanceEvents(events) {
+  if (!state.session?.sessionId || !events?.length) return;
+  state.session.events = appendSessionEvents(state.session.events, events);
+  try {
+    const res = await fetch('/api/session/events', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: state.session.sessionId, events }),
+    });
+    if (!res.ok) throw new Error(`events failed (${res.status})`);
+    const body = await res.json();
+    if (Array.isArray(body.events)) state.session.events = body.events;
+  } catch (err) {
+    console.error('[CosmoMail] provenance save failed:', err);
+  }
 }
 
 // Insert fills whatever the user is working in: the open new-message window, an
 // inline reply on the open thread (started if needed), or a new message from the
 // inbox list. Drafts are scoped, so the text stays with that message or thread.
-function insertIntoComposer(markdown) {
+async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, rawMarkdown = null } = {}) {
+  if (composerIsDirty()) {
+    const ok = await confirmReplaceDraft();
+    if (!ok) return;
+  }
+
   if (state.composingNew) {
     state.composeMinimized = false;
     applyView();
@@ -1604,39 +1826,72 @@ function insertIntoComposer(markdown) {
   } else {
     startCompose({ blank: true });
   }
-  const parsed = parseInsertedDraft(markdown, {
-    characters: directoryCharacters(),
-    threads: state.session?.threads ?? [],
-    learnerEmail: learnerEmail(),
-    // New-message inserts stay unscoped; inline replies use the open thread.
-    threadId: state.composingNew ? null : state.activeThreadId,
-  });
-  if (parsed.to.length || parsed.cc.length) applyRecipientDraft(parsed);
-  if (parsed.subject) {
-    els.composeSubject.value = parsed.subject;
+
+  const markdown = rawMarkdown || draftFieldsToMarkdown(draftLike);
+  const parsed = parseInsertedDraft(markdown, insertParseContext());
+  // Structured tool fields win when present (already normalized).
+  const structured = normalizeDraftFields(draftLike);
+  const fields = {
+    to: structured.to.length ? structured.to : parsed.to,
+    cc: structured.cc.length ? structured.cc : parsed.cc,
+    subject: structured.subject || parsed.subject,
+    body: structured.body || parsed.body,
+  };
+
+  if (fields.to.length || fields.cc.length) applyRecipientDraft(fields);
+  if (fields.subject) {
+    els.composeSubject.value = fields.subject;
     if (els.composerTitle && state.composingNew) {
       els.composerTitle.textContent = composeOverlayTitle();
     }
   }
-  setEditorMarkdown(parsed.body);
+  setEditorMarkdown(fields.body);
+
+  const draftId = draftLike.draftId || newDraftId();
+  const scope = draftScope() || { scope: 'new' };
+  const events = [];
+  if (source === 'fence') {
+    events.push(makeDraftProposedEvent({ draftId, source: 'fence', draft: fields }));
+  }
+  events.push(makeDraftInsertedEvent({ draftId, draft: fields, scope, source }));
+  state.assistant.lastInserted = { draftId, draft: fields, source };
+  void appendProvenanceEvents(events);
+
   scheduleDraftSave();
   els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
 }
 
 function persistAssistant() {
-  const live = (state.assistant.chat?.messages ?? []).map((m) => ({
-    role: m.role,
-    content: m.role === 'assistant'
-      ? (m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('')
-      : ((m.parts ?? []).filter((p) => p.type === 'text').map((p) => p.text).join('') || m.content || ''),
-    timestamp: new Date().toISOString(),
-  }));
+  const proposedEvents = [];
+  const live = (state.assistant.chat?.messages ?? []).map((m) => {
+    const content = messageText(m) || m.content || '';
+    if (m.role !== 'assistant') {
+      return { role: m.role, content, timestamp: new Date().toISOString() };
+    }
+    const { drafts, events } = draftsFromMessageParts(m.parts ?? [], {
+      seenToolCallIds: state.assistant.seenToolCallIds,
+    });
+    proposedEvents.push(...events);
+    return {
+      role: 'assistant',
+      content,
+      drafts,
+      timestamp: new Date().toISOString(),
+    };
+  });
   const all = [...state.assistant.persisted, ...live];
   state.session.assistantMessages = all;
+  if (proposedEvents.length) {
+    state.session.events = appendSessionEvents(state.session.events, proposedEvents);
+  }
   fetch('/api/session/save', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sessionId: state.session.sessionId, assistantMessages: all }),
+    body: JSON.stringify({
+      sessionId: state.session.sessionId,
+      assistantMessages: all,
+      events: state.session.events ?? [],
+    }),
   }).catch((err) => console.error('[CosmoMail] assistant save failed:', err));
 }
 
@@ -1647,6 +1902,12 @@ function setAssistantEnabled(enabled) {
 
 async function initAssistant() {
   state.assistant.persisted = state.session?.assistantMessages ?? [];
+  state.session.events = state.session?.events ?? [];
+  state.assistant.seenToolCallIds = new Set(
+    (state.session.events ?? [])
+      .filter((event) => event.type === EVENT_TYPES.DRAFT_PROPOSED && event.toolCallId)
+      .map((event) => event.toolCallId),
+  );
   renderAssistant([]);
   els.assistantClearBtn?.addEventListener('click', clearAssistant);
 
