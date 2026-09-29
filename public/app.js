@@ -41,6 +41,7 @@ import {
   normalizeDraftFields,
   PROPOSE_DRAFT_TOOL,
 } from '../lib/provenance.js';
+import { resolveQuickActionChips, QUICK_ACTION_SOURCE } from '../lib/quick-actions.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -120,6 +121,11 @@ const state = {
     // Last AI draft the learner Inserted — used for draft_sent provenance on send.
     lastInserted: null,
     seenToolCallIds: new Set(),
+    quickActionBusy: false,
+    // One-shot rewrite/shorten/tone/proofread card (not part of chat transcript).
+    quickDraft: null,
+    // Suggested reply options under the focused email.
+    suggestedReplies: null, // { threadId, emailId, replies: string[] }
   },
   characterSessions: {},
   attachments: [],
@@ -167,6 +173,8 @@ const els = {
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
   assistantClearBtn: document.getElementById('assistantClearBtn'),
+  assistantChips: document.getElementById('assistantChips'),
+  assistantQuickResult: document.getElementById('assistantQuickResult'),
   mailToasts: document.getElementById('mailToasts'),
 };
 
@@ -668,6 +676,8 @@ function applyView() {
       els.mailToolbarTitle.textContent = mailboxLabel(state.activeMailbox);
     }
   }
+  renderAssistantChips();
+  renderQuickResultPanel();
 }
 
 // ── Rendering ─────────────────────────────────────────────────
@@ -773,11 +783,17 @@ function renderThread(threadId) {
     backToList();
     return;
   }
+  const focusEmail = replyTargetEmail(thread);
   for (const email of thread.emails ?? []) {
     els.readingPane.appendChild(renderEmail(email, learnerAddr));
+    if (focusEmail && email.id === focusEmail.id) {
+      const suggestions = renderSuggestedReplies(thread, email);
+      if (suggestions) els.readingPane.appendChild(suggestions);
+    }
   }
   if (!state.replying) els.readingPane.appendChild(renderThreadActions());
   else placeComposer();
+  renderAssistantChips();
 }
 
 function renderThreadActions() {
@@ -1743,6 +1759,306 @@ function insertParseContext() {
   };
 }
 
+// ── Quick actions (chips) ─────────────────────────────────────
+
+function visibleQuickActionChips() {
+  if (state.config?.assistant?.enabled === false) return [];
+  const chips = resolveQuickActionChips({
+    capabilities: state.config?.assistant?.capabilities,
+    quickActions: state.config?.assistant?.quickActions,
+  });
+  const composerOpen = composerIsOpen();
+  const inThread = state.view === 'thread' && Boolean(state.activeThreadId);
+  return chips.filter((chip) => {
+    if (chip.needsThread && !inThread) return false;
+    if (chip.needsComposer && !composerOpen) return false;
+    return true;
+  });
+}
+
+function renderAssistantChips() {
+  const host = els.assistantChips;
+  if (!host) return;
+  const chips = visibleQuickActionChips();
+  host.innerHTML = '';
+  if (!chips.length) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  for (const chip of chips) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'button button-tertiary button-xsmall assistant__chip';
+    btn.textContent = t(chip.label);
+    btn.disabled = state.assistant.quickActionBusy
+      || state.assistant.chat?.status === 'streaming';
+    btn.addEventListener('click', () => void runQuickAction(chip.id));
+    host.appendChild(btn);
+  }
+}
+
+function quickDraftBelongsToActiveThread(draft) {
+  if (!draft?.sourceThreadId) return true;
+  return state.view === 'thread' && state.activeThreadId === draft.sourceThreadId;
+}
+
+function renderQuickResultPanel() {
+  const host = els.assistantQuickResult;
+  if (!host) return;
+  host.innerHTML = '';
+  const draft = state.assistant.quickDraft;
+  if (!draft || !quickDraftBelongsToActiveThread(draft)) {
+    host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  const row = document.createElement('div');
+  row.className = 'assistant__row assistant__row--ai';
+  const avatar = document.createElement('span');
+  avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
+  avatar.setAttribute('aria-hidden', 'true');
+  row.appendChild(avatar);
+  const turn = document.createElement('div');
+  turn.className = 'assistant__turn';
+  row.appendChild(turn);
+  host.appendChild(row);
+  appendDraftCard(row, draft);
+}
+
+function renderSuggestedReplies(thread, email) {
+  const pack = state.assistant.suggestedReplies;
+  if (!pack?.replies?.length) return null;
+  if (pack.threadId !== thread.id) return null;
+  if (pack.emailId && email.id && pack.emailId !== email.id) return null;
+
+  const wrap = document.createElement('div');
+  wrap.className = 'suggested-replies';
+  wrap.setAttribute('aria-label', t('Suggested replies'));
+
+  const label = document.createElement('p');
+  label.className = 'body-xsmall suggested-replies__label';
+  label.textContent = t('Suggested replies');
+  wrap.appendChild(label);
+
+  const list = document.createElement('div');
+  list.className = 'suggested-replies__list';
+
+  for (const body of pack.replies) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    // Not a design-system .button — those are fixed-height single-line controls.
+    btn.className = 'suggested-replies__option body-small';
+    btn.textContent = String(body ?? '').trim();
+    btn.title = t('Insert into composer');
+    btn.addEventListener('click', () => void applySuggestedReply(body));
+    list.appendChild(btn);
+  }
+  wrap.appendChild(list);
+  return wrap;
+}
+
+function focusedEmailMarkdown(thread) {
+  const email = replyTargetEmail(thread);
+  if (!email) return '';
+  const lines = [
+    `From: ${formatAddress(email.from)}`,
+    `To: ${formatAddressList(email.to)}`,
+  ];
+  if (email.cc?.length) lines.push(`Cc: ${formatAddressList(email.cc)}`);
+  if (email.date) lines.push(`Date: ${email.date}`);
+  if (email.subject) lines.push(`Subject: ${email.subject}`);
+  lines.push('', String(email.body ?? ''));
+  return lines.join('\n');
+}
+
+async function runQuickAction(action, detail = '') {
+  if (state.assistant.quickActionBusy) return;
+  if (!state.session?.sessionId) return;
+  state.assistant.quickActionBusy = true;
+  renderAssistantChips();
+
+  // Capture before the await — the learner may change threads while the request runs.
+  // New-message compose is unscoped; reply chips bind to the open thread.
+  const sourceThreadId = state.composingNew
+    ? null
+    : (state.view === 'thread' ? state.activeThreadId : null);
+  const thread = (state.session?.threads ?? []).find((th) => th.id === sourceThreadId);
+  const context = buildMailboxContext({
+    threads: state.session?.threads ?? [],
+    learnerEmail: learnerEmail(),
+    viewing: {
+      threadId: sourceThreadId,
+      composingNew: state.composingNew && !state.composeMinimized,
+      mailbox: state.activeMailbox,
+    },
+    previousHash: null, // always send full mailbox for one-shot sessions
+  });
+
+  try {
+    const res = await fetch('/api/assistant/quick-action', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sessionId: state.session.sessionId,
+        action,
+        detail: detail || undefined,
+        threadContext: context.text,
+        focusedEmail: thread ? focusedEmailMarkdown(thread) : '',
+        currentDraft: getEditorMarkdown() || currentDraftMarkdownWithHeaders(),
+        threadId: sourceThreadId || null,
+      }),
+    });
+    if (!res.ok) {
+      const errBody = await res.json().catch(() => ({}));
+      throw new Error(errBody.error || `quick-action failed (${res.status})`);
+    }
+    const body = await res.json();
+    if (Array.isArray(body.sessionEvents)) state.session.events = body.sessionEvents;
+    else if (body.events?.length) {
+      state.session.events = appendSessionEvents(state.session.events, body.events);
+    }
+
+    if (action === 'suggested_replies' && body.replies?.length) {
+      const focus = thread ? replyTargetEmail(thread) : null;
+      state.assistant.suggestedReplies = {
+        threadId: sourceThreadId,
+        emailId: focus?.id || null,
+        replies: body.replies,
+      };
+      state.assistant.quickDraft = null;
+      if (state.view === 'thread' && state.activeThreadId === sourceThreadId) {
+        renderThread(sourceThreadId);
+      }
+    } else if (action === 'subject_recipients' && body.headers) {
+      const stillOnSourceThread = sourceThreadId
+        ? state.view === 'thread' && state.activeThreadId === sourceThreadId
+        : Boolean(state.composingNew);
+      if (stillOnSourceThread) {
+        await applyHeaderSuggestion(body.headers, body.draftId);
+      }
+      state.assistant.quickDraft = null;
+      renderQuickResultPanel();
+    } else if (body.draft) {
+      state.assistant.quickDraft = {
+        draftId: body.draftId || newDraftId(),
+        source: QUICK_ACTION_SOURCE,
+        sourceThreadId: sourceThreadId || null,
+        ...normalizeDraftFields(body.draft),
+      };
+      state.assistant.suggestedReplies = null;
+      renderQuickResultPanel();
+    }
+  } catch (err) {
+    console.error('[CosmoMail] quick action failed:', err);
+  } finally {
+    state.assistant.quickActionBusy = false;
+    renderAssistantChips();
+  }
+}
+
+function currentDraftMarkdownWithHeaders() {
+  const draft = currentDraft();
+  if (!draft.body && !draft.subject && !draft.to.length && !draft.cc.length) return '(empty)';
+  return draftFieldsToMarkdown(draft);
+}
+
+async function applySuggestedReply(body) {
+  const draftLike = {
+    draftId: newDraftId(),
+    to: [],
+    cc: [],
+    subject: '',
+    body,
+  };
+  // Keep thread To/Subject from reply autofill; only fill the body.
+  if (composerIsDirty() && getEditorMarkdown().trim()) {
+    const ok = await confirmReplaceDraft();
+    if (!ok) return;
+  }
+  // Dismiss the suggestion picker once the learner picks one.
+  state.assistant.suggestedReplies = null;
+  if (!state.replying && state.view === 'thread' && state.activeThreadId) {
+    startReply('reply');
+  } else if (!composerIsOpen()) {
+    startCompose({ blank: true });
+  } else if (state.view === 'thread' && state.activeThreadId) {
+    renderThread(state.activeThreadId);
+  }
+  setEditorMarkdown(body);
+  const scope = draftScope() || { scope: 'new' };
+  const events = [
+    makeDraftProposedEvent({
+      draftId: draftLike.draftId,
+      source: QUICK_ACTION_SOURCE,
+      draft: { ...draftLike, ...normalizeDraftFields({ body }) },
+    }),
+    makeDraftInsertedEvent({
+      draftId: draftLike.draftId,
+      draft: normalizeDraftFields({
+        to: state.recipients.to,
+        cc: state.recipients.cc,
+        subject: els.composeSubject?.value || '',
+        body,
+      }),
+      scope,
+      source: QUICK_ACTION_SOURCE,
+    }),
+  ];
+  state.assistant.lastInserted = {
+    draftId: draftLike.draftId,
+    draft: normalizeDraftFields({
+      to: state.recipients.to,
+      cc: state.recipients.cc,
+      subject: els.composeSubject?.value || '',
+      body,
+    }),
+    source: QUICK_ACTION_SOURCE,
+    scope: scope.scope,
+    threadId: scope.threadId ?? null,
+  };
+  void appendProvenanceEvents(events);
+  scheduleDraftSave();
+  els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+}
+
+async function applyHeaderSuggestion(headers, draftId) {
+  if (!composerIsOpen()) {
+    if (state.view === 'thread' && state.activeThreadId) startReply('reply');
+    else startCompose({ blank: true });
+  }
+  const fields = normalizeDraftFields({ ...headers, body: '' });
+  if (fields.to.length || fields.cc.length) applyRecipientDraft(fields);
+  if (fields.subject) {
+    els.composeSubject.value = fields.subject;
+    if (els.composerTitle && state.composingNew) {
+      els.composerTitle.textContent = composeOverlayTitle();
+    }
+  }
+  const scope = draftScope() || { scope: 'new' };
+  const draftFields = normalizeDraftFields({
+    ...fields,
+    body: getEditorMarkdown(),
+  });
+  const id = draftId || newDraftId();
+  void appendProvenanceEvents([
+    makeDraftInsertedEvent({
+      draftId: id,
+      draft: draftFields,
+      scope,
+      source: QUICK_ACTION_SOURCE,
+    }),
+  ]);
+  state.assistant.lastInserted = {
+    draftId: id,
+    draft: draftFields,
+    source: QUICK_ACTION_SOURCE,
+    scope: scope.scope,
+    threadId: scope.threadId ?? null,
+  };
+  scheduleDraftSave();
+}
+
 function composerIsOpen() {
   return Boolean(state.composingNew || state.replying);
 }
@@ -1819,6 +2135,18 @@ async function appendProvenanceEvents(events) {
 // inline reply on the open thread (started if needed), or a new message from the
 // inbox list. Drafts are scoped, so the text stays with that message or thread.
 async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, rawMarkdown = null } = {}) {
+  const quick = state.assistant.quickDraft;
+  if (
+    quick
+    && draftLike?.draftId
+    && quick.draftId === draftLike.draftId
+    && quick.sourceThreadId
+    && (state.view !== 'thread' || state.activeThreadId !== quick.sourceThreadId)
+  ) {
+    // Quick-action drafts stay bound to the thread they were generated for.
+    return;
+  }
+
   if (composerIsDirty()) {
     const ok = await confirmReplaceDraft();
     if (!ok) return;
@@ -1868,6 +2196,11 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
     threadId: scope.threadId ?? null,
   };
   void appendProvenanceEvents(events);
+
+  if (state.assistant.quickDraft?.draftId === draftId) {
+    state.assistant.quickDraft = null;
+    renderQuickResultPanel();
+  }
 
   scheduleDraftSave();
   els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -1970,6 +2303,7 @@ async function initAssistant() {
     renderAssistant(chat.messages);
     if (chat.status !== 'streaming') persistAssistant();
     setAssistantEnabled(chat.status !== 'streaming');
+    renderAssistantChips();
   });
 
   els.assistantInput.addEventListener('input', () => {
@@ -1984,6 +2318,8 @@ async function initAssistant() {
   });
   els.assistantSendBtn.addEventListener('click', sendAssistant);
   setAssistantEnabled(true);
+  renderAssistantChips();
+  renderQuickResultPanel();
 }
 
 async function sendAssistant() {
