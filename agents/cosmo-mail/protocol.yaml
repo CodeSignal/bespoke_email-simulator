@@ -153,6 +153,19 @@ tools:
         type: string
         description: Suggested subject line.
 
+  propose-triage:
+    display: stream
+    title: Inbox priority
+    description: >
+      Propose a ranked inbox triage list (who / why / urgency). Used only by the
+      quick-action trigger when the action is prioritize inbox.
+    parameters:
+      ranking:
+        type: string
+        description: >
+          Markdown numbered list. Each item names who or which thread, a
+          one-line reason, and urgency (High / Medium / Low).
+
 agent:
   model: MODEL
   system: system
@@ -170,6 +183,7 @@ agent:
     - propose-draft
     - propose-suggested-replies
     - propose-headers
+    - propose-triage
 
 handlers:
   assistant-message:

@@ -7,6 +7,8 @@ import {
   mailboxCounts,
   mailboxForThread,
   buildReplyHeaders,
+  latestInboundEmail,
+  threadListCorrespondent,
 } from '../lib/mailboxes.js';
 
 const learner = 'you@company.com';
@@ -137,6 +139,27 @@ describe('buildReplyHeaders', () => {
       to: ['dana@acme.com'],
       cc: ['alex@company.com'],
       subject: 'Re: Proposal',
+    });
+  });
+});
+
+describe('latestInboundEmail / threadListCorrespondent', () => {
+  it('finds the most recent inbound even after the learner replies', () => {
+    expect(latestInboundEmail(repliedThread, learner)).toEqual(inbound);
+    expect(latestInboundEmail(sentThread, learner)).toBeNull();
+  });
+
+  it('shows the inbound sender in Inbox after a reply, not You', () => {
+    expect(threadListCorrespondent(repliedThread, { mailbox: 'inbox', learnerEmail: learner })).toEqual({
+      kind: 'from',
+      address: inbound.from,
+    });
+  });
+
+  it('shows To: in Sent', () => {
+    expect(threadListCorrespondent(sentThread, { mailbox: 'sent', learnerEmail: learner })).toEqual({
+      kind: 'to',
+      address: outbound.to[0],
     });
   });
 });

@@ -12,7 +12,21 @@
       "name": "Priya Nair",
       "email": "priya@brightlabs.io",
       "role": "Potential partner",
-      "avatar": 12
+      "avatar": 12,
+      "persona": {
+        "personality": "Warm, busy BD lead. Replies when outreach is specific; ignores generic pitches.",
+        "motivation": "Find partners that clearly understand BrightLabs' work, without filling the calendar with tire-kickers.",
+        "goal": "If the email is concrete and respectful of her time, agree to a short intro call or ask one clarifying question. Otherwise decline politely.",
+        "communicationStyle": "Short professional email. Signs off 'Priya'.",
+        "knowledge": [
+          "BrightLabs builds developer tooling",
+          "She prefers 30-minute calls over open-ended 'pick your brain' chats"
+        ],
+        "constraints": [
+          "Do not invent products, pricing, or mutual contacts",
+          "Do not agree to multi-hour workshops on a first reply"
+        ]
+      }
     }
   ],
   "seed": {

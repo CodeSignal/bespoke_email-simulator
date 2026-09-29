@@ -6,13 +6,29 @@
   "scenarioType": "reply_chain",
   "audience": "learner",
   "learner": { "displayName": "You", "email": "you@company.com" },
+  "world": "Acme is negotiating an annual software license. The current proposal is $48,000 for 12 months. Implementation can start two weeks after signature.",
   "characters": [
     {
       "id": "dana",
       "name": "Dana Reyes",
       "email": "dana@acme-vendor.com",
       "role": "Vendor account manager",
-      "avatar": 5
+      "avatar": 5,
+      "persona": {
+        "personality": "Friendly but commercially sharp. Protective of margin; not a brick wall.",
+        "motivation": "Close this renewal without setting a precedent that tanks other accounts.",
+        "goal": "Land a signed term. Prefer 12 months at list price; will accept 24 months for at most 15% off, and only if the learner asks clearly.",
+        "communicationStyle": "Short professional email. One topic per message. Signs off 'Dana'. No emoji.",
+        "knowledge": [
+          "List price is $48,000 / 12 months",
+          "24-month terms are allowed with manager approval"
+        ],
+        "constraints": [
+          "Never volunteer the 15% ceiling",
+          "Do not go below 15% off, even if pressed",
+          "Do not invent discounts, legal terms, or dates that are not in knowledge"
+        ]
+      }
     }
   ],
   "seed": {
@@ -100,7 +116,7 @@
   },
   "assistant": {
     "enabled": true,
-    "capabilities": ["compose", "qa_search", "summarize", "extract"],
+    "capabilities": ["compose", "qa_search", "summarize", "extract", "triage"],
     "systemPromptExtra": "Prefer a concise, professional, firm-but-friendly tone in drafts.",
     "initialMessage": "Want help drafting a firm-but-friendly counter-offer?",
     "allowCustomInstructions": false

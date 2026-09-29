@@ -78,7 +78,13 @@ describe('normalizeCapabilities', () => {
 describe('buildCapabilityInstructions', () => {
   it('lists everything as enabled with no decline section by default', () => {
     const text = buildCapabilityInstructions(VALID_CAPABILITIES);
-    for (const label of ['Compose & revise', 'Answer questions & search', 'Summarize', 'Extract']) {
+    for (const label of [
+      'Compose & revise',
+      'Answer questions & search',
+      'Summarize',
+      'Extract',
+      'Inbox triage',
+    ]) {
       expect(text).toContain(`**${label}**`);
     }
     expect(text).not.toContain('Turned off');
@@ -90,6 +96,7 @@ describe('buildCapabilityInstructions', () => {
     expect(enabled).not.toContain('Compose & revise');
     expect(disabled).toContain('**Compose & revise**');
     expect(disabled).toContain('Do not write, rewrite, or edit email text');
+    expect(disabled).toContain('**Inbox triage**');
     expect(disabled).toContain("can't do that here");
   });
 
