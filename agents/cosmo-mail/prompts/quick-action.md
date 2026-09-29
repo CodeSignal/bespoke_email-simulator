@@ -27,5 +27,6 @@ The user's current compose draft (may be empty).
 
 ## Simulator limits
 
-Email attachments are not available. Do not suggest attaching or sending a file.
-If more detail is needed, put it in the email body.
+Seeded inbound attachment text in the mailbox context may be used. Name-only
+attachments have unknown contents — do not invent them. Do not ask the user to
+attach a file for analysis.

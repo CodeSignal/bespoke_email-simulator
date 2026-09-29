@@ -6,6 +6,7 @@ import {
   buildMailboxContext,
   hashText,
   normalizeCapabilities,
+  serializeAttachments,
   serializeMailbox,
 } from '../lib/assistant.js';
 import { validateScenario, withScenarioDefaults, loadScenario } from '../lib/scenario.js';
@@ -107,14 +108,87 @@ describe('buildCapabilityInstructions', () => {
   });
 });
 
+describe('serializeAttachments', () => {
+  it('lists name-only attachments without inventing contents', () => {
+    expect(serializeAttachments([{ name: 'quote.pdf' }])).toEqual([
+      'Attachments:',
+      '- quote.pdf',
+    ]);
+  });
+
+  it('includes seeded text when present', () => {
+    const lines = serializeAttachments([
+      { name: 'quote.txt', text: 'List price: $48,000\nTerm: 12 months' },
+      { name: 'deck.pptx' },
+    ]);
+    expect(lines).toEqual([
+      'Attachments:',
+      '- quote.txt (seeded text follows)',
+      '```',
+      'List price: $48,000\nTerm: 12 months',
+      '```',
+      '- deck.pptx',
+    ]);
+  });
+
+  it('omits text when includeText is false', () => {
+    expect(
+      serializeAttachments([{ name: 'notes.txt', text: 'secret' }], { includeText: false }),
+    ).toEqual(['Attachments:', '- notes.txt']);
+  });
+
+  it('ignores non-string text and empty text', () => {
+    expect(serializeAttachments([{ name: 'a.pdf', text: 12 }, { name: 'b.pdf', text: '' }])).toEqual([
+      'Attachments:',
+      '- a.pdf',
+      '- b.pdf',
+    ]);
+  });
+});
+
 describe('serializeMailbox', () => {
   it('includes every thread with folders, ids, and stable UTC dates', () => {
     const text = serializeMailbox(threads, { learnerEmail: LEARNER });
     expect(text).toContain('#### Thread 1: Proposal [Inbox] (id: thread-1)');
     expect(text).toContain('#### Thread 2: You won a prize [Spam] (id: thread-2)');
     expect(text).toContain('Date: 2026-07-10 14:02 UTC');
-    expect(text).toContain('Attachments: quote.pdf');
+    expect(text).toContain('Attachments:');
+    expect(text).toContain('- quote.pdf');
     expect(text).toContain('Cc: Sam <sam@vendor.com>');
+  });
+
+  it('includes seeded attachment text on inbound mail only', () => {
+    const withText = [
+      {
+        id: 'thread-1',
+        subject: 'Proposal',
+        emails: [
+          {
+            id: 'e1',
+            from: { name: 'Dana', email: 'dana@vendor.com' },
+            to: [{ name: 'You', email: LEARNER }],
+            date: '2026-07-10T14:02:00Z',
+            body: 'See attached.',
+            attachments: [{ name: 'quote.txt', text: 'List price: $48,000' }],
+          },
+          {
+            id: 'e2',
+            from: { name: 'You', email: LEARNER },
+            to: [{ name: 'Dana', email: 'dana@vendor.com' }],
+            date: '2026-07-11T09:15:00Z',
+            body: 'Thanks.',
+            // Even if outbound somehow had text, Cosmo must not see it.
+            attachments: [{ name: 'counter.txt', text: 'Our counter: $40,000' }],
+          },
+        ],
+      },
+    ];
+    const text = serializeMailbox(withText, { learnerEmail: LEARNER });
+    expect(text).toContain('List price: $48,000');
+    expect(text).toContain('- quote.txt (seeded text follows)');
+    expect(text).toContain('- counter.txt');
+    expect(text).not.toContain('Our counter: $40,000');
+    expect(text).not.toContain('counter.txt (seeded text follows)');
   });
 
   it('marks emails from the learner', () => {

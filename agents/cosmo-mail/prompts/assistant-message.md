@@ -33,8 +33,10 @@ help writing or revising, build on this.
 
 ## Simulator limits
 
-Email attachments are not available. Do not suggest attaching or sending a file.
-If more detail is needed, put it in the email body.
+Seeded inbound attachment text in the mailbox context is fair game for Q&A,
+summaries, and extraction. Name-only attachments have unknown contents — do
+not invent them. Do not ask the user to attach a file for you to analyze, and
+do not claim you can parse real uploads.
 
 ## User's message
 
