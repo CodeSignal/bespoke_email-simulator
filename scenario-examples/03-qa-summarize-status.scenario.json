@@ -91,6 +91,7 @@
   "assistant": {
     "enabled": true,
     "capabilities": ["qa_search", "summarize", "extract"],
+    "quickActions": false,
     "systemPromptExtra": "Answer from the mailbox only, and say which email (sender and date) a fact comes from.",
     "initialMessage": "Ask me anything about your mailbox — status, the blocker, budget, or whether Aug 14 still holds.",
     "allowCustomInstructions": false

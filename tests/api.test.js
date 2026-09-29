@@ -237,6 +237,13 @@ describe('session lifecycle', () => {
     expect(res.status).toBe(404);
   });
 
+  it('POST /api/assistant/quick-action rejects when the agent is not configured', async () => {
+    const res = await request(app)
+      .post('/api/assistant/quick-action')
+      .send({ sessionId, action: 'rewrite' });
+    expect(res.status).toBe(503);
+  });
+
   it('DELETE /api/sessions/:id removes the session', async () => {
     const del = await request(app).delete(`/api/sessions/${sessionId}`);
     expect(del.status).toBe(200);

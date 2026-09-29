@@ -293,7 +293,8 @@ function draftFieldLines(draft, indent = '') {
   return lines;
 }
 
-// AI draft provenance: propose → insert → (optional) send-with-edit-distance.
+// AI draft provenance: propose → insert → (optional) send-with-edit-distance;
+// plus quick_action chip events (not learner chat turns).
 function provenanceLines(session) {
   const events = session.events ?? [];
   const lines = ['### AI draft provenance', ''];
@@ -327,6 +328,21 @@ function provenanceLines(session) {
           `  - recipients: to ±${dist.to?.total ?? 0}, cc ±${dist.cc?.total ?? 0}`,
         );
       }
+    } else if (event.type === 'quick_action') {
+      lines.push(
+        `- **Quick action** \`${event.action || 'unknown'}\` (${event.source || 'quick-action'}${when ? ` · ${when}` : ''})`,
+      );
+      if (event.draftId) lines.push(`  - draftId: \`${event.draftId}\``);
+      if (event.threadId) lines.push(`  - threadId: \`${event.threadId}\``);
+      if (event.replies?.length) {
+        lines.push(`  - suggested replies (${event.replies.length}):`);
+        for (const reply of event.replies) {
+          for (const line of String(reply).split('\n')) lines.push(`    > ${line}`);
+          lines.push('');
+        }
+      }
+      if (event.headers) lines.push(...draftFieldLines(event.headers, '  '));
+      if (event.draft) lines.push(...draftFieldLines(event.draft, '  '));
     } else {
       lines.push(`- **${event.type}**${when ? ` · ${when}` : ''}`);
     }

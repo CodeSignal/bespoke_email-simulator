@@ -23,7 +23,7 @@ run a file in place or copy it to `scenario.json`.
 | --- | --- | --- | --- | --- | --- |
 | `01-compose-new-outreach` | Write a cold outreach email from scratch | `compose_new` | learner | compose, summarize | none (Priya is directory-only) |
 | `02-reply-vendor-negotiation` | Counter a vendor's pricing in an ongoing thread | `reply_chain` | learner | all four | none (Dana is directory-only) |
-| `03-qa-summarize-status` | Interrogate a mailbox and write an exec summary | `reply` | **candidate** | qa_search, summarize, extract (**no compose**) | none |
+| `03-qa-summarize-status` | Interrogate a mailbox and write an exec summary | `reply` | **candidate** | qa_search, summarize, extract (**no compose**; `quickActions: false`) | none |
 | `04-simulated-recipient-support` | De-escalate and resolve a support ticket | `reply_chain` | learner | compose, qa_search, summarize (**no extract**) | Marcus |
 | `05-scripted-recipient-scheduling` | Schedule an interview with a candidate | `reply_chain` | learner | compose, summarize | Jordan (Morgan is directory-only) |
 | `06-software-sales-prospecting` | Align with a manager on one CRM lead, then book a meeting | `reply_chain` | **candidate** | all four | Alex, Jane, Ryan, Emily, Michael, Sarah |

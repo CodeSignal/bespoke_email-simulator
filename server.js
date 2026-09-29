@@ -16,7 +16,24 @@ import {
 } from './lib/character-replies.js';
 import { buildCapabilityInstructions } from './lib/assistant.js';
 import { removeScopedDraft } from './lib/drafts.js';
-import { appendSessionEvents, normalizeDraftFields, PROPOSE_DRAFT_TOOL } from './lib/provenance.js';
+import {
+  appendSessionEvents,
+  makeDraftProposedEvent,
+  makeQuickActionEvent,
+  newDraftId,
+  normalizeDraftFields,
+  PROPOSE_DRAFT_TOOL,
+} from './lib/provenance.js';
+import {
+  QUICK_ACTION_MODEL,
+  QUICK_ACTION_SOURCE,
+  QUICK_ACTION_TOOLS,
+  actionInstruction,
+  isValidQuickAction,
+  normalizeHeaderSuggestion,
+  normalizeSuggestedReplies,
+  resolveQuickActionChips,
+} from './lib/quick-actions.js';
 import { resolveStrings } from './lib/i18n.js';
 import {
   newSessionRecord,
@@ -29,14 +46,34 @@ import {
   toClientSession,
 } from './lib/sessions.js';
 
-// propose-draft is a passthrough: Cosmo emits structured fields; the UI renders
-// a draft card. Returning the fields lets the model continue talking afterward.
-const ASSISTANT_TOOLS = {
-  [PROPOSE_DRAFT_TOOL]: async (args = {}) => {
-    const draft = normalizeDraftFields(args);
-    return { ok: true, ...draft, to: draft.to.join(', '), cc: draft.cc.join(', ') };
-  },
-};
+// propose-draft / quick-action tools are passthrough: Cosmo emits structured
+// fields; the host app renders them. Returning the fields lets the model finish.
+function buildAssistantTools(capture = null) {
+  return {
+    [PROPOSE_DRAFT_TOOL]: async (args = {}) => {
+      const draft = normalizeDraftFields(args);
+      if (capture) capture.draft = draft;
+      return { ok: true, ...draft, to: draft.to.join(', '), cc: draft.cc.join(', ') };
+    },
+    [QUICK_ACTION_TOOLS.PROPOSE_SUGGESTED_REPLIES]: async (args = {}) => {
+      const replies = normalizeSuggestedReplies(args);
+      if (capture) capture.replies = replies;
+      return { ok: true, replies };
+    },
+    [QUICK_ACTION_TOOLS.PROPOSE_HEADERS]: async (args = {}) => {
+      const headers = normalizeHeaderSuggestion(args);
+      if (capture) capture.headers = headers;
+      return {
+        ok: true,
+        ...headers,
+        to: headers.to.join(', '),
+        cc: headers.cc.join(', '),
+      };
+    },
+  };
+}
+
+const ASSISTANT_TOOLS = buildAssistantTools();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCENARIO_FILE = process.env.SCENARIO_FILE || path.join(__dirname, 'scenario.json');
@@ -334,6 +371,141 @@ app.post('/api/assistant/trigger', async (req, res) => {
     return res.status(500).json({ error: 'Failed to load scenario config' });
   }
   await streamAgent(res, sessionId, payload, { tools: ASSISTANT_TOOLS });
+});
+
+/**
+ * Run a one-shot quick-action on a fresh Octavus session (no chat history),
+ * capture tool results, append a quick_action provenance event, and return JSON.
+ */
+async function runQuickAction({
+  config,
+  record,
+  action,
+  detail = '',
+  threadContext = '',
+  focusedEmail = '',
+  currentDraft = '',
+  threadId = null,
+}) {
+  const capture = { draft: null, replies: null, headers: null };
+  const input = buildAgentSessionInput(config);
+  // Prefer a cheaper/faster model for chip actions unless the scenario pins one.
+  if (config.generation?.model === undefined) input.MODEL = QUICK_ACTION_MODEL;
+  if (config.generation?.temperature === undefined) input.TEMPERATURE = 0.3;
+
+  const ephemeralId = await octavus.agentSessions.create(AGENT_ID, input);
+  try {
+    const session = octavus.agentSessions.attach(ephemeralId, {
+      tools: buildAssistantTools(capture),
+    });
+    // Server SDK uses execute() with the same trigger payload the client sends.
+    const events = session.execute({
+      type: 'trigger',
+      triggerName: 'quick-action',
+      input: {
+        ACTION_INSTRUCTION: actionInstruction(action, detail),
+        THREAD_CONTEXT: threadContext || '(no mailbox context)',
+        FOCUSED_EMAIL: focusedEmail || '',
+        CURRENT_DRAFT: currentDraft || '(empty)',
+      },
+    });
+    for await (const _event of events) {
+      // Drain the stream so tool handlers run to completion.
+    }
+  } finally {
+    try {
+      await octavus.agentSessions.clear(ephemeralId);
+    } catch (err) {
+      console.warn('[assistant/quick-action] clear failed:', err?.message || err);
+    }
+  }
+
+  const draftId = capture.draft || capture.headers ? newDraftId() : null;
+  const resultEvents = [];
+  if (capture.draft) {
+    resultEvents.push(
+      makeDraftProposedEvent({
+        draftId,
+        source: QUICK_ACTION_SOURCE,
+        draft: capture.draft,
+      }),
+    );
+  }
+  resultEvents.push(
+    makeQuickActionEvent({
+      action,
+      source: QUICK_ACTION_SOURCE,
+      draftId,
+      draft: capture.draft,
+      replies: capture.replies,
+      headers: capture.headers,
+      detail: detail || null,
+      threadId,
+    }),
+  );
+
+  record.events = appendSessionEvents(record.events, resultEvents);
+
+  return {
+    action,
+    draftId,
+    draft: capture.draft,
+    replies: capture.replies,
+    headers: capture.headers,
+    events: resultEvents,
+  };
+}
+
+// POST /api/assistant/quick-action — chip actions (no chat transcript pollution).
+app.post('/api/assistant/quick-action', async (req, res) => {
+  if (!AGENT_ID) return res.status(503).json({ error: 'Assistant agent is not configured' });
+  const {
+    sessionId,
+    action,
+    detail,
+    threadContext,
+    focusedEmail,
+    currentDraft,
+    threadId,
+  } = req.body || {};
+  if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  if (!isValidQuickAction(action)) {
+    return res.status(400).json({ error: 'action is required and must be a known quick action' });
+  }
+  try {
+    const { config } = await getScenario();
+    if (config.assistant?.enabled === false) {
+      return res.status(403).json({ error: 'Assistant is disabled for this scenario' });
+    }
+    const chips = resolveQuickActionChips({
+      capabilities: config.assistant?.capabilities,
+      quickActions: config.assistant?.quickActions,
+    });
+    if (!chips.some((chip) => chip.id === action)) {
+      return res.status(403).json({ error: `Quick action "${action}" is not enabled` });
+    }
+
+    const data = await readSessions();
+    const record = findSession(data, sessionId);
+    if (!record) return res.status(404).json({ error: 'Session not found' });
+
+    const result = await runQuickAction({
+      config,
+      record,
+      action,
+      detail,
+      threadContext,
+      focusedEmail,
+      currentDraft,
+      threadId: threadId || null,
+    });
+    upsertSession(data, record);
+    await writeSessions(data);
+    res.json({ ok: true, ...result, sessionEvents: record.events });
+  } catch (err) {
+    console.error('[assistant/quick-action] Error:', err);
+    res.status(500).json({ error: 'Failed to run quick action' });
+  }
 });
 
 // POST /api/upload-urls — proxy presigned upload URL requests to Octavus.

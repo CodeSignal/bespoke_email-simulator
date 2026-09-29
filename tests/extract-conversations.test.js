@@ -103,6 +103,14 @@ describe('extract-conversations provenance', () => {
                   body: 'Thanks Dana — edited.',
                 },
               },
+              {
+                type: 'quick_action',
+                timestamp: '2026-01-02T00:04:00.000Z',
+                action: 'suggested_replies',
+                source: 'quick-action',
+                threadId: 'thread-1',
+                replies: ['Happy to discuss pricing next week.'],
+              },
             ],
           },
         ],
@@ -132,5 +140,7 @@ describe('extract-conversations provenance', () => {
     expect(out).toContain('body edit distance 4');
     expect(out).toContain('Proposed draft (structured)');
     expect(out).toContain('Thanks Dana.');
+    expect(out).toContain('**Quick action** `suggested_replies`');
+    expect(out).toContain('Happy to discuss pricing next week.');
   });
 });

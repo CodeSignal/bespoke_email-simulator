@@ -158,6 +158,7 @@ shape, relative to the project root.
 | `initialDraft` | `{ to, cc, subject, body }` | Optional composer prefill. |
 | `assistant.enabled` | boolean | When `false`, hide the Cosmo copilot panel. |
 | `assistant.capabilities` | string[] | Which features Cosmo has: `compose`, `qa_search`, `summarize`, `extract`. Omitted ones are turned off and Cosmo politely declines them (for example, drop `compose` so Cosmo won't draft). Defaults to all. |
+| `assistant.quickActions` | `true` \| `false` \| string[] | Product chips (suggest replies, rewrite, shorten, tone, proofread, subject/recipients). Default `true` (all). Set `false` to hide chips (useful for prompting assessments), or pass a subset of action ids. Chips still require the matching capability (e.g. no rewrite chip without `compose`). Chip clicks are **not** logged as learner chat turns. |
 | `assistant.systemPromptExtra` | string | Trusted extra instructions for the copilot. |
 | `assistant.initialMessage` | string | Cosmo's opening message. |
 | `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. Ignored (always off) when `audience` is `candidate`. |
