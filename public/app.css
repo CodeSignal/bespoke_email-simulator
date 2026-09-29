@@ -929,8 +929,22 @@ body {
   justify-content: flex-end;
 }
 
+.assistant__row--ai {
+  width: 100%;
+}
+
 .assistant__avatar {
   margin-top: var(--UI-Spacing-spacing-min);
+  flex: 0 0 auto;
+}
+
+.assistant__turn {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--UI-Spacing-spacing-s);
 }
 
 .assistant__msg {
@@ -1009,7 +1023,63 @@ body {
 }
 
 .assistant__insert {
-  margin-top: var(--UI-Spacing-spacing-s);
+  flex: 0 0 auto;
+  margin: 0;
+}
+
+/* Draft sits beside the avatar, not inside the chat bubble — a second .box
+   in this narrow panel left almost no width for To/Subject. */
+.assistant__draft {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: 0 0 0 var(--UI-Spacing-spacing-s);
+  border-left: 3px solid var(--Colors-Primary-Default);
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.assistant__draft-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--UI-Spacing-spacing-xs);
+}
+
+.assistant__draft-label {
+  color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__draft-fields {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--UI-Spacing-spacing-s);
+  row-gap: var(--UI-Spacing-spacing-min);
+  margin: 0;
+}
+
+.assistant__draft-field-label {
+  margin: 0;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__draft-field-value {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.assistant__draft-body {
+  min-width: 0;
+  overflow-wrap: break-word;
+}
+
+.assistant__draft-body p:first-child {
+  margin-top: 0;
+}
+
+.assistant__draft-body p:last-child {
+  margin-bottom: 0;
 }
 
 .assistant__typing {

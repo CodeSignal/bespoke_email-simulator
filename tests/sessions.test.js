@@ -18,6 +18,7 @@ describe('newSessionRecord', () => {
     expect(rec.threads).toHaveLength(1);
     expect(rec.drafts).toEqual([]);
     expect(rec.assistant_messages).toEqual([]);
+    expect(rec.events).toEqual([]);
     // deep clone — mutating the copy must not touch the seed
     rec.threads[0].emails[0].body = 'changed';
     expect(seedThreads[0].emails[0].body).toBe('a');
@@ -53,8 +54,10 @@ describe('session collection ops', () => {
 describe('toClientSession', () => {
   it('maps internal fields to the client shape', () => {
     const rec = newSessionRecord('scn', seedThreads);
+    rec.events = [{ type: 'draft_proposed', draftId: 'd1' }];
     const client = toClientSession(rec);
     expect(client.sessionId).toBe(rec.session_id);
     expect(client.threads).toHaveLength(1);
+    expect(client.events).toEqual([{ type: 'draft_proposed', draftId: 'd1' }]);
   });
 });
