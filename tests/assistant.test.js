@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   CANDIDATE_DEFAULTS,
+  MAILBOX_CONTEXT_MAX_CHARS,
   VALID_CAPABILITIES,
   buildCapabilityInstructions,
   buildMailboxContext,
+  fenceAttachmentText,
   hashText,
   normalizeCapabilities,
   serializeAttachments,
@@ -128,6 +130,19 @@ describe('serializeAttachments', () => {
       'List price: $48,000\nTerm: 12 months',
       '```',
       '- deck.pptx',
+    ]);
+  });
+
+  it('uses a longer fence when seeded text contains backticks', () => {
+    const text = 'example:\n```\ncode\n```\ndone';
+    expect(fenceAttachmentText(text)).toEqual(['````', text, '````']);
+    const lines = serializeAttachments([{ name: 'notes.md', text }]);
+    expect(lines).toEqual([
+      'Attachments:',
+      '- notes.md (seeded text follows)',
+      '````',
+      text,
+      '````',
     ]);
   });
 
@@ -265,6 +280,38 @@ describe('buildMailboxContext', () => {
     expect(buildMailboxContext({ ...base, viewing: { threadId: 'gone' } }).text).toContain(
       'the mailbox list',
     );
+  });
+
+  it('truncates oversized mailbox context to the budget', () => {
+    const huge = [
+      {
+        id: 'thread-1',
+        subject: 'Big',
+        emails: [
+          {
+            id: 'e1',
+            from: { name: 'Dana', email: 'dana@vendor.com' },
+            to: [{ name: 'You', email: LEARNER }],
+            date: '2026-07-10T14:02:00Z',
+            body: 'See attached.',
+            attachments: [{ name: 'huge.txt', text: 'X'.repeat(500) }],
+          },
+        ],
+      },
+    ];
+    const ctx = buildMailboxContext({
+      threads: huge,
+      learnerEmail: LEARNER,
+      viewing: { threadId: 'thread-1' },
+      maxChars: 200,
+    });
+    expect(ctx.unchanged).toBe(false);
+    expect(ctx.text).toContain('[Mailbox truncated: exceeded context budget.');
+    expect(ctx.text.length).toBeLessThan(MAILBOX_CONTEXT_MAX_CHARS);
+    // Truncation marker is present; raw payload is bounded near maxChars + wrapper.
+    const mailboxStart = ctx.text.indexOf('### Mailbox state');
+    const mailboxBody = ctx.text.slice(mailboxStart);
+    expect(mailboxBody.length).toBeLessThan(200 + 200);
   });
 });
 
