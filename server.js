@@ -527,7 +527,7 @@ app.post('/api/session/save', async (req, res) => {
     if (Array.isArray(threads)) record.threads = threads;
     if (Array.isArray(drafts)) record.drafts = drafts;
     if (Array.isArray(assistantMessages)) record.assistant_messages = assistantMessages;
-    if (Array.isArray(events)) record.events = events;
+    if (Array.isArray(events)) record.events = appendSessionEvents(record.events, events);
 
     upsertSession(data, record);
     await writeSessions(data);

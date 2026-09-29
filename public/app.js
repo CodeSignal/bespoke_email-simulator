@@ -28,7 +28,7 @@ import {
   initialsFromName,
 } from '../lib/characters.js';
 import { buildMailboxContext } from '../lib/assistant.js';
-import { draftForScope, parseInsertedDraft, removeScopedDraft, upsertScopedDraft } from '../lib/drafts.js';
+import { draftForScope, parseInsertedDraft, removeScopedDraft, sameDraftScope, upsertScopedDraft } from '../lib/drafts.js';
 import {
   appendSessionEvents,
   draftFieldsToMarkdown,
@@ -855,6 +855,10 @@ function cancelReply() {
   if (threadId) {
     state.session.drafts = removeScopedDraft(state.session?.drafts, { scope: 'reply', threadId });
     void persistDrafts();
+    // Discarded reply must not attribute Cosmo insert provenance to a later send.
+    if (sameDraftScope(state.assistant.lastInserted, { scope: 'reply', threadId })) {
+      state.assistant.lastInserted = null;
+    }
   }
   setEditorMarkdown('');
   renderShell();
@@ -1312,7 +1316,9 @@ async function sendEmail() {
   try {
     const sentScope = draftScope() || { scope: 'new' };
     const composingNew = sentScope.scope === 'new';
-    const inserted = state.assistant.lastInserted;
+    const inserted = sameDraftScope(state.assistant.lastInserted, sentScope)
+      ? state.assistant.lastInserted
+      : null;
     const res = await fetch('/api/email/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1854,7 +1860,13 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
     events.push(makeDraftProposedEvent({ draftId, source: 'fence', draft: fields }));
   }
   events.push(makeDraftInsertedEvent({ draftId, draft: fields, scope, source }));
-  state.assistant.lastInserted = { draftId, draft: fields, source };
+  state.assistant.lastInserted = {
+    draftId,
+    draft: fields,
+    source,
+    scope: scope.scope,
+    threadId: scope.threadId ?? null,
+  };
   void appendProvenanceEvents(events);
 
   scheduleDraftSave();
@@ -1890,7 +1902,8 @@ function persistAssistant() {
     body: JSON.stringify({
       sessionId: state.session.sessionId,
       assistantMessages: all,
-      events: state.session.events ?? [],
+      // Only new proposed events — save merges; do not resend the full log.
+      ...(proposedEvents.length ? { events: proposedEvents } : {}),
     }),
   }).catch((err) => console.error('[CosmoMail] assistant save failed:', err));
 }

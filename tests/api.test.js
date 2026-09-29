@@ -193,6 +193,31 @@ describe('session lifecycle', () => {
     expect(reload.body.events).toHaveLength(2);
   });
 
+  it('POST /api/session/save merges events instead of replacing them', async () => {
+    const save = await request(app)
+      .post('/api/session/save')
+      .send({
+        sessionId,
+        events: [
+          {
+            type: 'draft_proposed',
+            draftId: 'draft-save-1',
+            toolCallId: 'call-save-1',
+            draft: { to: ['dana@acme-vendor.com'], subject: 'S', body: 'B' },
+          },
+        ],
+      });
+    expect(save.status).toBe(200);
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.events.map((e) => e.type)).toEqual([
+      'draft_proposed',
+      'draft_inserted',
+      'draft_proposed',
+    ]);
+    expect(reload.body.events[2].toolCallId).toBe('call-save-1');
+  });
+
   it('POST /api/assistant/clear wipes the assistant transcript', async () => {
     const clear = await request(app).post('/api/assistant/clear').send({ sessionId });
     expect(clear.status).toBe(200);
