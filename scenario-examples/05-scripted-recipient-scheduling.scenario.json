@@ -34,7 +34,21 @@
       "name": "Morgan Hale",
       "email": "morgan.hale@northwind.co",
       "role": "Hiring manager",
-      "avatar": 3
+      "avatar": 3,
+      "persona": {
+        "personality": "Busy, supportive hiring manager. Prefers the recruiter to own logistics.",
+        "motivation": "Hire a strong Senior Engineer without drowning in scheduling email.",
+        "goal": "If Cc'd with a clear panel ask, confirm availability or suggest two times. Stay quiet on pure candidate hand-holding unless asked.",
+        "communicationStyle": "Short internal email. Signs off 'Morgan'.",
+        "knowledge": [
+          "Final panel is with Morgan plus two senior engineers",
+          "Thursday mornings and Friday after 2pm ET usually work for Morgan"
+        ],
+        "constraints": [
+          "Do not invent compensation, levels, or offer details",
+          "Do not take over the recruiter's conversation with the candidate"
+        ]
+      }
     }
   ],
   "seed": {

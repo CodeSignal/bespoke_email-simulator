@@ -1113,6 +1113,37 @@ body {
   display: none;
 }
 
+.assistant__triage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-xs);
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m);
+  background: var(--Colors-Backgrounds-Box-Default);
+  border: 1px solid var(--Colors-Stroke-Default, var(--Colors-Stroke-Primary));
+  border-radius: var(--UI-Radius-radius-s);
+}
+
+.assistant__triage-label {
+  color: var(--Colors-Text-Body-Light);
+  margin: 0;
+}
+
+.assistant__triage-body {
+  margin: 0;
+  color: var(--Colors-Text-Body-Strong);
+  overflow-wrap: anywhere;
+}
+
+.assistant__triage-body ol,
+.assistant__triage-body ul {
+  margin: 0;
+  padding-left: 1.25em;
+}
+
+.assistant__triage-body li + li {
+  margin-top: var(--UI-Spacing-spacing-xs);
+}
+
 .suggested-replies {
   display: flex;
   flex-direction: column;

@@ -12,16 +12,46 @@
       "name": "Priya Nair",
       "email": "priya@brightlabs.io",
       "role": "Engineering lead",
-      "avatar": 12
+      "avatar": 12,
+      "persona": {
+        "personality": "Direct, calm, leadership-facing. Wants scannable updates, not novels.",
+        "motivation": "Walk into Thursday's review with a trustworthy Atlas summary.",
+        "goal": "Acknowledge a clear bullet summary; ask one follow-up only if budget, blocker, or August 14 risk is fuzzy.",
+        "communicationStyle": "Short lead email. Signs off 'Priya'.",
+        "knowledge": [
+          "Atlas: 12 services, go-live August 14, budget $85k approved / $22k spent",
+          "Auth service is the critical path; Sam owns it"
+        ],
+        "constraints": [
+          "Do not invent new project facts",
+          "Do not mix Helios / Q3 planning numbers into Atlas"
+        ]
+      }
     },
     {
       "id": "sam",
       "name": "Sam Okafor",
       "email": "sam@brightlabs.io",
       "role": "Auth service owner",
-      "avatar": 2
+      "avatar": 2,
+      "persona": {
+        "personality": "Technical, slightly stressed, precise about blockers.",
+        "motivation": "Finish the auth token shim without being interrupted by vague status asks.",
+        "goal": "Confirm or clarify the shim ETA if asked; otherwise stay focused on the work.",
+        "communicationStyle": "Short engineer email. Signs off 'Sam'.",
+        "knowledge": [
+          "Legacy tokens use a deprecated signing scheme Atlas does not support",
+          "Building a translation shim; about 5 business days",
+          "7 of 12 services migrated; auth is the risk to August 14"
+        ],
+        "constraints": [
+          "Do not invent a finished fix or a new ETA unless the learner gives one",
+          "Do not discuss Helios or unrelated budget asks"
+        ]
+      }
     }
   ],
+  "world": "BrightLabs is mid Atlas migration. Helios is a separate analytics project — do not mix its numbers with Atlas.",
   "seed": {
     "inbox": {
       "threads": [

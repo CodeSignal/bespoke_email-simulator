@@ -6,6 +6,7 @@ import {
   normalizeHeaderSuggestion,
   normalizeQuickActionsConfig,
   normalizeSuggestedReplies,
+  normalizeTriageRanking,
   resolveQuickActionChips,
 } from '../lib/quick-actions.js';
 import { EVENT_TYPES, makeQuickActionEvent } from '../lib/provenance.js';
@@ -33,7 +34,7 @@ describe('normalizeQuickActionsConfig', () => {
 });
 
 describe('resolveQuickActionChips', () => {
-  it('requires compose for all v1 chips', () => {
+  it('hides compose chips when compose is off', () => {
     expect(
       resolveQuickActionChips({
         capabilities: ['qa_search', 'summarize', 'extract'],
@@ -47,21 +48,35 @@ describe('resolveQuickActionChips', () => {
       capabilities: ['compose'],
       quickActions: true,
     });
-    expect(chips.map((c) => c.id)).toEqual(VALID_QUICK_ACTIONS);
+    expect(chips.map((c) => c.id)).toEqual(
+      VALID_QUICK_ACTIONS.filter((id) => QUICK_ACTIONS[id].requires.includes('compose')),
+    );
+  });
+
+  it('returns the prioritize chip when triage is enabled', () => {
+    const chips = resolveQuickActionChips({
+      capabilities: ['triage'],
+      quickActions: true,
+    });
+    expect(chips.map((c) => c.id)).toEqual(['prioritize_inbox']);
   });
 
   it('honors an author allow-list', () => {
     const chips = resolveQuickActionChips({
-      capabilities: ['compose', 'summarize'],
-      quickActions: ['suggested_replies', 'tone'],
+      capabilities: ['compose', 'summarize', 'triage'],
+      quickActions: ['suggested_replies', 'tone', 'prioritize_inbox'],
     });
-    expect(chips.map((c) => c.id)).toEqual(['suggested_replies', 'tone']);
+    expect(chips.map((c) => c.id)).toEqual([
+      'suggested_replies',
+      'tone',
+      'prioritize_inbox',
+    ]);
   });
 
   it('hides all chips when quickActions is false', () => {
     expect(
       resolveQuickActionChips({
-        capabilities: ['compose'],
+        capabilities: ['compose', 'triage'],
         quickActions: false,
       }),
     ).toEqual([]);
@@ -110,6 +125,17 @@ describe('actionInstruction', () => {
     expect(actionInstruction('suggested_replies')).toContain('propose-suggested-replies');
     expect(actionInstruction('rewrite')).toContain('propose-draft');
     expect(actionInstruction('subject_recipients')).toContain('propose-headers');
+    expect(actionInstruction('prioritize_inbox')).toContain('propose-triage');
+  });
+});
+
+describe('normalizeTriageRanking', () => {
+  it('trims ranking Markdown', () => {
+    expect(
+      normalizeTriageRanking({
+        ranking: '  1. Dana — awaiting counter — High\n2. Lena — dietary needs — Medium  ',
+      }),
+    ).toBe('1. Dana — awaiting counter — High\n2. Lena — dietary needs — Medium');
   });
 });
 
@@ -125,6 +151,15 @@ describe('makeQuickActionEvent', () => {
     expect(event.replies).toEqual(['Hi']);
     expect(event.threadId).toBe('thread-1');
     expect(event.source).toBe('quick-action');
+  });
+
+  it('records a triage ranking', () => {
+    const event = makeQuickActionEvent({
+      action: 'prioritize_inbox',
+      ranking: '1. Dana — High\n2. Lena — Medium',
+    });
+    expect(event.action).toBe('prioritize_inbox');
+    expect(event.ranking).toContain('Dana');
   });
 });
 
@@ -164,5 +199,7 @@ describe('scenario quickActions', () => {
   it('exposes chip metadata for UI labels', () => {
     expect(QUICK_ACTIONS.rewrite.label).toBe('Rewrite');
     expect(QUICK_ACTIONS.suggested_replies.needsThread).toBe(true);
+    expect(QUICK_ACTIONS.prioritize_inbox.label).toBe('Prioritize my inbox');
+    expect(QUICK_ACTIONS.prioritize_inbox.requires).toEqual(['triage']);
   });
 });

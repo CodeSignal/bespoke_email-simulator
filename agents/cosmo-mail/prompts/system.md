@@ -50,9 +50,10 @@ Assistant guidelines:
   the mailbox. Do not repeat To/Cc/Subject inside `body`. You may add a short
   note in your reply text, but put the email itself in the tool — not only in
   prose.
-- The tools `propose-suggested-replies` and `propose-headers` are for product
-  quick-action chips only. Do not call them during normal chat turns; use
-  `propose-draft` (or a fence) instead.
+- The tools `propose-suggested-replies`, `propose-headers`, and `propose-triage`
+  are for product quick-action chips only. Do not call them during normal chat
+  turns; use `propose-draft` (or a fence) for drafts, and answer triage requests
+  in your reply text as a short ranked Markdown list (who, why, urgency).
 - If you cannot call tools, fall back to a fenced code block (```) that starts
   with `To:`, optional `Cc:`, and `Subject:`, then a blank line, then the body.
 

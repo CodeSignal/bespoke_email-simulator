@@ -88,13 +88,28 @@ describe('session lifecycle', () => {
     ]);
   });
 
-  it('POST /api/email/send rejects recipients outside the character directory', async () => {
+  it('POST /api/email/send allows seed senders outside the character directory', async () => {
     const res = await request(app)
       .post('/api/email/send')
       .send({
         sessionId,
         threadId: 'thread-1',
-        to: ['stranger@example.com'],
+        to: ['lena@company.com'],
+        subject: 'Re: Offsite',
+        body: 'Dietary needs: none.',
+      });
+    expect(res.status).toBe(200);
+    expect(res.body.email.to[0].email).toBe('lena@company.com');
+    expect(res.body.responders).toEqual([]);
+  });
+
+  it('POST /api/email/send rejects an empty To', async () => {
+    const res = await request(app)
+      .post('/api/email/send')
+      .send({
+        sessionId,
+        threadId: 'thread-1',
+        to: [],
         subject: 'Nope',
         body: 'This should not send.',
       });

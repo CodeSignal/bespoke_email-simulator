@@ -208,7 +208,7 @@
   },
   "assistant": {
     "enabled": true,
-    "capabilities": ["compose", "qa_search", "summarize", "extract"],
+    "capabilities": ["compose", "qa_search", "summarize", "extract", "triage"],
     "systemPromptExtra": "Help with a two-step sales motion: (1) reply to Alex using urgency of need, speed-to-value from BestCRM's sales analytics/automation, and buying influence; (2) draft a concise new outreach email to one prospect with a specific value tie-in and a clear ask for a meeting. Do not write as if they should email more than one contact. Never suggest attaching a deck or file.",
     "initialMessage": "Want help comparing these leads against Alex's criteria, or drafting your reply?",
     "allowCustomInstructions": false

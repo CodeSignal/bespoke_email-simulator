@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   normalizeCharacters,
   constrainToCharacters,
+  resolveRecipientEmails,
   availableCharacters,
   characterByEmail,
   validateCharacters,
@@ -58,6 +59,15 @@ describe('constrainToCharacters / availableCharacters', () => {
 
   it('leaves addresses alone when no directory is configured', () => {
     expect(constrainToCharacters(['anyone@example.com'], [])).toEqual(['anyone@example.com']);
+  });
+
+  it('resolveRecipientEmails keeps non-directory addresses', () => {
+    expect(
+      resolveRecipientEmails(
+        ['Jordan.Lee@candidatemail.com', 'lena@company.com'],
+        directory,
+      ),
+    ).toEqual([jordan.email, 'lena@company.com']);
   });
 
   it('omits already-selected people and the learner', () => {

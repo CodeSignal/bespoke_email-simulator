@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
 import { filterModels } from './lib/helpers.js';
 import { loadScenario } from './lib/scenario.js';
-import { constrainToCharacters, toCharacterAddress } from './lib/characters.js';
+import { toCharacterAddress, resolveRecipientEmails } from './lib/characters.js';
 import {
   selectResponders,
   compileCharacterCard,
@@ -32,6 +32,7 @@ import {
   isValidQuickAction,
   normalizeHeaderSuggestion,
   normalizeSuggestedReplies,
+  normalizeTriageRanking,
   resolveQuickActionChips,
 } from './lib/quick-actions.js';
 import { resolveStrings } from './lib/i18n.js';
@@ -69,6 +70,11 @@ function buildAssistantTools(capture = null) {
         to: headers.to.join(', '),
         cc: headers.cc.join(', '),
       };
+    },
+    [QUICK_ACTION_TOOLS.PROPOSE_TRIAGE]: async (args = {}) => {
+      const ranking = normalizeTriageRanking(args);
+      if (capture) capture.ranking = ranking;
+      return { ok: true, ranking };
     },
   };
 }
@@ -423,7 +429,7 @@ async function runQuickAction({
   currentDraft = '',
   threadId = null,
 }) {
-  const capture = { draft: null, replies: null, headers: null };
+  const capture = { draft: null, replies: null, headers: null, ranking: null };
   const input = buildAgentSessionInput(config);
   // Prefer a cheaper/faster model for chip actions unless the scenario pins one.
   if (config.generation?.model === undefined) input.MODEL = QUICK_ACTION_MODEL;
@@ -475,6 +481,7 @@ async function runQuickAction({
       draft: capture.draft,
       replies: capture.replies,
       headers: capture.headers,
+      ranking: capture.ranking,
       detail: detail || null,
       threadId,
     }),
@@ -488,6 +495,7 @@ async function runQuickAction({
     draft: capture.draft,
     replies: capture.replies,
     headers: capture.headers,
+    ranking: capture.ranking,
     events: resultEvents,
   };
 }
@@ -581,12 +589,14 @@ app.post('/api/email/send', async (req, res) => {
   try {
     const { config } = await getScenario();
     const characters = config.characters ?? [];
-    const toList = constrainToCharacters(to, characters);
-    const ccList = constrainToCharacters(cc, characters).filter(
+    // Keep addresses from reply autofill even when the sender is not in the
+    // character directory (seed distractors). Picker-only adds stay directory-bound.
+    const toList = resolveRecipientEmails(to, characters);
+    const ccList = resolveRecipientEmails(cc, characters).filter(
       (email) => !toList.some((value) => value.toLowerCase() === email.toLowerCase()),
     );
-    if (characters.length && toList.length === 0) {
-      return res.status(400).json({ error: 'to must include a scenario character' });
+    if (toList.length === 0) {
+      return res.status(400).json({ error: 'to is required' });
     }
 
     let email;

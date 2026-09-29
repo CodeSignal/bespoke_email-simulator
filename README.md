@@ -157,8 +157,8 @@ shape, relative to the project root.
 | `seed.focusedEmailId` | string | Email the reply targets. |
 | `initialDraft` | `{ to, cc, subject, body }` | Optional composer prefill. |
 | `assistant.enabled` | boolean | When `false`, hide the Cosmo copilot panel. |
-| `assistant.capabilities` | string[] | Which features Cosmo has: `compose`, `qa_search`, `summarize`, `extract`. Omitted ones are turned off and Cosmo politely declines them (for example, drop `compose` so Cosmo won't draft). Defaults to all. |
-| `assistant.quickActions` | `true` \| `false` \| string[] | Product chips (suggest replies, rewrite, shorten, tone, proofread, subject/recipients). Default `true` (all). Set `false` to hide chips (useful for prompting assessments), or pass a subset of action ids. Chips still require the matching capability (e.g. no rewrite chip without `compose`). Chip clicks are **not** logged as learner chat turns. |
+| `assistant.capabilities` | string[] | Which features Cosmo has: `compose`, `qa_search`, `summarize`, `extract`, `triage`. Omitted ones are turned off and Cosmo politely declines them (for example, drop `compose` so Cosmo won't draft, or omit `triage` to disable inbox prioritization). Defaults to all. |
+| `assistant.quickActions` | `true` \| `false` \| string[] | Product chips (suggest replies, rewrite, shorten, tone, proofread, subject/recipients, prioritize inbox). Default `true` (all). Set `false` to hide chips (useful for prompting assessments), or pass a subset of action ids. Chips still require the matching capability (e.g. no rewrite chip without `compose`, no prioritize chip without `triage`). Chip clicks are **not** logged as learner chat turns. |
 | `assistant.systemPromptExtra` | string | Trusted extra instructions for the copilot. |
 | `assistant.initialMessage` | string | Cosmo's opening message. |
 | `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. Ignored (always off) when `audience` is `candidate`. |
@@ -173,16 +173,16 @@ Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/). Copy
 one to `scenario.json` to try it:
 
 - **`01-compose-new-outreach`** — write a cold outreach email from scratch
-  (no seed inbox, copilot only).
+  (no seed inbox, copilot only; Priya may reply).
 - **`02-reply-vendor-negotiation`** — reply within a seeded vendor negotiation
-  thread (copilot + attachments; Dana is directory-only, so she will not write back).
+  thread (copilot + attachments; Dana replies in-character).
 - **`03-qa-summarize-status`** — use Cosmo to interrogate a project thread and
-  write a leadership-ready summary (Q&A / search / extract focus).
+  write a leadership-ready summary (Q&A / search / extract focus; Priya and Sam
+  can reply).
 - **`04-simulated-recipient-support`** — a customer-support thread where Marcus
   replies in-character until the issue is resolved.
-- **`05-scripted-recipient-scheduling`** — schedule an interview; Jordan replies
-  in-character. Morgan is in the directory but does not write back unless you
-  give her a persona.
+- **`05-scripted-recipient-scheduling`** — schedule an interview; Jordan and
+  Morgan (hiring manager) both reply in-character.
 - **`06-software-sales-prospecting`** — align with a sales manager on one CRM
   lead, then email that prospect and book a meeting (Alex plus five live
   prospects; Ryan is the right call).

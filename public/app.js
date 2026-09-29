@@ -18,12 +18,15 @@ import {
   mailboxForThread,
   threadsInMailbox,
   buildReplyHeaders,
+  threadListCorrespondent,
+  latestInboundEmail,
 } from '../lib/mailboxes.js';
 import {
   availableCharacters,
   characterByEmail,
   characterLabel,
   constrainToCharacters,
+  resolveRecipientEmails,
   avatarPath,
   initialsFromName,
 } from '../lib/characters.js';
@@ -83,6 +86,10 @@ function parseMailto(href) {
 
 marked.use({
   renderer: {
+    // marked preserves raw HTML by default; escape so sinks using innerHTML stay safe.
+    html({ text }) {
+      return escapeHtml(text);
+    },
     link({ href, tokens }) {
       const email = parseMailto(href);
       if (!email) return false;
@@ -124,6 +131,8 @@ const state = {
     quickActionBusy: false,
     // One-shot rewrite/shorten/tone/proofread card (not part of chat transcript).
     quickDraft: null,
+    // Inbox triage ranking from the prioritize chip (Markdown; not chat transcript).
+    triageRanking: null,
     // Suggested reply options under the focused email.
     suggestedReplies: null, // { threadId, emailId, replies: string[] }
   },
@@ -287,23 +296,21 @@ function avatarMarkup(person, size = 'md') {
 }
 
 function threadListFrom(thread, mailbox) {
-  const last = thread.emails?.[thread.emails.length - 1];
-  if (mailbox === 'sent') {
-    const to = Array.isArray(last?.to) ? last.to[0] : last?.to;
-    const name = displayName(to);
-    return name ? `${t('To')}: ${name}` : t('To');
-  }
-  return displayName(last?.from) || formatAddress(last?.from);
+  const { kind, address } = threadListCorrespondent(thread, {
+    mailbox,
+    learnerEmail: learnerEmail(),
+  });
+  const name = displayName(address) || formatAddress(address);
+  if (kind === 'to') return name ? `${t('To')}: ${name}` : t('To');
+  return name;
 }
 
 function threadListPerson(thread, mailbox) {
-  const last = thread.emails?.[thread.emails.length - 1];
-  if (mailbox === 'sent') {
-    const to = Array.isArray(last?.to) ? last.to[0] : last?.to;
-    return personForAddress(to);
-  }
-  if (last?.outbound) return learnerPerson();
-  return personForAddress(last?.from);
+  const { address } = threadListCorrespondent(thread, {
+    mailbox,
+    learnerEmail: learnerEmail(),
+  });
+  return personForAddress(address);
 }
 
 function learnerEmail() {
@@ -323,9 +330,11 @@ function selectedRecipientEmails() {
 
 function applyRecipientDraft({ to = [], cc = [] } = {}) {
   const directory = directoryCharacters();
-  state.recipients.to = constrainToCharacters(to, directory);
+  // Keep seed senders who are not in `characters` (e.g. Lena in example 02).
+  // The recipient picker still only adds directory people via constrainToCharacters.
+  state.recipients.to = resolveRecipientEmails(to, directory);
   const toKeys = new Set(state.recipients.to.map((email) => email.toLowerCase()));
-  state.recipients.cc = constrainToCharacters(cc, directory).filter(
+  state.recipients.cc = resolveRecipientEmails(cc, directory).filter(
     (email) => !toKeys.has(email.toLowerCase()),
   );
   renderRecipientPickers();
@@ -783,14 +792,12 @@ function renderThread(threadId) {
     backToList();
     return;
   }
-  const focusEmail = replyTargetEmail(thread);
   for (const email of thread.emails ?? []) {
     els.readingPane.appendChild(renderEmail(email, learnerAddr));
-    if (focusEmail && email.id === focusEmail.id) {
-      const suggestions = renderSuggestedReplies(thread, email);
-      if (suggestions) els.readingPane.appendChild(suggestions);
-    }
   }
+  // Always at the end of the thread — never mid-history under a stale focus.
+  const suggestions = renderSuggestedReplies(thread, replyTargetEmail(thread));
+  if (suggestions) els.readingPane.appendChild(suggestions);
   if (!state.replying) els.readingPane.appendChild(renderThreadActions());
   else placeComposer();
   renderAssistantChips();
@@ -816,10 +823,21 @@ function renderThreadActions() {
   return actions;
 }
 
+/**
+ * Email the learner is replying to / suggesting replies for.
+ * Honor scenario focusedEmailId only while that email is still the tip;
+ * after the thread grows, use the latest inbound (else last email).
+ */
 function replyTargetEmail(thread) {
   const emails = thread?.emails ?? [];
+  if (!emails.length) return null;
+  const last = emails[emails.length - 1];
   const focusedId = state.scenario?.focusedEmailId;
-  return emails.find((email) => email.id === focusedId) ?? emails[emails.length - 1];
+  if (focusedId) {
+    const focused = emails.find((email) => email.id === focusedId);
+    if (focused && focused.id === last.id) return focused;
+  }
+  return latestInboundEmail(thread, learnerEmail()) || last;
 }
 
 function applyThreadComposer(threadId, mode = state.replying || 'reply') {
@@ -1313,6 +1331,10 @@ function showMailToast(thread, email) {
 
 function refreshMailAfterInbound(thread, email) {
   replaceThread(thread);
+  // Stale chip suggestions belonged to the previous tip of the thread.
+  if (state.assistant.suggestedReplies?.threadId === thread.id) {
+    state.assistant.suggestedReplies = null;
+  }
   renderMailboxes();
   if (state.view === 'list') renderMailList();
   if (isViewingThread(thread.id)) {
@@ -1378,6 +1400,7 @@ async function sendEmail() {
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
     state.session.drafts = removeScopedDraft(state.session.drafts, sentScope);
+    state.assistant.suggestedReplies = null;
     void persistDrafts();
     setEditorMarkdown('');
     clearAttachments();
@@ -1808,29 +1831,60 @@ function renderQuickResultPanel() {
   if (!host) return;
   host.innerHTML = '';
   const draft = state.assistant.quickDraft;
-  if (!draft || !quickDraftBelongsToActiveThread(draft)) {
+  const ranking = String(state.assistant.triageRanking ?? '').trim();
+  const showDraft = draft && quickDraftBelongsToActiveThread(draft);
+  if (!showDraft && !ranking) {
     host.hidden = true;
     return;
   }
   host.hidden = false;
-  const row = document.createElement('div');
-  row.className = 'assistant__row assistant__row--ai';
-  const avatar = document.createElement('span');
-  avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-  avatar.setAttribute('aria-hidden', 'true');
-  row.appendChild(avatar);
-  const turn = document.createElement('div');
-  turn.className = 'assistant__turn';
-  row.appendChild(turn);
-  host.appendChild(row);
-  appendDraftCard(row, draft);
+
+  if (ranking) {
+    const row = document.createElement('div');
+    row.className = 'assistant__row assistant__row--ai';
+    const avatar = document.createElement('span');
+    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    row.appendChild(avatar);
+    const turn = document.createElement('div');
+    turn.className = 'assistant__turn';
+    const card = document.createElement('div');
+    card.className = 'assistant__triage';
+    card.setAttribute('aria-label', t('Inbox priority'));
+    const label = document.createElement('p');
+    label.className = 'body-xsmall assistant__triage-label';
+    label.textContent = t('Inbox priority');
+    card.appendChild(label);
+    const body = document.createElement('div');
+    body.className = 'assistant__triage-body body-small';
+    body.innerHTML = renderMarkdown(ranking);
+    card.appendChild(body);
+    turn.appendChild(card);
+    row.appendChild(turn);
+    host.appendChild(row);
+  }
+
+  if (showDraft) {
+    const row = document.createElement('div');
+    row.className = 'assistant__row assistant__row--ai';
+    const avatar = document.createElement('span');
+    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
+    avatar.setAttribute('aria-hidden', 'true');
+    row.appendChild(avatar);
+    const turn = document.createElement('div');
+    turn.className = 'assistant__turn';
+    row.appendChild(turn);
+    host.appendChild(row);
+    appendDraftCard(row, draft);
+  }
 }
 
 function renderSuggestedReplies(thread, email) {
   const pack = state.assistant.suggestedReplies;
   if (!pack?.replies?.length) return null;
   if (pack.threadId !== thread.id) return null;
-  if (pack.emailId && email.id && pack.emailId !== email.id) return null;
+  // Drop suggestions that targeted an older message once the thread moved on.
+  if (pack.emailId && email?.id && pack.emailId !== email.id) return null;
 
   const wrap = document.createElement('div');
   wrap.className = 'suggested-replies';
@@ -1927,9 +1981,15 @@ async function runQuickAction(action, detail = '') {
         replies: body.replies,
       };
       state.assistant.quickDraft = null;
+      state.assistant.triageRanking = null;
       if (state.view === 'thread' && state.activeThreadId === sourceThreadId) {
         renderThread(sourceThreadId);
       }
+    } else if (action === 'prioritize_inbox' && body.ranking) {
+      state.assistant.triageRanking = body.ranking;
+      state.assistant.quickDraft = null;
+      state.assistant.suggestedReplies = null;
+      renderQuickResultPanel();
     } else if (action === 'subject_recipients' && body.headers) {
       const stillOnSourceThread = sourceThreadId
         ? state.view === 'thread' && state.activeThreadId === sourceThreadId
@@ -1938,6 +1998,7 @@ async function runQuickAction(action, detail = '') {
         await applyHeaderSuggestion(body.headers, body.draftId);
       }
       state.assistant.quickDraft = null;
+      state.assistant.triageRanking = null;
       renderQuickResultPanel();
     } else if (body.draft) {
       state.assistant.quickDraft = {
@@ -1947,6 +2008,7 @@ async function runQuickAction(action, detail = '') {
         ...normalizeDraftFields(body.draft),
       };
       state.assistant.suggestedReplies = null;
+      state.assistant.triageRanking = null;
       renderQuickResultPanel();
     }
   } catch (err) {
