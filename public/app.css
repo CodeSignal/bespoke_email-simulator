@@ -36,7 +36,13 @@ body {
   overflow: hidden;
 }
 
-.mail-split {
+/*
+ * SplitPanel sets container.className = 'split-panel-container' (wiping other
+ * classes). Re-add .mail-split in JS after init; also target the host id so
+ * layout still works if that ever races.
+ */
+.mail-split,
+#mailSplit.split-panel-container {
   min-width: 0;
   min-height: 0;
   height: 100%;
@@ -54,19 +60,30 @@ body {
 }
 
 .mail-split .split-panel-left,
-.mail-split .split-panel-right {
+.mail-split .split-panel-right,
+#mailSplit .split-panel-left,
+#mailSplit .split-panel-right {
   display: flex;
   flex-direction: column;
+  align-self: stretch;
   overflow: hidden;
   background: transparent;
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
 }
 
 .mail-split .mail-main,
-.mail-split .assistant {
+.mail-split .assistant,
+#mailSplit .mail-main,
+#mailSplit .assistant {
   flex: 1 1 auto;
-  height: 100%;
   min-height: 0;
+  min-width: 0;
   width: 100%;
+  /* Fill the pane via flex, not height:100% (percentage height fails when the
+     split pane’s used height comes from stretch rather than an explicit height). */
+  height: auto;
 }
 
 /* ── Mailbox rail (Gmail-style folder nav) ── */

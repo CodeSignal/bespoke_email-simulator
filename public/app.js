@@ -1985,6 +1985,15 @@ function renderSuggestedReplies(thread, email) {
   return wrap;
 }
 
+/** Scroll the reading pane so end-of-thread UI (e.g. suggested replies) is visible. */
+function scrollReadingPaneToEnd() {
+  const pane = els.readingPane;
+  if (!pane || pane.hidden) return;
+  requestAnimationFrame(() => {
+    pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' });
+  });
+}
+
 function focusedEmailMarkdown(thread) {
   const email = replyTargetEmail(thread);
   if (!email) return '';
@@ -2058,6 +2067,8 @@ async function runQuickAction(action, detail = '') {
       state.assistant.triageRanking = null;
       if (state.view === 'thread' && state.activeThreadId === sourceThreadId) {
         renderThread(sourceThreadId);
+        // Suggestions render at the end of the thread — bring them into view.
+        scrollReadingPaneToEnd();
       }
     } else if (action === 'prioritize_inbox' && body.ranking) {
       state.assistant.triageRanking = body.ranking;
@@ -2429,10 +2440,14 @@ function initMailSplit() {
   });
   panel.getLeftPanel().appendChild(main);
   panel.getRightPanel().appendChild(assistant);
+  // SplitPanel replaces container.className; restore our layout hook class.
+  host.classList.add('mail-split');
   for (const pane of [panel.getLeftPanel(), panel.getRightPanel()]) {
     pane.style.overflow = 'hidden';
     pane.style.display = 'flex';
     pane.style.flexDirection = 'column';
+    pane.style.minHeight = '0';
+    pane.style.height = '100%';
   }
   state.mailSplit = panel;
 }
