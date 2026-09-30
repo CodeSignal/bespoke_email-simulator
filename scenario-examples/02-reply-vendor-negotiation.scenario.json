@@ -45,8 +45,13 @@
               "cc": [],
               "date": "2026-07-10T14:02:00Z",
               "subject": "Proposal for annual license",
-              "body": "Hi,\n\nThanks for your interest in Acme. Our standard **annual license** is **$48,000**, billed up front, and includes priority support and up to 50 seats.\n\nHappy to answer any questions.\n\nBest,\nDana",
-              "attachments": []
+              "body": "Hi,\n\nThanks for your interest in Acme. Our standard **annual license** is **$48,000**, billed up front, and includes priority support and up to 50 seats.\n\nI've attached a short quote summary for reference.\n\nHappy to answer any questions.\n\nBest,\nDana",
+              "attachments": [
+                {
+                  "name": "acme-quote-summary.txt",
+                  "text": "Acme Annual License — Quote Summary\n\nSKU: ACME-ANN-50\nList price: $48,000 USD (billed up front)\nTerm: 12 months\nSeats: up to 50\nIncludes: priority support, standard onboarding\nImplementation: can start two weeks after signature\nPayment: net 30 from invoice date\nQuote valid through: 2026-08-15"
+                }
+              ]
             },
             {
               "id": "email-2",

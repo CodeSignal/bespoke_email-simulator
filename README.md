@@ -163,7 +163,8 @@ shape, relative to the project root.
 | `assistant.initialMessage` | string | Cosmo's opening message. |
 | `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. Ignored (always off) when `audience` is `candidate`. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
-| `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support. |
+| `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support (learner can attach files in the composer when enabled). |
+| Seed email `attachments[]` | `{ name, text? }` | Optional on seeded inbound emails. `name` is shown in the UI. Author-provided `text` is readable by Cosmo (Q&A / summarize / extract); omit `text` when contents should stay unknown. Not real file parsing. |
 | `ui` | `{ hideHistory, strings }` | UI overrides + i18n strings. |
 | `rubricHints` | object \| string | Notes surfaced in the extraction report. |
 
