@@ -182,4 +182,41 @@ describe('extract-conversations provenance', () => {
     expect(out).toContain('### Rubric hints');
     expect(out).toContain('Reward a clear meeting ask.');
   });
+
+  it('errors when --rubric points at a missing file in report mode', () => {
+    writeFileSync(sessionsFile, JSON.stringify({ sessions: [] }));
+    const missing = join(dir, 'missing-rubric.json');
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--mode', 'report', '--rubric', missing, '--output', outputFile, '--stdout'],
+      {
+        env: {
+          ...process.env,
+          SESSIONS_FILE: sessionsFile,
+          SCENARIO_FILE: scenarioFile,
+        },
+        encoding: 'utf8',
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain('rubric file not found');
+  });
+
+  it('skips rubric loading outside report mode', () => {
+    writeFileSync(sessionsFile, JSON.stringify({ sessions: [] }));
+    const missing = join(dir, 'missing-rubric.json');
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--mode', 'full', '--rubric', missing, '--output', outputFile],
+      {
+        env: {
+          ...process.env,
+          SESSIONS_FILE: sessionsFile,
+          SCENARIO_FILE: scenarioFile,
+        },
+        encoding: 'utf8',
+      },
+    );
+    expect(result.status).toBe(0);
+  });
 });

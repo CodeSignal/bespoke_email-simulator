@@ -159,12 +159,18 @@ try {
 
 const rubricPath = explicitRubricFile || defaultRubricPath(SCENARIO_FILE);
 let rubric = null;
-if (existsSync(rubricPath)) {
-  try {
-    rubric = JSON.parse(readFileSync(rubricPath, 'utf8'));
-  } catch (err) {
-    console.log(`Could not read ${rubricPath}: ${err.message}`);
+if (mode === 'report') {
+  if (explicitRubricFile && !existsSync(rubricPath)) {
+    console.log(`Error: rubric file not found: ${rubricPath}`);
     process.exit(1);
+  }
+  if (existsSync(rubricPath)) {
+    try {
+      rubric = JSON.parse(readFileSync(rubricPath, 'utf8'));
+    } catch (err) {
+      console.log(`Could not read ${rubricPath}: ${err.message}`);
+      process.exit(1);
+    }
   }
 }
 

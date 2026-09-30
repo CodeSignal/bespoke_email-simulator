@@ -1789,9 +1789,22 @@ function updateAssistantThinking() {
       ? t('Working…')
       : t('Thinking…');
   }
-  if (els.assistantPanel) {
-    els.assistantPanel.setAttribute('aria-busy', busy ? 'true' : 'false');
+  // Limit aria-busy to the message log so the status live region in the header can announce.
+  if (els.assistantMessages) {
+    els.assistantMessages.setAttribute('aria-busy', busy ? 'true' : 'false');
   }
+}
+
+/** Refresh thinking, clear, and Send when busy state flips (e.g. quick actions). */
+function syncAssistantBusyControls() {
+  updateAssistantThinking();
+  updateAssistantClearBtn();
+  if (!els.assistantSendBtn) return;
+  // Preserve input-disabled (agent unavailable / assistant off); only gate Send on empty + busy.
+  const inputDisabled = els.assistantInput?.disabled === true;
+  els.assistantSendBtn.disabled = inputDisabled
+    || !String(els.assistantInput?.value ?? '').trim()
+    || assistantIsBusy();
 }
 
 // The clear button is only actionable when there is something to clear and
@@ -1991,7 +2004,7 @@ async function runQuickAction(action, detail = '') {
   if (!state.session?.sessionId) return;
   state.assistant.quickActionBusy = true;
   renderAssistantChips();
-  updateAssistantThinking();
+  syncAssistantBusyControls();
 
   // Capture before the await — the learner may change threads while the request runs.
   // New-message compose is unscoped; reply chips bind to the open thread.
@@ -2077,7 +2090,7 @@ async function runQuickAction(action, detail = '') {
   } finally {
     state.assistant.quickActionBusy = false;
     renderAssistantChips();
-    updateAssistantThinking();
+    syncAssistantBusyControls();
   }
 }
 

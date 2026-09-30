@@ -957,20 +957,6 @@ body {
   to { transform: rotate(360deg); }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .assistant__spinner {
-    animation: none;
-    border-top-color: var(--Colors-Stroke-Default);
-    background: var(--Colors-Text-Body-Light);
-    opacity: 0.55;
-  }
-
-  .assistant__typing-dot {
-    animation: none;
-    opacity: 0.7;
-  }
-}
-
 .assistant__clear:hover:not(:disabled) {
   color: var(--Colors-Text-Body-Strong);
 }
@@ -1176,6 +1162,20 @@ body {
 @keyframes assistant-typing-bounce {
   0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
   40% { opacity: 1; transform: translateY(-2px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant__spinner {
+    animation: none;
+    border-top-color: var(--Colors-Stroke-Default);
+    background: var(--Colors-Text-Body-Light);
+    opacity: 0.55;
+  }
+
+  .assistant__typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 
 .email__attachment--preview {
