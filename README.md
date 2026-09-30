@@ -166,7 +166,25 @@ shape, relative to the project root.
 | `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support (learner can attach files in the composer when enabled). |
 | Seed email `attachments[]` | `{ name, text? }` | Optional on seeded inbound emails. `name` is shown in the UI. Author-provided `text` is readable by Cosmo (Q&A / summarize / extract); omit `text` when contents should stay unknown. Not real file parsing. |
 | `ui` | `{ hideHistory, strings }` | UI overrides + i18n strings. |
-| `rubricHints` | object \| string | Notes surfaced in the extraction report. |
+
+Relative date tokens in seed strings (resolved once at load): `${today}`,
+`${tomorrow}`, `${yesterday}`, `${next week}`, `${last week}`,
+`${3 days from today}`, `${in 2 days}`, `${5 days ago}`. Use them in
+`email.date`, bodies, subjects, and attachment `text`. Bare date fields like
+`"${today}"` become ISO datetimes (`…T12:00:00Z`); prose keeps `YYYY-MM-DD`.
+
+### Rubric sidecar (not part of the scenario)
+
+Grading notes do **not** belong in `scenario.json`. Put them in a sidecar file
+next to the scenario:
+
+| Scenario file | Rubric file |
+| --- | --- |
+| `scenario.json` | `rubric.json` |
+| `foo.scenario.json` | `foo.rubric.json` |
+
+`npm run report` includes the sidecar when present. Override with
+`--rubric <file>`. Cosmo and `/api/config` never see rubric content.
 
 ### Example scenarios
 
@@ -189,7 +207,9 @@ one to `scenario.json` to try it:
   prospects; Ryan is the right call).
 
 ```bash
-cp scenario-examples/04-simulated-recipient-support.scenario.json scenario.json && npm run dev
+cp scenario-examples/04-simulated-recipient-support.scenario.json scenario.json && \
+  cp scenario-examples/04-simulated-recipient-support.rubric.json rubric.json && \
+  npm run dev
 ```
 
 See [`scenario-examples/README.md`](scenario-examples/README.md) for details.

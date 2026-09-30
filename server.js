@@ -136,7 +136,7 @@ app.get('/api/config', async (_req, res) => {
     const { config, errors } = await getScenario();
     if (errors.length) console.warn('[scenario] validation warnings:', errors);
     const strings = await resolveStrings(config.generation.language, config.ui.strings, I18N_DIR);
-    const { seed, ...clientConfig } = config;
+    const { seed, rubricHints: _rubricHints, ...clientConfig } = config;
     res.json({ ...clientConfig, strings, warnings: errors });
   } catch (err) {
     console.error('[config] Error:', err);

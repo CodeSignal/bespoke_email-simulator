@@ -48,13 +48,17 @@
  *                      writes to report.md by default; other modes already
  *                      print to stdout unless --output is given).
  *   --print-settings  Include the scenario's key settings in the heading.
+ *   --rubric <file>   Rubric sidecar JSON for report mode (default: rubric.json
+ *                      next to the scenario, or foo.rubric.json beside
+ *                      foo.scenario.json).
  *   -h, --help        Show this help message.
  */
 
-import { readFileSync, writeFileSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { characterIsLive, normalizeWorld } from './lib/character-replies.js';
+import { defaultRubricPath, rubricLines } from './lib/rubric.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const SESSIONS_FILE = process.env.SESSIONS_FILE || join(__dirname, 'sessions.json');
@@ -86,11 +90,15 @@ Options:
   --output <file>  Write output to this file instead of the default
   --stdout         Print to stdout instead of writing report.md (report mode)
   --print-settings Include a human-readable World/Characters summary
+  --rubric <file>  Rubric sidecar for report mode (default beside scenario)
   -h, --help       Show this help message
 
 The assistant (Cosmo) conversation is only included when the scenario's
 "assistant.enabled" is true (the default); otherwise the report notes that
-the assistant was disabled for the scenario.`);
+the assistant was disabled for the scenario.
+
+Grading notes belong in a sidecar rubric file (not scenario.json) and are
+included in report mode when that file is present.`);
   process.exit(0);
 }
 
@@ -122,6 +130,8 @@ const explicitOutputFile = outputIdx !== -1 && args[outputIdx + 1] ? args[output
 // Report mode is meant to be handed to a human grader, so it writes a
 // report.md file by default instead of dumping to stdout.
 const outputFile = explicitOutputFile ?? (mode === 'report' && !stdout ? DEFAULT_REPORT_FILE : null);
+const rubricIdx = args.indexOf('--rubric');
+const explicitRubricFile = rubricIdx !== -1 && args[rubricIdx + 1] ? args[rubricIdx + 1] : null;
 
 // ── Load ──────────────────────────────────────────────────────
 // No sessions.json yet means the participant hasn't opened the scenario at
@@ -145,6 +155,23 @@ try {
   scenario = JSON.parse(readFileSync(SCENARIO_FILE, 'utf8'));
 } catch {
   scenario = {};
+}
+
+const rubricPath = explicitRubricFile || defaultRubricPath(SCENARIO_FILE);
+let rubric = null;
+if (mode === 'report') {
+  if (explicitRubricFile && !existsSync(rubricPath)) {
+    console.log(`Error: rubric file not found: ${rubricPath}`);
+    process.exit(1);
+  }
+  if (existsSync(rubricPath)) {
+    try {
+      rubric = JSON.parse(readFileSync(rubricPath, 'utf8'));
+    } catch (err) {
+      console.log(`Could not read ${rubricPath}: ${err.message}`);
+      process.exit(1);
+    }
+  }
 }
 
 // Defaults to true, matching lib/scenario.js's default for `assistant.enabled`.
@@ -207,6 +234,10 @@ function overviewLines() {
   if (!lines.length) return [];
   lines.push('---', '');
   return lines;
+}
+
+function rubricSectionLines() {
+  return rubricLines(rubric);
 }
 
 function emailLines(email) {
@@ -466,6 +497,10 @@ if (mode === 'report') {
   lines.push('# CosmoMail Session Report', '');
   lines.push(`*Generated on ${formatDate(new Date().toISOString())}*`, '', '---', '');
   lines.push(...overviewLines());
+  const rubricBlock = rubricSectionLines();
+  if (rubricBlock.length) {
+    lines.push(...rubricBlock, '---', '');
+  }
   if (reportSessions.length === 0) {
     lines.push(NO_SESSIONS_MESSAGE, '');
   } else {

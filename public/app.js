@@ -12,6 +12,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import { Placeholder } from '@tiptap/extensions';
 import Modal from '../design-system/components/modal/modal.js';
+import SplitPanel from '../design-system/components/split-panel/split-panel.js';
 import {
   MAILBOXES,
   mailboxCounts,
@@ -138,6 +139,7 @@ const state = {
   },
   characterSessions: {},
   attachments: [],
+  mailSplit: null,
 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -147,6 +149,9 @@ const els = {
   composeBtn: document.getElementById('composeBtn'),
   composeBtnLabel: document.getElementById('composeBtnLabel'),
   mailboxList: document.getElementById('mailboxList'),
+  mailSplit: document.getElementById('mailSplit'),
+  assistantThinking: document.getElementById('assistantThinking'),
+  assistantThinkingLabel: document.getElementById('assistantThinkingLabel'),
   mailMain: document.getElementById('mailMain'),
   mailList: document.getElementById('mailList'),
   threadList: document.getElementById('threadList'),
@@ -178,6 +183,7 @@ const els = {
   attachBtn: document.getElementById('attachBtn'),
   fileInput: document.getElementById('fileInput'),
   attachmentPreview: document.getElementById('attachmentPreview'),
+  assistantPanel: document.getElementById('assistantPanel'),
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
@@ -762,7 +768,14 @@ function renderEmail(email, learnerEmail) {
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
   const attachmentsHtml = attachments.length
     ? `<div class="email__attachments">${attachments
-        .map((a) => `<span class="tag outline email__attachment">${escapeHtml(a.name || 'attachment')}</span>`)
+        .map((a, index) => {
+          const name = escapeHtml(a.name || 'attachment');
+          const hasText = typeof a.text === 'string' && a.text.length > 0;
+          if (hasText) {
+            return `<button type="button" class="tag outline email__attachment email__attachment--preview" data-attachment-index="${index}" aria-label="${escapeHtml(t('Preview attachment'))}: ${name}">${name}</button>`;
+          }
+          return `<span class="tag outline email__attachment">${name}</span>`;
+        })
         .join('')}</div>`
     : '';
   wrap.innerHTML = `
@@ -778,7 +791,33 @@ function renderEmail(email, learnerEmail) {
     <div class="email__body">${renderMarkdown(email.body)}</div>
     ${attachmentsHtml}
   `;
+  for (const btn of wrap.querySelectorAll('.email__attachment--preview')) {
+    btn.addEventListener('click', () => {
+      const index = Number(btn.dataset.attachmentIndex);
+      const attachment = attachments[index];
+      if (attachment) openAttachmentPreview(attachment);
+    });
+  }
   return wrap;
+}
+
+function openAttachmentPreview(attachment) {
+  const name = attachment?.name || t('Attachment');
+  const text = typeof attachment?.text === 'string' ? attachment.text : '';
+  const modal = new Modal({
+    size: 'medium',
+    title: name,
+    content: `<pre class="attachment-preview-modal__body body-small">${escapeHtml(text)}</pre>`,
+    closeOnOverlayClick: true,
+    footerButtons: [
+      {
+        label: t('Close'),
+        type: 'secondary',
+        onClick: () => modal.close(),
+      },
+    ],
+  });
+  modal.open();
 }
 
 function renderThread(threadId) {
@@ -1722,7 +1761,7 @@ function renderAssistant(liveMessages = []) {
         'ai',
         renderMarkdown(text) || (drafts.length || streaming
           ? ''
-          : '<span class="assistant__typing">…</span>'),
+          : '<span class="assistant__typing" aria-label="Thinking"><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span></span>'),
       );
       for (const draft of drafts) appendDraftCard(row, draft, { streaming });
       if (!streaming) appendFenceInsertFallback(row, text);
@@ -1732,6 +1771,40 @@ function renderAssistant(liveMessages = []) {
 
   container.scrollTop = container.scrollHeight;
   updateAssistantClearBtn();
+  updateAssistantThinking();
+}
+
+function assistantIsBusy() {
+  return state.assistant.chat?.status === 'streaming'
+    || state.assistant.quickActionBusy === true;
+}
+
+function updateAssistantThinking() {
+  const host = els.assistantThinking;
+  if (!host) return;
+  const busy = assistantIsBusy();
+  host.hidden = !busy;
+  if (els.assistantThinkingLabel) {
+    els.assistantThinkingLabel.textContent = state.assistant.quickActionBusy && state.assistant.chat?.status !== 'streaming'
+      ? t('Working…')
+      : t('Thinking…');
+  }
+  // Limit aria-busy to the message log so the status live region in the header can announce.
+  if (els.assistantMessages) {
+    els.assistantMessages.setAttribute('aria-busy', busy ? 'true' : 'false');
+  }
+}
+
+/** Refresh thinking, clear, and Send when busy state flips (e.g. quick actions). */
+function syncAssistantBusyControls() {
+  updateAssistantThinking();
+  updateAssistantClearBtn();
+  if (!els.assistantSendBtn) return;
+  // Preserve input-disabled (agent unavailable / assistant off); only gate Send on empty + busy.
+  const inputDisabled = els.assistantInput?.disabled === true;
+  els.assistantSendBtn.disabled = inputDisabled
+    || !String(els.assistantInput?.value ?? '').trim()
+    || assistantIsBusy();
 }
 
 // The clear button is only actionable when there is something to clear and
@@ -1741,7 +1814,7 @@ function updateAssistantClearBtn() {
   if (!btn) return;
   const hasAny = state.assistant.persisted.length > 0
     || (state.assistant.chat?.messages?.length ?? 0) > 0;
-  btn.disabled = !hasAny || state.assistant.chat?.status === 'streaming';
+  btn.disabled = !hasAny || assistantIsBusy();
 }
 
 // Wipe the conversation (persisted + live) and start Cosmo on a fresh session.
@@ -1931,6 +2004,7 @@ async function runQuickAction(action, detail = '') {
   if (!state.session?.sessionId) return;
   state.assistant.quickActionBusy = true;
   renderAssistantChips();
+  syncAssistantBusyControls();
 
   // Capture before the await — the learner may change threads while the request runs.
   // New-message compose is unscoped; reply chips bind to the open thread.
@@ -2016,6 +2090,7 @@ async function runQuickAction(action, detail = '') {
   } finally {
     state.assistant.quickActionBusy = false;
     renderAssistantChips();
+    syncAssistantBusyControls();
   }
 }
 
@@ -2305,7 +2380,61 @@ function persistAssistant() {
 
 function setAssistantEnabled(enabled) {
   els.assistantInput.disabled = !enabled;
-  els.assistantSendBtn.disabled = !enabled || !els.assistantInput.value.trim();
+  els.assistantSendBtn.disabled = !enabled || !els.assistantInput.value.trim() || assistantIsBusy();
+  updateAssistantThinking();
+}
+
+const SPLIT_STORAGE_KEY = 'cosmoMail.splitPercent';
+const SPLIT_DEFAULT_PERCENT = 72;
+
+function readStoredSplitPercent() {
+  try {
+    const raw = sessionStorage.getItem(SPLIT_STORAGE_KEY);
+    const value = Number(raw);
+    if (Number.isFinite(value) && value >= 40 && value <= 82) return value;
+  } catch {
+    /* ignore */
+  }
+  return SPLIT_DEFAULT_PERCENT;
+}
+
+function initMailSplit() {
+  const host = els.mailSplit;
+  const main = els.mailMain;
+  const assistant = els.assistantPanel;
+  if (!host || !main || !assistant) return;
+
+  if (state.config?.assistant?.enabled === false) {
+    assistant.setAttribute('hidden', '');
+    host.classList.add('mail-split--solo');
+    return;
+  }
+
+  // Detach existing panels before SplitPanel clears the host.
+  main.remove();
+  assistant.remove();
+  const panel = new SplitPanel(host, {
+    orientation: 'horizontal',
+    initialSplit: readStoredSplitPercent(),
+    minLeft: 40,
+    minRight: 18,
+    dividerLabel: t('Resize Cosmo panel'),
+    onChange: (percent) => {
+      try {
+        sessionStorage.setItem(SPLIT_STORAGE_KEY, String(Math.round(percent)));
+      } catch {
+        /* ignore */
+      }
+    },
+  });
+  panel.getLeftPanel().appendChild(main);
+  panel.getRightPanel().appendChild(assistant);
+  for (const pane of [panel.getLeftPanel(), panel.getRightPanel()]) {
+    pane.style.overflow = 'hidden';
+    pane.style.display = 'flex';
+    pane.style.flexDirection = 'column';
+  }
+  state.mailSplit = panel;
 }
 
 async function initAssistant() {
@@ -2318,9 +2447,9 @@ async function initAssistant() {
   );
   renderAssistant([]);
   els.assistantClearBtn?.addEventListener('click', clearAssistant);
+  updateAssistantThinking();
 
   if (state.config?.assistant?.enabled === false) {
-    document.getElementById('assistantPanel')?.setAttribute('hidden', '');
     return;
   }
 
@@ -2366,11 +2495,12 @@ async function initAssistant() {
     if (chat.status !== 'streaming') persistAssistant();
     setAssistantEnabled(chat.status !== 'streaming');
     renderAssistantChips();
+    updateAssistantThinking();
   });
 
   els.assistantInput.addEventListener('input', () => {
     els.assistantSendBtn.disabled = !els.assistantInput.value.trim()
-      || state.assistant.chat?.status === 'streaming';
+      || assistantIsBusy();
   });
   els.assistantInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -2437,6 +2567,7 @@ async function boot() {
     state.view = 'list';
 
     applyScenarioChrome();
+    initMailSplit();
     initComposer();
     initMailtoCompose();
     initAttachments();

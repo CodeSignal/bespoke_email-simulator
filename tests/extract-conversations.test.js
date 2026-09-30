@@ -143,4 +143,80 @@ describe('extract-conversations provenance', () => {
     expect(out).toContain('**Quick action** `suggested_replies`');
     expect(out).toContain('Happy to discuss pricing next week.');
   });
+
+  it('includes sidecar rubric hints in report mode', () => {
+    writeFileSync(
+      sessionsFile,
+      JSON.stringify({
+        sessions: [
+          {
+            session_id: 's1',
+            updated_at: '2026-01-02T00:00:00.000Z',
+            created_at: '2026-01-01T00:00:00.000Z',
+            threads: [],
+            assistant_messages: [],
+          },
+        ],
+      }),
+    );
+    writeFileSync(
+      join(dir, 'rubric.json'),
+      JSON.stringify({ notes: 'Reward a clear meeting ask.' }),
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--mode', 'report', '--output', outputFile, '--stdout'],
+      {
+        env: {
+          ...process.env,
+          SESSIONS_FILE: sessionsFile,
+          SCENARIO_FILE: scenarioFile,
+        },
+        encoding: 'utf8',
+      },
+    );
+
+    expect(result.status).toBe(0);
+    const out = readFileSync(outputFile, 'utf8');
+    expect(out).toContain('### Rubric hints');
+    expect(out).toContain('Reward a clear meeting ask.');
+  });
+
+  it('errors when --rubric points at a missing file in report mode', () => {
+    writeFileSync(sessionsFile, JSON.stringify({ sessions: [] }));
+    const missing = join(dir, 'missing-rubric.json');
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--mode', 'report', '--rubric', missing, '--output', outputFile, '--stdout'],
+      {
+        env: {
+          ...process.env,
+          SESSIONS_FILE: sessionsFile,
+          SCENARIO_FILE: scenarioFile,
+        },
+        encoding: 'utf8',
+      },
+    );
+    expect(result.status).toBe(1);
+    expect(`${result.stdout}${result.stderr}`).toContain('rubric file not found');
+  });
+
+  it('skips rubric loading outside report mode', () => {
+    writeFileSync(sessionsFile, JSON.stringify({ sessions: [] }));
+    const missing = join(dir, 'missing-rubric.json');
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--mode', 'full', '--rubric', missing, '--output', outputFile],
+      {
+        env: {
+          ...process.env,
+          SESSIONS_FILE: sessionsFile,
+          SCENARIO_FILE: scenarioFile,
+        },
+        encoding: 'utf8',
+      },
+    );
+    expect(result.status).toBe(0);
+  });
 });

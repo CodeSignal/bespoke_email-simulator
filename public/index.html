@@ -22,6 +22,7 @@
   <link rel="stylesheet" href="/design-system/components/tags/tags.css" />
   <link rel="stylesheet" href="/design-system/components/dropdown/dropdown.css" />
   <link rel="stylesheet" href="/design-system/components/modal/modal.css" />
+  <link rel="stylesheet" href="/design-system/components/split-panel/split-panel.css" />
 
   <link rel="stylesheet" href="/app.css" />
 </head>
@@ -50,6 +51,9 @@
       </div>
       <nav class="rail__mailboxes" id="mailboxList" aria-label="Folders"></nav>
     </aside>
+
+    <!-- ── MAIN + COSMO: resizable SplitPanel (rail stays fixed) ── -->
+    <div class="mail-split" id="mailSplit">
 
     <!-- ── MAIN: list or conversation; new mail floats as a PiP overlay ── -->
     <main class="mail-main" id="mailMain">
@@ -141,6 +145,10 @@
       <div class="assistant__header">
         <span class="icon icon-cosmo-black icon-primary icon-small" aria-hidden="true"></span>
         <span class="heading-xxxsmall assistant__title">Cosmo</span>
+        <span class="assistant__thinking" id="assistantThinking" role="status" aria-live="polite" hidden>
+          <span class="assistant__spinner" aria-hidden="true"></span>
+          <span class="body-xsmall assistant__thinking-label" id="assistantThinkingLabel">Thinking…</span>
+        </span>
         <button type="button" class="button button-text button-xsmall assistant__clear" id="assistantClearBtn" aria-label="Clear conversation" title="Clear conversation" disabled>
           <span class="icon icon-trash icon-small" aria-hidden="true"></span>
         </button>
@@ -155,6 +163,8 @@
         <button type="button" class="button button-secondary button-small" id="assistantSendBtn" disabled>Send</button>
       </div>
     </aside>
+
+    </div><!-- /#mailSplit -->
 
   </div>
 

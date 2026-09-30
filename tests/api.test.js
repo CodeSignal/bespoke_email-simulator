@@ -38,6 +38,7 @@ describe('config & scenario routes', () => {
     expect(res.status).toBe(200);
     expect(res.body.id).toBe('reply-to-vendor-negotiation');
     expect(res.body.seed).toBeUndefined();
+    expect(res.body.rubricHints).toBeUndefined();
     expect(res.body.strings).toBeTypeOf('object');
     expect(res.body.characters).toEqual(
       expect.arrayContaining([
