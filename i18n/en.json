@@ -40,6 +40,11 @@
     "Awaiting reply…": "Awaiting reply…",
     "New email": "New email",
     "Dismiss": "Dismiss",
-    "Discard": "Discard"
+    "Discard": "Discard",
+    "Thinking…": "Thinking…",
+    "Working…": "Working…",
+    "Resize Cosmo panel": "Resize Cosmo panel",
+    "Preview attachment": "Preview attachment",
+    "Attachment": "Attachment"
   }
 }

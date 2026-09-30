@@ -11,11 +11,13 @@ Copy a scenario to `scenario.json` at the project root, then start the app:
 
 ```bash
 cp scenario-examples/02-reply-vendor-negotiation.scenario.json scenario.json
+cp scenario-examples/02-reply-vendor-negotiation.rubric.json rubric.json
 npm run dev
 ```
 
 These examples keep the mailbox in the scenario file, so they work whether you
-run a file in place or copy it to `scenario.json`.
+run a file in place or copy it to `scenario.json`. Grading notes live in the
+matching `*.rubric.json` sidecar (optional for local play; used by `npm run report`).
 
 ## The examples
 
@@ -84,7 +86,7 @@ Cosmo panel. Deploy the dev agent first (`npm run deploy:agent:dev`).
 After a run, generate a rubric-ready transcript:
 
 ```bash
-npm run report                 # Markdown report with rubric hints in the header
+npm run report                 # Markdown report; includes rubric.json when present
 npm run extract -- --latest    # full transcript of the most recent session
 ```
 

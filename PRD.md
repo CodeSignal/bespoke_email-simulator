@@ -236,11 +236,15 @@ of the same shape.
     "hideAssistant": false,
     "hideHistory": false,
     "strings": {}
-  },
-
-  "rubricHints": {
-    "notes": "Reward: acknowledges proposal, counters price with rationale, proposes 12-month term, professional tone."
   }
+}
+```
+
+Grading notes live in a sidecar `rubric.json` (not in the scenario), e.g.:
+
+```json
+{
+  "notes": "Reward: acknowledges proposal, counters price with rationale, proposes 12-month term, professional tone."
 }
 ```
 
@@ -286,7 +290,8 @@ in a separate file and `seed.inbox` can be a path to it.
 - Control generation (model, temperature, thinking, language) and attachments.
 - Configure the submission label/limit and UI/i18n overrides (reusing ChatCPT's
   string-override + i18n approach).
-- Provide optional `rubricHints` metadata for the external tutor/assessment.
+- Provide optional grading notes in a sidecar `rubric.json` (never in the scenario
+  runtime or learner/Cosmo surface) for the external tutor/assessment.
 
 ---
 
@@ -389,9 +394,9 @@ draft revisions, the assistant chat transcript, and the final submission.
   - the **assistant chat transcript** (including any search/Q&A the learner did),
   - a combined **report** for the tutor/rubric.
   - Modes along the lines of `--mode full|submission|thread|assistant|report`,
-    plus `--latest`, `--output`, `--print-settings`.
-- **Used by:** the external AI tutor and assessment rubrics (the `rubricHints`
-  block in the scenario config can inform grading).
+    plus `--latest`, `--output`, `--print-settings`, `--rubric`.
+- **Used by:** the external AI tutor and assessment rubrics (sidecar `rubric.json`
+  can inform grading; it is not part of the scenario the learner runs).
 
 ---
 

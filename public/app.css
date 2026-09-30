@@ -28,16 +28,45 @@ body {
   display: none !important;
 }
 
-/* ── App shell: 3-column layout (2-column when Cosmo is disabled) ── */
+/* ── App shell: fixed rail + resizable mail/Cosmo split ── */
 .mail-app {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr) 340px;
+  grid-template-columns: 220px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
 
-.mail-app:has(#assistantPanel[hidden]) {
-  grid-template-columns: 220px minmax(0, 1fr);
+.mail-split {
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.mail-split--solo {
+  display: flex;
+  flex-direction: column;
+}
+
+.mail-split--solo .mail-main {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mail-split .split-panel-left,
+.mail-split .split-panel-right {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: transparent;
+}
+
+.mail-split .mail-main,
+.mail-split .assistant {
+  flex: 1 1 auto;
+  height: 100%;
+  min-height: 0;
+  width: 100%;
 }
 
 /* ── Mailbox rail (Gmail-style folder nav) ── */
@@ -891,12 +920,55 @@ body {
   color: var(--Colors-Text-Body-Strong);
 }
 
+.assistant__thinking {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
+  margin-left: var(--UI-Spacing-spacing-xs);
+  color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__thinking[hidden] {
+  display: none !important;
+}
+
+.assistant__spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--Colors-Stroke-Default);
+  border-top-color: var(--Colors-Text-Body-Strong);
+  border-radius: 50%;
+  animation: assistant-spin 0.7s linear infinite;
+}
+
+.assistant__thinking-label {
+  white-space: nowrap;
+}
+
 .assistant__clear {
   margin-left: auto;
   min-width: var(--UI-Input-xs);
   min-height: var(--UI-Input-xs);
   padding: 0;
   color: var(--Colors-Text-Body-Light);
+}
+
+@keyframes assistant-spin {
+  to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .assistant__spinner {
+    animation: none;
+    border-top-color: var(--Colors-Stroke-Default);
+    background: var(--Colors-Text-Body-Light);
+    opacity: 0.55;
+  }
+
+  .assistant__typing-dot {
+    animation: none;
+    opacity: 0.7;
+  }
 }
 
 .assistant__clear:hover:not(:disabled) {
@@ -1083,7 +1155,50 @@ body {
 }
 
 .assistant__typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__typing-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.35;
+  animation: assistant-typing-bounce 1.2s ease-in-out infinite;
+}
+
+.assistant__typing-dot:nth-child(2) { animation-delay: 0.15s; }
+.assistant__typing-dot:nth-child(3) { animation-delay: 0.3s; }
+
+@keyframes assistant-typing-bounce {
+  0%, 80%, 100% { opacity: 0.35; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+
+.email__attachment--preview {
+  cursor: pointer;
+  font: inherit;
+}
+
+.email__attachment--preview:hover,
+.email__attachment--preview:focus-visible {
+  border-color: var(--Colors-Stroke-Strong, var(--Colors-Stroke-Default));
+  outline: 2px solid var(--Colors-Stroke-Focus, rgba(92, 148, 255, 0.6));
+  outline-offset: 2px;
+}
+
+.attachment-preview-modal__body {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: min(60vh, 28rem);
+  overflow: auto;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .assistant__chips {
