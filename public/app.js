@@ -1,9 +1,9 @@
 /**
- * CosmoMail — app.js (frontend entry, bundled by esbuild).
+ * Mail — app.js (frontend entry, bundled by esbuild).
  *
- * Stage 3: load the scenario + session and render the thread rail and reading
- * pane (emails rendered from Markdown). Composer (TipTap) and the Cosmo
- * assistant are wired in later stages.
+ * Loads the scenario + session and renders the mailbox rail, mail list and
+ * reading pane (emails rendered from Markdown), the TipTap composer, and the
+ * AI Assistant panel (backed by the Cosmo agent on Octavus).
  */
 
 import { OctavusChat, createHttpTransport } from '@octavus/client-sdk';
@@ -115,6 +115,7 @@ const state = {
   composeMinimized: false,
   composeExpanded: false,
   replying: null, // null | 'reply' | 'replyAll'
+  selectedEmailId: null, // highlighted message in a multi-message thread
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
   editor: null,
@@ -156,7 +157,13 @@ const els = {
   mailList: document.getElementById('mailList'),
   threadList: document.getElementById('threadList'),
   mailToolbarTitle: document.getElementById('mailToolbarTitle'),
+  mailToolbarName: document.getElementById('mailToolbarName'),
+  mailToolbarCount: document.getElementById('mailToolbarCount'),
   backBtn: document.getElementById('backBtn'),
+  backBtnLabel: document.getElementById('backBtnLabel'),
+  replyBtn: document.getElementById('replyBtn'),
+  replyAllBtn: document.getElementById('replyAllBtn'),
+  deleteBtn: document.getElementById('deleteBtn'),
   readingPane: document.getElementById('readingPane'),
   composer: document.getElementById('composer'),
   composerChrome: document.getElementById('composerChrome'),
@@ -167,6 +174,7 @@ const els = {
   assistantHint: document.getElementById('assistantHint'),
   composeToLabel: document.getElementById('composeToLabel'),
   composeCcLabel: document.getElementById('composeCcLabel'),
+  composeSubjectLabel: document.getElementById('composeSubjectLabel'),
   composeToPicker: document.getElementById('composeToPicker'),
   composeCcPicker: document.getElementById('composeCcPicker'),
   composeToChips: document.getElementById('composeToChips'),
@@ -184,6 +192,7 @@ const els = {
   fileInput: document.getElementById('fileInput'),
   attachmentPreview: document.getElementById('attachmentPreview'),
   assistantPanel: document.getElementById('assistantPanel'),
+  assistantContent: document.getElementById('assistantContent'),
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
@@ -233,9 +242,9 @@ function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  const day = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${day} ${time}`;
 }
 
 function formatListDate(iso) {
@@ -323,6 +332,21 @@ function learnerEmail() {
   return state.config?.learner?.email || '';
 }
 
+function isLearnerAddress(addr) {
+  const email = addressEmail(addr).toLowerCase();
+  const learner = learnerEmail().toLowerCase();
+  return Boolean(email && learner && email === learner);
+}
+
+// Header recipient list: names only, with the learner shown as "You".
+function recipientNames(list) {
+  const items = Array.isArray(list) ? list : [list];
+  return items
+    .filter(Boolean)
+    .map((addr) => (isLearnerAddress(addr) ? t('You') : displayName(personForAddress(addr)) || addressEmail(addr)))
+    .join(', ');
+}
+
 function directoryCharacters() {
   const learner = learnerEmail().toLowerCase();
   return (state.config?.characters ?? []).filter(
@@ -390,19 +414,20 @@ function closeRecipientMenus() {
 function renderRecipientChip(field, email) {
   const character = characterByEmail(directoryCharacters(), email) || personForAddress(email);
   const chip = document.createElement('span');
-  chip.className = 'tag outline recipient-picker__chip';
+  chip.className = 'recipient-picker__chip';
   chip.dataset.email = email;
   chip.insertAdjacentHTML('afterbegin', avatarMarkup(character, 'xs'));
 
   const label = document.createElement('span');
+  label.className = 'recipient-picker__chip-name';
   label.textContent = characterLabel(character) || email;
   chip.appendChild(label);
 
   const remove = document.createElement('button');
   remove.type = 'button';
-  remove.className = 'button button-text button-xsmall recipient-picker__remove';
+  remove.className = 'recipient-picker__remove';
   remove.setAttribute('aria-label', `${t('Remove')} ${label.textContent}`);
-  remove.textContent = '×';
+  remove.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>';
   remove.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -536,6 +561,12 @@ function mailboxLabel(mailbox) {
   return t(box?.label || 'Inbox');
 }
 
+function backLabel(mailbox) {
+  if (mailbox === 'sent') return t('Back to sent');
+  if (mailbox === 'spam') return t('Back to spam');
+  return t('Back to inbox');
+}
+
 function emptyMailboxCopy(mailbox) {
   if (mailbox === 'sent') {
     return { title: t('No sent messages'), body: t('Messages you send will appear here.') };
@@ -547,10 +578,16 @@ function emptyMailboxCopy(mailbox) {
 }
 
 const MAILBOX_ICONS = {
-  inbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 9.5 4.2 4h7.6L14 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9.5Z"/><path d="M2 9.5h3l.8 1.5h4.4l.8-1.5H14"/></svg>',
-  sent: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M14 2 7 9M14 2 9.2 14 7 9 2 6.8 14 2Z"/></svg>',
-  spam: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="5.25"/><path d="m4.4 11.6 7.2-7.2"/></svg>',
+  inbox: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 8H3.92131C4.37811 8 4.79571 8.25809 5 8.66667C5.20429 9.07524 5.62189 9.33333 6.07869 9.33333H9.92131C10.3781 9.33333 10.7957 9.07524 11 8.66667C11.2043 8.25809 11.6219 8 12.0787 8H14.3333M5.97771 2.66667H10.0223C10.7402 2.66667 11.0992 2.66667 11.4161 2.77598C11.6963 2.87264 11.9516 3.0304 12.1634 3.23783C12.4029 3.4724 12.5634 3.79347 12.8845 4.43558L14.3288 7.32433C14.4548 7.57632 14.5178 7.70232 14.5623 7.83437C14.6017 7.95163 14.6302 8.07231 14.6473 8.19484C14.6667 8.33282 14.6667 8.47368 14.6667 8.75542V10.1333C14.6667 11.2534 14.6667 11.8135 14.4487 12.2413C14.2569 12.6176 13.951 12.9236 13.5746 13.1153C13.1468 13.3333 12.5868 13.3333 11.4667 13.3333H4.53333C3.41323 13.3333 2.85318 13.3333 2.42535 13.1153C2.04903 12.9236 1.74307 12.6176 1.55132 12.2413C1.33333 11.8135 1.33333 11.2534 1.33333 10.1333V8.75542C1.33333 8.47368 1.33333 8.33282 1.35265 8.19484C1.3698 8.07231 1.39829 7.95163 1.43775 7.83437C1.48217 7.70232 1.54517 7.57632 1.67117 7.32433L3.11554 4.43558C3.4366 3.79346 3.59713 3.4724 3.83663 3.23783C4.04842 3.0304 4.30368 2.87264 4.58393 2.77598C4.90084 2.66667 5.25979 2.66667 5.97771 2.66667Z"/></svg>',
+  sent: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.00028 8.00002H3.33362M3.27718 8.19436L1.72057 12.8442C1.59828 13.2094 1.53713 13.3921 1.58101 13.5046C1.61912 13.6022 1.70096 13.6763 1.80195 13.7045C1.91824 13.7369 2.09388 13.6579 2.44517 13.4998L13.5862 8.48638C13.929 8.33209 14.1005 8.25494 14.1535 8.14776C14.1995 8.05465 14.1995 7.9454 14.1535 7.85229C14.1005 7.74511 13.929 7.66796 13.5862 7.51367L2.44129 2.49851C2.09106 2.3409 1.91595 2.2621 1.79977 2.29443C1.69888 2.3225 1.61704 2.39636 1.57881 2.49385C1.53478 2.60612 1.59527 2.78837 1.71625 3.15287L3.27761 7.85704C3.29839 7.91965 3.30878 7.95095 3.31288 7.98296C3.31652 8.01137 3.31649 8.04013 3.31277 8.06853C3.30859 8.10053 3.29812 8.13181 3.27718 8.19436Z"/></svg>',
+  spam: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.28667 3.28667L12.7133 12.7133M1.33333 5.68183V10.3182C1.33333 10.4812 1.33333 10.5628 1.35175 10.6395C1.36808 10.7075 1.39502 10.7725 1.43157 10.8322C1.4728 10.8995 1.53045 10.9571 1.64575 11.0724L4.92758 14.3542C5.04288 14.4695 5.10053 14.5272 5.16781 14.5684C5.22746 14.605 5.29249 14.6319 5.36051 14.6482C5.43724 14.6667 5.51877 14.6667 5.68183 14.6667H10.3182C10.4812 14.6667 10.5628 14.6667 10.6395 14.6482C10.7075 14.6319 10.7725 14.605 10.8322 14.5684C10.8995 14.5272 10.9571 14.4695 11.0724 14.3542L14.3542 11.0724C14.4695 10.9571 14.5272 10.8995 14.5684 10.8322C14.605 10.7725 14.6319 10.7075 14.6482 10.6395C14.6667 10.5628 14.6667 10.4812 14.6667 10.3182V5.68183C14.6667 5.51877 14.6667 5.43724 14.6482 5.36051C14.6319 5.29249 14.605 5.22746 14.5684 5.16781C14.5272 5.10053 14.4695 5.04288 14.3542 4.92758L11.0724 1.64575C10.9571 1.53045 10.8995 1.4728 10.8322 1.43157C10.7725 1.39502 10.7075 1.36808 10.6395 1.35175C10.5628 1.33333 10.4812 1.33333 10.3182 1.33333H5.68183C5.51877 1.33333 5.43724 1.33333 5.36051 1.35175C5.29249 1.36808 5.22746 1.39502 5.16781 1.43157C5.10053 1.4728 5.04288 1.53045 4.92758 1.64575L1.64575 4.92758C1.53045 5.04288 1.4728 5.10053 1.43157 5.16781C1.39502 5.22746 1.36808 5.29249 1.35175 5.36051C1.33333 5.43724 1.33333 5.51877 1.33333 5.68183Z"/></svg>',
 };
+
+// Figma untitled-ui mail-01 with lines (thread header).
+const THREAD_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 5.14583L6.59962 8.59889C6.99907 8.87851 7.1988 9.01832 7.41605 9.07247C7.60795 9.12031 7.80866 9.12031 8.00056 9.07247C8.21781 9.01832 8.41754 8.87851 8.817 8.59889L13.7499 5.14583M13.7499 8.16665V6.23332C13.7499 5.21823 13.7499 4.71068 13.5524 4.32297C13.3786 3.98193 13.1014 3.70465 12.7603 3.53088C12.3726 3.33333 11.8651 3.33333 10.85 3.33333H4.56665C3.55156 3.33333 3.04402 3.33333 2.6563 3.53088C2.31526 3.70465 2.03799 3.98193 1.86422 4.32297C1.66667 4.71068 1.66667 5.21823 1.66667 6.23332V10.1C1.66667 11.1151 1.66667 11.6226 1.86422 12.0103C2.03799 12.3514 2.31526 12.6286 2.6563 12.8024C3.04402 13 3.55156 13 4.56665 13H8.70831"/><path d="M11 10.5H18M11 13.5H18M11 16.5H16"/></svg>';
+
+// Figma "Content Icon" sparkles used inside AI Assistant action chips.
+const CHIP_ICON = '<span class="assistant__chip-icon" aria-hidden="true"><img src="/icons/chip-sparkles.svg" width="18" height="18" alt="" /></span>';
 
 function renderShell() {
   if (state.view === 'compose') state.view = 'list';
@@ -676,20 +713,34 @@ function applyView() {
   if (els.composerCloseBtn) els.composerCloseBtn.setAttribute('aria-label', t('Close'));
   if (els.discardBtn) {
     els.discardBtn.hidden = !state.replying;
-    els.discardBtn.textContent = t('Discard');
+    els.discardBtn.textContent = t('Cancel');
   }
   if (els.backBtn) {
     els.backBtn.hidden = isList;
-    els.backBtn.setAttribute('aria-label', t('Back to list'));
+    if (els.backBtnLabel) els.backBtnLabel.textContent = backLabel(state.activeMailbox);
   }
 
   if (els.mailToolbarTitle) {
+    // In a conversation the subject is shown in the reading pane; keep the
+    // heading for screen readers only.
+    els.mailToolbarTitle.classList.toggle('visually-hidden', isThread);
     if (isThread) {
       const thread = (state.session?.threads ?? []).find((th) => th.id === state.activeThreadId);
-      els.mailToolbarTitle.textContent = thread?.subject || t('Inbox');
+      if (els.mailToolbarName) els.mailToolbarName.textContent = thread?.subject || t('Inbox');
+      if (els.mailToolbarCount) els.mailToolbarCount.textContent = '';
     } else {
-      els.mailToolbarTitle.textContent = mailboxLabel(state.activeMailbox);
+      if (els.mailToolbarName) els.mailToolbarName.textContent = mailboxLabel(state.activeMailbox);
+      if (els.mailToolbarCount) els.mailToolbarCount.textContent = `(${visibleThreads().length})`;
     }
+  }
+  // Reply actions live in the toolbar and only apply to an open conversation.
+  const canReply = isThread && Boolean(state.activeThreadId);
+  for (const [btn, label] of [[els.replyBtn, t('Reply')], [els.replyAllBtn, t('Reply all')]]) {
+    if (!btn) continue;
+    btn.disabled = !canReply;
+    btn.setAttribute('aria-label', label);
+    btn.title = label;
+    btn.setAttribute('aria-pressed', String(canReply && state.replying === (btn === els.replyBtn ? 'reply' : 'replyAll')));
   }
   renderAssistantChips();
   renderQuickResultPanel();
@@ -707,15 +758,18 @@ function renderMailboxes() {
     btn.dataset.mailbox = box.id;
     if (box.id === state.activeMailbox) btn.setAttribute('aria-current', 'true');
     const count = counts[box.id] ?? 0;
+    // Figma: the inbox carries a badge marker while it has mail.
+    const marker = box.id === 'inbox' && count ? '<span class="rail__mailbox-marker" aria-hidden="true"></span>' : '';
     btn.innerHTML = `
       <span class="rail__mailbox-icon">${MAILBOX_ICONS[box.id] || ''}</span>
-      <span class="body-small rail__mailbox-label">${escapeHtml(t(box.label))}</span>
-      <span class="body-xsmall rail__mailbox-count">${count ? escapeHtml(String(count)) : ''}</span>
+      <span class="rail__mailbox-label">${escapeHtml(t(box.label))}</span>
+      <span class="rail__mailbox-meta">${marker}<span class="rail__mailbox-count">${escapeHtml(String(count))}</span></span>
     `;
     btn.addEventListener('click', () => selectMailbox(box.id));
     els.mailboxList.appendChild(btn);
   }
   if (els.composeBtnLabel) els.composeBtnLabel.textContent = t('Compose');
+  if (els.composeBtn) els.composeBtn.title = t('Compose');
 }
 
 function renderMailList() {
@@ -727,44 +781,57 @@ function renderMailList() {
     const empty = document.createElement('div');
     empty.className = 'mail-list__empty';
     empty.innerHTML = `
-      <span class="icon icon-cosmo-black icon-xlarge icon-secondary" aria-hidden="true"></span>
-      <p class="heading-small mail-list__empty-title">${escapeHtml(copy.title)}</p>
-      <p class="body-small mail-list__empty-body">${escapeHtml(copy.body)}</p>
+      <img class="mail-list__empty-icon" src="/icons/mail-logo.svg" width="22" height="22" alt="" />
+      <p class="mail-list__empty-title">${escapeHtml(copy.title)}</p>
+      <p class="mail-list__empty-body">${escapeHtml(copy.body)}</p>
     `;
     els.threadList.appendChild(empty);
     return;
   }
 
-  for (const thread of threads) {
+  threads.forEach((thread, index) => {
+    if (index > 0) {
+      const rule = document.createElement('hr');
+      rule.className = 'mail-list__rule';
+      els.threadList.appendChild(rule);
+    }
     const last = thread.emails?.[thread.emails.length - 1];
     const snippet = threadSnippet(thread);
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mail-row';
     btn.dataset.threadId = thread.id;
+    if (snippet) btn.title = snippet;
     btn.innerHTML = `
-      ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'sm')}
-      <span class="body-small mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
+      ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'lg')}
       <span class="mail-row__main">
-        <span class="body-small mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
-        ${snippet ? `<span class="body-xsmall mail-row__snippet"> – ${escapeHtml(snippet)}</span>` : ''}
+        <span class="mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
+        <span class="mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
       </span>
-      <span class="body-xsmall mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
+      <span class="mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
     `;
     btn.addEventListener('click', () => selectThread(thread.id));
     els.threadList.appendChild(btn);
-  }
+  });
 }
 
-function renderEmail(email, learnerEmail) {
+function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } = {}) {
   const isOutbound =
     email.outbound === true ||
     (learnerEmail && formatAddress(email.from).includes(learnerEmail));
   const wrap = document.createElement('article');
-  wrap.className = 'email box card non-interactive' + (isOutbound ? ' email--outbound' : '');
+  wrap.className = 'email' + (isOutbound ? ' email--outbound' : '');
   if (email.id) wrap.dataset.emailId = email.id;
-  const toLine = formatAddressList(email.to);
-  const ccLine = email.cc && email.cc.length ? `<div class="body-xsmall email__to">Cc: ${escapeHtml(formatAddressList(email.cc))}</div>` : '';
+  const sender = isOutbound ? learnerPerson() : personForAddress(email.from);
+  const senderName = displayName(email.from) || sender.name || addressEmail(email.from);
+  const senderEmail = addressEmail(email.from);
+  const subjectText = email.subject || subject;
+  const subjectRow = showSubject && subjectText
+    ? `<div class="email__row"><span class="email__label">${escapeHtml(t('Subject'))}:</span> <span class="email__subject">${escapeHtml(subjectText)}</span></div>`
+    : '';
+  const ccRow = email.cc && email.cc.length
+    ? `<div class="email__row"><span class="email__label">${escapeHtml(t('Cc'))}:</span> <span class="email__recipients">${escapeHtml(recipientNames(email.cc))}</span></div>`
+    : '';
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
   const attachmentsHtml = attachments.length
     ? `<div class="email__attachments">${attachments
@@ -780,16 +847,22 @@ function renderEmail(email, learnerEmail) {
     : '';
   wrap.innerHTML = `
     <div class="email__meta">
-      ${avatarMarkup(isOutbound ? learnerPerson() : personForAddress(email.from), 'md')}
+      ${avatarMarkup(sender, 'lg')}
       <div class="email__meta-text">
-        <div class="heading-xxxsmall email__from">${escapeHtml(formatAddress(email.from))}</div>
-        <div class="body-xsmall email__to">To: ${escapeHtml(toLine)}</div>
-        ${ccLine}
+        <div class="email__row email__row--from">
+          <span class="email__from">${escapeHtml(senderName)}</span>
+          ${senderEmail && senderEmail !== senderName ? `<span class="email__address">&lt;${escapeHtml(senderEmail)}&gt;</span>` : ''}
+          <span class="email__date">${escapeHtml(formatDate(email.date))}</span>
+        </div>
+        ${subjectRow}
+        <div class="email__row"><span class="email__label">${escapeHtml(t('To'))}:</span> <span class="email__recipients">${escapeHtml(recipientNames(email.to))}</span></div>
+        ${ccRow}
       </div>
-      <div class="body-xsmall email__date">${escapeHtml(formatDate(email.date))}</div>
     </div>
-    <div class="email__body">${renderMarkdown(email.body)}</div>
-    ${attachmentsHtml}
+    <div class="email__content">
+      <div class="email__body">${renderMarkdown(email.body)}</div>
+      ${attachmentsHtml}
+    </div>
   `;
   for (const btn of wrap.querySelectorAll('.email__attachment--preview')) {
     btn.addEventListener('click', () => {
@@ -831,35 +904,47 @@ function renderThread(threadId) {
     backToList();
     return;
   }
-  for (const email of thread.emails ?? []) {
-    els.readingPane.appendChild(renderEmail(email, learnerAddr));
+  const emails = thread.emails ?? [];
+  const isThread = emails.length > 1;
+  els.readingPane.classList.toggle('reading-pane--thread', isThread);
+  els.readingPane.classList.toggle('reading-pane--single', !isThread);
+
+  if (isThread) {
+    const head = document.createElement('div');
+    head.className = 'thread-head';
+    head.innerHTML = `${THREAD_ICON}<h2 class="thread-head__subject">${escapeHtml(thread.subject || '(no subject)')}</h2>`;
+    els.readingPane.appendChild(head);
+    if (!emails.some((email) => email.id && email.id === state.selectedEmailId)) {
+      state.selectedEmailId = emails[0]?.id ?? null;
+    }
   }
+  emails.forEach((email, index) => {
+    const card = renderEmail(email, learnerAddr, {
+      // A thread repeats the subject only on its first message.
+      showSubject: index === 0,
+      subject: thread.subject,
+    });
+    if (isThread) {
+      card.classList.add('email--card');
+      card.classList.toggle('is-selected', Boolean(email.id) && email.id === state.selectedEmailId);
+      card.addEventListener('click', () => selectEmail(email.id));
+    }
+    els.readingPane.appendChild(card);
+  });
   // Always at the end of the thread — never mid-history under a stale focus.
   const suggestions = renderSuggestedReplies(thread, replyTargetEmail(thread));
   if (suggestions) els.readingPane.appendChild(suggestions);
-  if (!state.replying) els.readingPane.appendChild(renderThreadActions());
-  else placeComposer();
+  if (state.replying) placeComposer();
   renderAssistantChips();
 }
 
-function renderThreadActions() {
-  const actions = document.createElement('div');
-  actions.className = 'thread-actions';
-
-  const reply = document.createElement('button');
-  reply.type = 'button';
-  reply.className = 'button button-tertiary button-small';
-  reply.textContent = t('Reply');
-  reply.addEventListener('click', () => startReply('reply'));
-
-  const replyAll = document.createElement('button');
-  replyAll.type = 'button';
-  replyAll.className = 'button button-tertiary button-small';
-  replyAll.textContent = t('Reply all');
-  replyAll.addEventListener('click', () => startReply('replyAll'));
-
-  actions.append(reply, replyAll);
-  return actions;
+// Visual selection inside a multi-message thread (no behavior attached).
+function selectEmail(emailId) {
+  if (!emailId || state.selectedEmailId === emailId) return;
+  state.selectedEmailId = emailId;
+  for (const card of els.readingPane.querySelectorAll('.email--card')) {
+    card.classList.toggle('is-selected', card.dataset.emailId === emailId);
+  }
 }
 
 /**
@@ -907,6 +992,7 @@ function selectThread(threadId) {
   state.view = 'thread';
   state.replying = null;
   state.activeThreadId = threadId;
+  state.selectedEmailId = null;
   renderShell();
 }
 
@@ -1022,11 +1108,20 @@ function backToList() {
 }
 
 function applyScenarioChrome() {
-  const title = state.config?.title || 'CosmoMail';
+  const title = state.config?.title || t('Mail');
   document.title = title;
   if (els.appTitle) els.appTitle.textContent = title;
   if (els.composeToLabel) els.composeToLabel.textContent = t('To');
   if (els.composeCcLabel) els.composeCcLabel.textContent = t('Cc');
+  if (els.composeSubjectLabel) els.composeSubjectLabel.textContent = t('Subject');
+  if (els.assistantInput) {
+    els.assistantInput.placeholder = t('Ask me anything...');
+    els.assistantInput.setAttribute('aria-label', t('Message the AI Assistant'));
+  }
+  if (els.assistantClearBtn) {
+    els.assistantClearBtn.setAttribute('aria-label', t('New conversation'));
+    els.assistantClearBtn.title = t('New conversation');
+  }
   if (els.assistantHint && state.config?.assistant?.initialMessage) {
     els.assistantHint.textContent = state.config.assistant.initialMessage;
   }
@@ -1161,6 +1256,8 @@ function initComposer() {
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);
+  els.replyBtn?.addEventListener('click', () => startReply('reply'));
+  els.replyAllBtn?.addEventListener('click', () => startReply('replyAll'));
   els.discardBtn?.addEventListener('click', cancelReply);
   els.composerMinimizeBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
@@ -1622,17 +1719,10 @@ function makeBubble(role, contentHtml) {
   const row = document.createElement('div');
   row.className = `assistant__row assistant__row--${isUser ? 'user' : 'ai'}`;
 
-  if (!isUser) {
-    const avatar = document.createElement('span');
-    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-    avatar.setAttribute('aria-hidden', 'true');
-    row.appendChild(avatar);
-  }
-
   const bubble = document.createElement('div');
   bubble.className = isUser
-    ? 'assistant__msg assistant__msg--user box non-interactive'
-    : 'assistant__msg assistant__msg--ai box non-interactive';
+    ? 'assistant__msg assistant__msg--user'
+    : 'assistant__msg assistant__msg--ai';
   bubble.innerHTML = contentHtml;
 
   if (isUser) {
@@ -1730,9 +1820,9 @@ function renderAssistant(liveMessages = []) {
   const hasAny = persisted.length > 0 || liveMessages.length > 0;
   if (!hasAny) {
     const hint = document.createElement('p');
-    hint.className = 'body-xsmall assistant__hint';
+    hint.className = 'assistant__hint';
     hint.textContent = state.config?.assistant?.initialMessage
-      || t('Ask Cosmo to help draft, summarize, or answer questions about this thread.');
+      || t('Ask the AI Assistant to help draft, summarize, or answer questions about this thread.');
     container.appendChild(hint);
     updateAssistantClearBtn();
     return;
@@ -1769,7 +1859,8 @@ function renderAssistant(liveMessages = []) {
     }
   }
 
-  container.scrollTop = container.scrollHeight;
+  const scroller = els.assistantContent || container;
+  scroller.scrollTop = scroller.scrollHeight;
   updateAssistantClearBtn();
   updateAssistantThinking();
 }
@@ -1885,8 +1976,8 @@ function renderAssistantChips() {
   for (const chip of chips) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'button button-tertiary button-xsmall assistant__chip';
-    btn.textContent = t(chip.label);
+    btn.className = 'assistant__chip';
+    btn.innerHTML = `${CHIP_ICON}<span class="assistant__chip-label">${escapeHtml(t(chip.label))}</span>`;
     btn.disabled = state.assistant.quickActionBusy
       || state.assistant.chat?.status === 'streaming';
     btn.addEventListener('click', () => void runQuickAction(chip.id));
@@ -1915,10 +2006,6 @@ function renderQuickResultPanel() {
   if (ranking) {
     const row = document.createElement('div');
     row.className = 'assistant__row assistant__row--ai';
-    const avatar = document.createElement('span');
-    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-    avatar.setAttribute('aria-hidden', 'true');
-    row.appendChild(avatar);
     const turn = document.createElement('div');
     turn.className = 'assistant__turn';
     const card = document.createElement('div');
@@ -1940,10 +2027,6 @@ function renderQuickResultPanel() {
   if (showDraft) {
     const row = document.createElement('div');
     row.className = 'assistant__row assistant__row--ai';
-    const avatar = document.createElement('span');
-    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-    avatar.setAttribute('aria-hidden', 'true');
-    row.appendChild(avatar);
     const turn = document.createElement('div');
     turn.className = 'assistant__turn';
     row.appendChild(turn);
@@ -2235,7 +2318,7 @@ function confirmReplaceDraft() {
       size: 'small',
       title: t('Replace current draft?'),
       content: `<p class="body-medium">${escapeHtml(
-        t("You're already writing an email. Replace it with Cosmo's draft?"),
+        t("You're already writing an email. Replace it with the AI Assistant's draft?"),
       )}</p>`,
       closeOnOverlayClick: false,
       footerButtons: [
@@ -2396,7 +2479,8 @@ function setAssistantEnabled(enabled) {
 }
 
 const SPLIT_STORAGE_KEY = 'cosmoMail.splitPercent';
-const SPLIT_DEFAULT_PERCENT = 72;
+// Figma: ~341px assistant column beside the mail column at a 1224px viewport.
+const SPLIT_DEFAULT_PERCENT = 66.5;
 
 function readStoredSplitPercent() {
   try {
@@ -2429,7 +2513,7 @@ function initMailSplit() {
     initialSplit: readStoredSplitPercent(),
     minLeft: 40,
     minRight: 18,
-    dividerLabel: t('Resize Cosmo panel'),
+    dividerLabel: t('Resize AI Assistant panel'),
     onChange: (percent) => {
       try {
         sessionStorage.setItem(SPLIT_STORAGE_KEY, String(Math.round(percent)));
@@ -2594,7 +2678,7 @@ async function boot() {
     await initAssistant();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);
-    showBootError('Could not load CosmoMail. Is the server running?');
+    showBootError('Could not load Mail. Is the server running?');
   }
 }
 

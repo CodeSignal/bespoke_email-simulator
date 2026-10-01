@@ -1,6 +1,6 @@
 {
   "id": "software-sales-prospecting",
-  "title": "CosmoMail",
+  "title": "Mail",
   "brief": "You are a sales representative at BestCRM. Your manager, Alex Rivera, emailed you a short list of referral leads. Discuss who to prioritize — the contact with the most pressing need, the fastest path to value from BestCRM, and enough influence to buy a CRM. Once you and Alex align, compose a new email to that prospect asking for a meeting. Keep it concise and tie BestCRM to their priorities. You can only run a real sequence on one contact.",
   "primarySkill": "both",
   "scenarioType": "reply_chain",

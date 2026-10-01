@@ -1,0 +1,91 @@
+/*
+ * Mail — design token extensions.
+ *
+ * Tokens used by the Figma "Learn Interactive Practices" mail designs that the
+ * design-system submodule does not ship yet (or ships with an older value).
+ * Names follow the Figma variable path mechanically
+ * (Colors/Border/Subtle → --Colors-Border-Subtle) so they can be deleted here
+ * once the design system catches up. Loaded after the design system and before
+ * app.css.
+ */
+
+:root {
+  /* Text (Figma values supersede the older design-system ones) */
+  --Colors-Text-Body-Strong: #0b1223;
+  --Colors-Text-Body-Default: #2e3856;
+  --Colors-Text-Body-Medium: #4f5c82;
+  --Colors-Text-Body-Light: #5b688f;
+  --Colors-Text-Body-Lighter: #67718e;
+  --Colors-Text-Black: #000000;
+
+  /* Borders */
+  --Colors-Border-Subtle: #d1d7eb8f;
+  --Colors-Border-Medium: #97a1bf85;
+  --Colors-Border-Primary-Soft: #377dff75;
+
+  /* Controls */
+  --Colors-Control-Neutral-Subtle: #d1d7eb33;
+  --Colors-Control-Neutral-Strong: #68759ccc;
+  --Colors-Control-Primary-Subtle: #90b7ff1a;
+  --Colors-Control-Input-Default: #ffffff;
+
+  /* Icons */
+  --Colors-Icon-Neutral-Default: #3c4767b8;
+  --Colors-Icon-Primary-Default: #377dff;
+  --Colors-Icon-Illustrative-Primary-Base: #90b7ff33;
+  --Colors-Icon-Switch-Off: #c7cbd6;
+
+  /* Surfaces */
+  --Colors-Surface-App-Base: #ffffff;
+  --Colors-Surface-Container-Subtle: #f8f9fc;
+  --Colors-Surface-Container-Highest: #ffffff;
+
+  /* Emphasis */
+  --Colors-Emphasis-Shadow-Soft: #3c476729;
+
+  /* Spacing / radius steps missing from spacing.css */
+  --UI-Spacing-spacing-mxxs: 10px;
+  --UI-Radius-radius-ms: 10px;
+
+  /* Component sizes from the Figma components */
+  --Avatar-Size: 48px;
+  --Avatar-Border-Radius: 12px;
+  --Icon-Box-Size: 24px;
+  --Icon-Box-Border-Radius: 8px;
+  --Button-Size: 32px;
+  --Button-Radius: 6px;
+}
+
+/* The Figma file is light-only; map the new tokens onto design-system dark
+   equivalents so dark mode stays legible. Text tokens fall back to the
+   design-system dark values. */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --Colors-Text-Body-Strong: var(--Colors-Base-Neutral-00);
+    --Colors-Text-Body-Default: var(--Colors-Base-Neutral-450);
+    --Colors-Text-Body-Medium: var(--Colors-Base-Neutral-650);
+    --Colors-Text-Body-Light: var(--Colors-Base-Neutral-650);
+    --Colors-Text-Body-Lighter: var(--Colors-Base-Neutral-700);
+    --Colors-Text-Black: var(--Colors-Base-Neutral-00);
+
+    --Colors-Border-Subtle: var(--Colors-Stroke-Default);
+    --Colors-Border-Medium: var(--Colors-Stroke-Strong);
+    --Colors-Border-Primary-Soft: var(--Colors-Stroke-Primary-Medium);
+
+    --Colors-Control-Neutral-Subtle: var(--Colors-Backgrounds-Main-Medium);
+    --Colors-Control-Neutral-Strong: var(--Colors-Stroke-Strong);
+    --Colors-Control-Primary-Subtle: rgba(144, 183, 255, 0.12);
+    --Colors-Control-Input-Default: var(--Colors-Backgrounds-Main-Top);
+
+    --Colors-Icon-Neutral-Default: var(--Colors-Icon-Medium);
+    --Colors-Icon-Primary-Default: var(--Colors-Icon-Primary);
+    --Colors-Icon-Illustrative-Primary-Base: rgba(144, 183, 255, 0.2);
+    --Colors-Icon-Switch-Off: var(--Colors-Stroke-Strong);
+
+    --Colors-Surface-App-Base: var(--Colors-Backgrounds-Main-Default);
+    --Colors-Surface-Container-Subtle: var(--Colors-Backgrounds-Main-Light);
+    --Colors-Surface-Container-Highest: var(--Colors-Backgrounds-Main-Top);
+
+    --Colors-Emphasis-Shadow-Soft: rgba(0, 0, 0, 0.4);
+  }
+}

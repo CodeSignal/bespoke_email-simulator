@@ -1,6 +1,6 @@
 {
   "id": "reply-to-vendor-negotiation",
-  "title": "CosmoMail",
+  "title": "Mail",
   "brief": "Reply to Dana's latest email. Push back on the $48,000 price and propose a 24-month term in exchange for a discount. Keep it firm but friendly.",
   "primarySkill": "both",
   "scenarioType": "reply_chain",
