@@ -1007,10 +1007,6 @@ body {
   flex: 1 1 auto;
 }
 
-.composer.is-minimized .composer__panel {
-  display: none;
-}
-
 /* Reply: at the end of the conversation, pinned to the pane bottom. */
 .composer.is-inline {
   position: sticky;
@@ -1031,11 +1027,7 @@ body {
   overflow-y: auto;
 }
 
-.composer.is-minimized {
-  cursor: pointer;
-}
-
-/* Head: icon · title · collapse */
+/* Head: icon · title · close */
 .composer__head {
   display: flex;
   align-items: center;
@@ -1067,7 +1059,7 @@ body {
   color: var(--Colors-Text-Black);
 }
 
-/* Figma "Button Icon" 26px, no fill, chevron-down 14px */
+/* Figma "Button Icon" 26px, no fill, 14px icon */
 .icon-button--ghost {
   width: 26px;
   height: 26px;
@@ -1076,14 +1068,6 @@ body {
 
 .icon-button--ghost:hover:not(:disabled) {
   background: var(--Colors-Control-Neutral-Subtle);
-}
-
-.composer__collapse svg {
-  transition: transform 0.15s ease;
-}
-
-.composer.is-minimized .composer__collapse svg {
-  transform: rotate(180deg);
 }
 
 /* Header rows: 42px, 6px side padding; To / Cc carry a bottom hairline */

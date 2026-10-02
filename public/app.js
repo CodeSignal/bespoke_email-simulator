@@ -115,7 +115,6 @@ const state = {
   activeThreadId: null,
   view: 'list', // list | thread
   composingNew: false,
-  composeMinimized: false, // composer panel collapsed to its head
   replying: null, // null | 'reply' | 'replyAll'
   selectedEmailId: null, // highlighted message in a multi-message thread
   replyToEmailId: null, // email a per-message reply button targeted
@@ -177,7 +176,7 @@ const els = {
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
   composerIcon: document.getElementById('composerIcon'),
-  composerMinimizeBtn: document.getElementById('composerMinimizeBtn'),
+  composerCloseBtn: document.getElementById('composerCloseBtn'),
   assistantHint: document.getElementById('assistantHint'),
   composeToLabel: document.getElementById('composeToLabel'),
   composeCcLabel: document.getElementById('composeCcLabel'),
@@ -780,7 +779,6 @@ function placeComposer() {
   const inlineReply = !newMessage && state.view === 'thread' && Boolean(state.replying);
   els.composer.classList.toggle('is-new', newMessage);
   els.composer.classList.toggle('is-inline', inlineReply);
-  els.composer.classList.toggle('is-minimized', (newMessage || inlineReply) && state.composeMinimized);
 
   if (inlineReply && els.readingPane && !els.readingPane.hidden) {
     els.readingPane.appendChild(els.composer);
@@ -823,11 +821,9 @@ function applyView() {
   if (els.composerTitle) els.composerTitle.textContent = composeOverlayTitle();
   if (els.composerIcon) els.composerIcon.innerHTML = overlayCompose ? COMPOSER_NEW_ICON : COMPOSER_REPLY_ICON;
   if (els.composer) els.composer.setAttribute('aria-label', composeOverlayTitle());
-  if (els.composerMinimizeBtn) {
-    const minimized = showComposer && state.composeMinimized;
-    els.composerMinimizeBtn.setAttribute('aria-label', minimized ? t('Restore') : t('Minimize'));
-    els.composerMinimizeBtn.setAttribute('aria-expanded', minimized ? 'false' : 'true');
-    els.composerMinimizeBtn.title = minimized ? t('Restore') : t('Minimize');
+  if (els.composerCloseBtn) {
+    els.composerCloseBtn.setAttribute('aria-label', t('Close'));
+    els.composerCloseBtn.title = t('Close');
   }
   if (els.discardBtn) {
     els.discardBtn.hidden = !showComposer;
@@ -1162,7 +1158,6 @@ function selectThread(threadId) {
 function startReply(mode, emailId = null) {
   state.view = 'thread';
   state.composingNew = false;
-  state.composeMinimized = false;
   state.replying = mode;
   state.replyToEmailId = emailId;
   if (emailId) state.selectedEmailId = emailId;
@@ -1189,14 +1184,12 @@ function cancelReply() {
 
 function startCompose({ blank = true } = {}) {
   if (state.composingNew) {
-    state.composeMinimized = false;
     applyView();
     els.composeToInput?.focus();
     return;
   }
   const wasReplying = Boolean(state.replying);
   state.composingNew = true;
-  state.composeMinimized = false;
   state.replying = null;
   if (state.view === 'compose') state.view = 'list';
   if (blank) {
@@ -1216,16 +1209,22 @@ function closeComposeOverlay() {
   clearTimeout(state.draftSaveTimer);
   void saveDraftNow();
   state.composingNew = false;
-  state.composeMinimized = false;
   applyView();
 }
 
-function toggleComposeMinimized() {
-  if (!state.composingNew && !state.replying) return;
-  state.composeMinimized = !state.composeMinimized;
+// Close (×): hide the panel but keep what was written. New messages keep
+// their draft as before; a reply's draft is restored when it's reopened.
+function closeComposer() {
   closeRecipientMenus();
-  applyView();
-  if (!state.composeMinimized) state.editor?.commands.focus();
+  if (state.composingNew) {
+    closeComposeOverlay();
+    return;
+  }
+  if (!state.replying) return;
+  clearTimeout(state.draftSaveTimer);
+  void saveDraftNow();
+  state.replying = null;
+  renderShell();
 }
 
 // Cancel: a reply is discarded; a new message closes and keeps its draft.
@@ -1405,14 +1404,7 @@ function initComposer() {
   els.backBtn?.addEventListener('click', backToList);
   els.toolbarComposeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.discardBtn?.addEventListener('click', cancelComposer);
-  els.composerMinimizeBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleComposeMinimized();
-  });
-  // A collapsed panel reopens from anywhere on its head.
-  els.composerChrome?.addEventListener('click', () => {
-    if (state.composeMinimized) toggleComposeMinimized();
-  });
+  els.composerCloseBtn?.addEventListener('click', closeComposer);
   updateSendEnabled();
 }
 
@@ -1664,8 +1656,7 @@ async function sendEmail() {
 
     replaceThread(thread);
     state.composingNew = false;
-    state.composeMinimized = false;
-      state.replying = null;
+        state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
@@ -1797,7 +1788,7 @@ function assistantMailboxContext() {
     learnerEmail: state.config?.learner?.email || 'you@example.com',
     viewing: {
       threadId: state.view === 'thread' ? state.activeThreadId : null,
-      composingNew: state.composingNew && !state.composeMinimized,
+      composingNew: state.composingNew,
       mailbox: state.activeMailbox,
     },
     previousHash: state.assistant.lastContextHash,
@@ -2372,7 +2363,7 @@ async function runQuickAction(action, detail = '') {
     learnerEmail: learnerEmail(),
     viewing: {
       threadId: sourceThreadId,
-      composingNew: state.composingNew && !state.composeMinimized,
+      composingNew: state.composingNew,
       mailbox: state.activeMailbox,
     },
     previousHash: null, // always send full mailbox for one-shot sessions
@@ -2647,7 +2638,6 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
   }
 
   if (state.composingNew) {
-    state.composeMinimized = false;
     applyView();
   } else if (state.view === 'thread' && state.activeThreadId) {
     if (!state.replying) startReply('reply');
