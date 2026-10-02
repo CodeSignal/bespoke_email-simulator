@@ -43,6 +43,7 @@
   --Colors-Surface-Container-Highest: #ffffff;
 
   /* Emphasis */
+  --Colors-Emphasis-Shadow-Subtle: #3c476714; /* Grey/1000 @ 8% */
   --Colors-Emphasis-Shadow-Soft: #3c476729;
 
   /* Spacing / radius steps missing from spacing.css */
@@ -90,6 +91,7 @@
     --Colors-Surface-Container-Subtle: var(--Colors-Backgrounds-Main-Light);
     --Colors-Surface-Container-Highest: var(--Colors-Backgrounds-Main-Top);
 
+    --Colors-Emphasis-Shadow-Subtle: rgba(4, 8, 19, 0.3); /* Grey/1550 @ 30% */
     --Colors-Emphasis-Shadow-Soft: rgba(0, 0, 0, 0.4);
   }
 }
