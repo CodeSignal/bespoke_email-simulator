@@ -2115,3 +2115,11 @@ body {
   flex: 0 0 auto;
   align-self: flex-start;
 }
+
+/* Dark mode trial: mail column and AI Assistant card on library Grey/1250. */
+@media (prefers-color-scheme: dark) {
+  .mail-main,
+  .assistant__card {
+    background: var(--Colors-Base-Grey-1250);
+  }
+}

@@ -70,6 +70,8 @@
     --Colors-Text-Body-Light: var(--Colors-Base-Neutral-650);
     --Colors-Text-Body-Lighter: var(--Colors-Base-Neutral-700);
     --Colors-Text-Black: var(--Colors-Base-Neutral-00);
+    /* Library base step (CodeSignal Design System › Base/Grey/1250) */
+    --Colors-Base-Grey-1250: #1c253f;
 
     --Colors-Border-Subtle: var(--Colors-Stroke-Default);
     --Colors-Border-Medium: var(--Colors-Stroke-Strong);
