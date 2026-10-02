@@ -1902,14 +1902,21 @@ body {
   gap: var(--UI-Spacing-spacing-s);
 }
 
-/* Quick results (triage ranking, rewrite/shorten drafts) read as plain
-   assistant text: no card fill, border or inner padding. */
+/* Quick results (triage ranking, rewrite/shorten drafts): filled card,
+   16px inside, 8px between the content and the actions row. */
 .assistant__quick-result .assistant__triage,
 .assistant__quick-result .assistant__draft {
-  padding: 0;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-ms);
   border: none;
-  border-radius: 0;
-  background: none;
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Control-Neutral-Subtle);
+}
+
+.assistant__draft-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
 }
 
 /* Bold in assistant output is Work Sans Medium, not Bold. */

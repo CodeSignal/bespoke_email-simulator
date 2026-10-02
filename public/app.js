@@ -1886,7 +1886,8 @@ function appendDraftField(list, label, value) {
   list.appendChild(dd);
 }
 
-function appendDraftCard(row, draft, { streaming = false } = {}) {
+// actionsAtBottom: quick results put Insert in a row under the content.
+function appendDraftCard(row, draft, { streaming = false, actionsAtBottom = false } = {}) {
   const turn = row.querySelector('.assistant__turn');
   const bubble = row.querySelector('.assistant__msg');
   if (!turn) return;
@@ -1901,16 +1902,17 @@ function appendDraftCard(row, draft, { streaming = false } = {}) {
   label.className = 'body-xsmall assistant__draft-label';
   label.textContent = streaming ? t('Drafting email…') : t('Draft');
   toolbar.appendChild(label);
+  let insertBtn = null;
   if (!streaming) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'button button-text-primary button-xsmall assistant__insert';
-    btn.textContent = t('Insert');
-    btn.setAttribute('aria-label', t('Insert into composer'));
-    btn.addEventListener('click', () => {
+    insertBtn = document.createElement('button');
+    insertBtn.type = 'button';
+    insertBtn.className = 'button button-text-primary button-xsmall assistant__insert';
+    insertBtn.textContent = t('Insert');
+    insertBtn.setAttribute('aria-label', t('Insert into composer'));
+    insertBtn.addEventListener('click', () => {
       void insertProposedDraft(draft, { source: draft.source || PROPOSE_DRAFT_TOOL });
     });
-    toolbar.appendChild(btn);
+    if (!actionsAtBottom) toolbar.appendChild(insertBtn);
   }
   card.appendChild(toolbar);
 
@@ -1926,6 +1928,13 @@ function appendDraftCard(row, draft, { streaming = false } = {}) {
     bodyEl.className = 'assistant__draft-body body-small';
     bodyEl.innerHTML = renderMarkdown(draft.body);
     card.appendChild(bodyEl);
+  }
+
+  if (insertBtn && actionsAtBottom) {
+    const actions = document.createElement('div');
+    actions.className = 'assistant__draft-actions';
+    actions.appendChild(insertBtn);
+    card.appendChild(actions);
   }
 
   turn.appendChild(card);
@@ -2250,7 +2259,7 @@ function renderQuickResultPanel() {
     turn.className = 'assistant__turn';
     row.appendChild(turn);
     host.appendChild(row);
-    appendDraftCard(row, draft);
+    appendDraftCard(row, draft, { actionsAtBottom: true });
   }
 }
 
