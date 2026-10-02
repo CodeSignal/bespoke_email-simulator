@@ -89,7 +89,10 @@
 
     --Colors-Surface-App-Base: var(--Colors-Backgrounds-Main-Default);
     --Colors-Surface-Container-Subtle: var(--Colors-Backgrounds-Main-Light);
-    --Colors-Surface-Container-Highest: var(--Colors-Backgrounds-Main-Top);
+    /* Library dark is Grey/1300 #192139, but this app's dark ground still comes
+       from the bespoke design system (#1D2740), which is lighter. Use the same
+       elevated grey as design-system boxes (toasts) so panels read as raised. */
+    --Colors-Surface-Container-Highest: var(--Colors-Box-Background);
 
     --Colors-Emphasis-Shadow-Subtle: rgba(4, 8, 19, 0.3); /* Grey/1550 @ 30% */
     --Colors-Emphasis-Shadow-Soft: rgba(4, 8, 19, 0.42); /* Grey/1550 @ 42% (library) */
