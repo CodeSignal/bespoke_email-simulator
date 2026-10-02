@@ -1895,6 +1895,27 @@ body {
   gap: var(--UI-Spacing-spacing-s);
 }
 
+/* Quick results (triage ranking, rewrite/shorten drafts) read as plain
+   assistant text: no card fill, border or inner padding. */
+.assistant__quick-result .assistant__triage,
+.assistant__quick-result .assistant__draft {
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: none;
+}
+
+/* Bold in assistant output is Work Sans Medium, not Bold. */
+.assistant__msg strong,
+.assistant__msg b,
+.assistant__draft strong,
+.assistant__draft b,
+.assistant__quick-result strong,
+.assistant__quick-result b {
+  font-family: 'Work Sans', var(--body-family), sans-serif;
+  font-weight: 500;
+}
+
 .assistant__quick-result[hidden],
 .assistant__chips[hidden] {
   display: none;
