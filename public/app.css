@@ -1086,6 +1086,7 @@ body {
 
 .composer__field--recipients {
   border-bottom: 1px solid var(--Colors-Border-Subtle);
+  cursor: text;
 }
 
 .composer__field--subject {

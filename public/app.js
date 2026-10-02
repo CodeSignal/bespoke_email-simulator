@@ -647,11 +647,14 @@ function initRecipientPickers() {
       input.value = '';
       renderRecipientPickers();
     });
-    // Clicking anywhere on the row puts the caret after the last entry.
-    picker?.addEventListener('mousedown', (event) => {
+    // Clicking anywhere on the whole 42px row (label, padding, entries, empty
+    // space) puts the caret after the last entry.
+    const row = picker?.closest('.composer__field') || picker;
+    row?.addEventListener('mousedown', (event) => {
       if (event.target === input || event.target.closest('.recipient-picker__remove, .recipient-picker__option, .recipient-picker__menu')) return;
       event.preventDefault();
-      input.focus();
+      if (document.activeElement === input) openRecipientMenu(field);
+      else input.focus();
       input.setSelectionRange(input.value.length, input.value.length);
     });
   }
