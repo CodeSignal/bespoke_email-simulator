@@ -21,6 +21,8 @@ import {
   buildReplyHeaders,
   threadListCorrespondent,
   latestInboundEmail,
+  threadIsUnread,
+  unreadEmailKeys,
 } from '../lib/mailboxes.js';
 import {
   availableCharacters,
@@ -667,6 +669,29 @@ function initRecipientPickers() {
   });
 }
 
+function readEmailIdSet() {
+  return new Set(state.session?.readEmailIds ?? []);
+}
+
+function isThreadUnread(thread) {
+  return threadIsUnread(thread, readEmailIdSet(), learnerEmail());
+}
+
+// Opening a conversation reads all of its received mail. Persisted on the
+// session so the inbox markers survive a reload.
+function markThreadRead(thread) {
+  const keys = unreadEmailKeys(thread, readEmailIdSet(), learnerEmail());
+  if (!keys.length || !state.session) return;
+  state.session.readEmailIds = [...(state.session.readEmailIds ?? []), ...keys];
+  renderMailboxes();
+  if (!state.session.sessionId) return;
+  fetch('/api/session/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: state.session.sessionId, readEmailIds: keys }),
+  }).catch((err) => console.error('[Mail] read state save failed:', err));
+}
+
 function visibleThreads() {
   return threadsInMailbox(state.session?.threads ?? [], state.activeMailbox, learnerEmail());
 }
@@ -824,8 +849,10 @@ function renderMailboxes() {
     btn.dataset.mailbox = box.id;
     if (box.id === state.activeMailbox) btn.setAttribute('aria-current', 'true');
     const count = counts[box.id] ?? 0;
-    // Figma: the inbox carries a badge marker while it has mail.
-    const marker = box.id === 'inbox' && count ? '<span class="rail__mailbox-marker" aria-hidden="true"></span>' : '';
+    // Figma: the inbox carries a badge marker while it holds new (unread) mail.
+    const hasNew = box.id === 'inbox' && threadsInMailbox(state.session?.threads ?? [], 'inbox', learnerEmail())
+      .some((thread) => isThreadUnread(thread));
+    const marker = hasNew ? `<span class="rail__mailbox-marker" role="img" aria-label="${escapeHtml(t('New messages'))}"></span>` : '';
     btn.innerHTML = `
       <span class="rail__mailbox-icon">${MAILBOX_ICONS[box.id] || ''}</span>
       <span class="rail__mailbox-label">${escapeHtml(t(box.label))}</span>
@@ -855,9 +882,13 @@ function renderMailList() {
     return;
   }
 
+  // Figma "Inbox Item": [marker] + container (row, then its own hrule).
   for (const thread of threads) {
     const last = thread.emails?.[thread.emails.length - 1];
     const snippet = threadSnippet(thread);
+    const unread = isThreadUnread(thread);
+    const item = document.createElement('div');
+    item.className = 'mail-item' + (unread ? ' is-unread' : '');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mail-row';
@@ -870,13 +901,17 @@ function renderMailList() {
         <span class="mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
       </span>
       <span class="mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
+      ${unread ? `<span class="visually-hidden">, ${escapeHtml(t('New'))}</span>` : ''}
     `;
     btn.addEventListener('click', () => selectThread(thread.id));
-    els.threadList.appendChild(btn);
-    // Every row, including the last (or only) one, gets a divider below it.
+    const container = document.createElement('div');
+    container.className = 'mail-item__container';
     const rule = document.createElement('hr');
     rule.className = 'mail-list__rule';
-    els.threadList.appendChild(rule);
+    container.append(btn, rule);
+    if (unread) item.insertAdjacentHTML('beforeend', '<span class="mail-item__marker" aria-hidden="true"></span>');
+    item.appendChild(container);
+    els.threadList.appendChild(item);
   }
 }
 
@@ -969,6 +1004,7 @@ function renderThread(threadId) {
     backToList();
     return;
   }
+  markThreadRead(thread);
   const emails = thread.emails ?? [];
   const isThread = emails.length > 1;
   els.readingPane.classList.toggle('reading-pane--thread', isThread);

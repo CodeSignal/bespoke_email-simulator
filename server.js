@@ -753,7 +753,7 @@ app.post('/api/character/complete', async (req, res) => {
 
 // POST /api/session/save — persist threads / drafts / assistant messages / events.
 app.post('/api/session/save', async (req, res) => {
-  const { sessionId, threads, drafts, assistantMessages, events } = req.body;
+  const { sessionId, threads, drafts, assistantMessages, events, readEmailIds } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
   try {
     const record = await updateSessionById(sessionId, (fresh) => {
@@ -761,6 +761,12 @@ app.post('/api/session/save', async (req, res) => {
       if (Array.isArray(drafts)) fresh.drafts = drafts;
       if (Array.isArray(assistantMessages)) fresh.assistant_messages = assistantMessages;
       if (Array.isArray(events)) fresh.events = appendSessionEvents(fresh.events, events);
+      // Read state only grows (opening mail never un-reads it), so merge.
+      if (Array.isArray(readEmailIds)) {
+        const ids = new Set(fresh.read_email_ids ?? []);
+        for (const id of readEmailIds) if (typeof id === 'string' && id) ids.add(id);
+        fresh.read_email_ids = [...ids];
+      }
     });
     if (!record) return res.status(404).json({ error: 'Session not found' });
     res.json({ ok: true });
