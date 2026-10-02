@@ -1,0 +1,60 @@
+/*
+ * Mail — design token extensions.
+ *
+ * The design-system submodule now ships the CodeSignal Design System token
+ * families (Text, Surface, Border, Control, Emphasis, Alpha) in light and
+ * dark. This file only adds what it still lacks, plus the few values where the
+ * Figma "Learn Interactive Practices" mail designs need something different.
+ * Names follow the Figma variable path (Colors/Icon/Neutral/Strong →
+ * --Colors-Icon-Neutral-Strong). Loaded after the design system, before app.css.
+ */
+
+:root {
+  /* Figma mail frames sit on white (library Surface/App/Base is #f4f5fa). */
+  --Colors-Surface-App-Base: #ffffff;
+
+  /* Library: Alpha/Primary/Subtle = Primary/300 @ 10% in both modes
+     (the design system currently ships a different value). */
+  --Colors-Control-Primary-Subtle: #90b7ff1a;
+
+  /* Headline black used by Figma titles */
+  --Colors-Text-Black: #000000;
+
+  /* Icons (not in the design system yet) */
+  --Colors-Icon-Neutral-Default: #3c4767b8;
+  /* Library variable: Base/Grey/1200 (#212a45) at 74% opacity */
+  --Colors-Icon-Neutral-Strong: #212a45bd;
+  --Colors-Icon-Primary-Default: #377dff;
+  --Colors-Icon-Illustrative-Primary-Base: #90b7ff33;
+  --Colors-Icon-Switch-Off: #c7cbd6;
+
+  /* Inputs (design system name: --Colors-Control-Input) */
+  --Colors-Control-Input-Default: var(--Colors-Control-Input);
+
+  /* Spacing / radius steps missing from spacing.css */
+  --UI-Spacing-spacing-mxxs: 10px;
+  --UI-Radius-radius-ms: 10px;
+
+  /* Component sizes from the Figma components */
+  --Avatar-Size: 48px;
+  --Avatar-Border-Radius: 12px;
+  --Icon-Box-Size: 24px;
+  --Icon-Box-Border-Radius: 8px;
+  --Button-Size: 32px;
+  --Button-Radius: 6px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* White ground is light-only; follow the design system's dark ground. */
+    --Colors-Surface-App-Base: var(--Colors-Backgrounds-Main-Default);
+    --Colors-Text-Black: var(--Colors-Base-Neutral-00);
+
+    --Colors-Icon-Neutral-Default: var(--Colors-Icon-Default);
+    /* Library dark: Base/Grey/500 (#adb6d2) at 85% opacity */
+    --Colors-Icon-Neutral-Strong: #adb6d2d9;
+    --Colors-Icon-Primary-Default: var(--Colors-Icon-Primary);
+    --Colors-Icon-Illustrative-Primary-Base: rgba(144, 183, 255, 0.2);
+    --Colors-Icon-Switch-Off: var(--Colors-Border-Medium);
+  }
+}

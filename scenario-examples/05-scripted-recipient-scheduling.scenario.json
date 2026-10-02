@@ -1,6 +1,6 @@
 {
   "id": "interview-scheduling",
-  "title": "CosmoMail",
+  "title": "Mail",
   "brief": "You are a recruiter at Northwind. Reply to Jordan, who passed the technical screen and is asking about next steps. Lay out the process and propose scheduling the final panel. Jordan will respond — read carefully and keep the thread moving to a booked slot.",
   "primarySkill": "writing",
   "scenarioType": "reply_chain",

@@ -1,6 +1,6 @@
 {
   "id": "support-damaged-order",
-  "title": "CosmoMail",
+  "title": "Mail",
   "brief": "You are a customer support agent at BrightGoods. Reply to Marcus, who received a damaged espresso machine. De-escalate, apologize, and resolve his issue. He may reply — keep working the thread until it's resolved.",
   "primarySkill": "both",
   "scenarioType": "reply_chain",

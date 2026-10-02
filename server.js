@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
+import { watch as watchFiles } from 'fs';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
@@ -119,7 +120,49 @@ const CHARACTER_AGENT_ID =
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json({ limit: '5mb' }));
 app.use('/design-system', express.static(path.join(__dirname, 'design-system')));
+
+// Dev-only live reload (`npm run dev` sets LIVE_RELOAD=1): the page listens on
+// /__livereload and swaps stylesheets on CSS edits, reloads on anything else.
+if (process.env.LIVE_RELOAD === '1') {
+  const clients = new Set();
+  let timer = null;
+  let pending = new Set();
+  const notify = (file) => {
+    pending.add(file);
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const kind = [...pending].every((f) => f.endsWith('.css')) ? 'css' : 'reload';
+      pending = new Set();
+      for (const res of clients) res.write(`data: ${kind}\n\n`);
+    }, 120);
+  };
+  for (const dir of ['public', 'design-system']) {
+    try {
+      watchFiles(path.join(__dirname, dir), { recursive: true }, (_event, file) => {
+        if (file && /\.(css|html|js|svg|png)$/.test(file)) notify(String(file));
+      });
+    } catch (err) {
+      console.warn(`[live-reload] cannot watch ${dir}:`, err.message);
+    }
+  }
+  app.get('/__livereload', (req, res) => {
+    res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    res.flushHeaders();
+    res.write(': connected\n\n');
+    clients.add(res);
+    req.on('close', () => clients.delete(res));
+  });
+  console.log('[live-reload] watching public/ and design-system/');
+} else {
+  // Outside `npm run dev`, answer the page's probe quietly (204 ends the
+  // EventSource without a console 404).
+  app.get('/__livereload', (_req, res) => res.status(204).end());
+}
 app.use(express.static(path.join(__dirname, 'public')));
+// Rive runtime WASM for the AI Assistant thinking animation (thinking.riv).
+app.get('/vendor/rive.wasm', (_req, res) => {
+  res.type('application/wasm').sendFile(path.join(__dirname, 'node_modules/@rive-app/canvas/rive.wasm'));
+});
 
 // ── Health ────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
@@ -753,7 +796,7 @@ app.post('/api/character/complete', async (req, res) => {
 
 // POST /api/session/save — persist threads / drafts / assistant messages / events.
 app.post('/api/session/save', async (req, res) => {
-  const { sessionId, threads, drafts, assistantMessages, events } = req.body;
+  const { sessionId, threads, drafts, assistantMessages, events, readEmailIds } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
   try {
     const record = await updateSessionById(sessionId, (fresh) => {
@@ -761,6 +804,12 @@ app.post('/api/session/save', async (req, res) => {
       if (Array.isArray(drafts)) fresh.drafts = drafts;
       if (Array.isArray(assistantMessages)) fresh.assistant_messages = assistantMessages;
       if (Array.isArray(events)) fresh.events = appendSessionEvents(fresh.events, events);
+      // Read state only grows (opening mail never un-reads it), so merge.
+      if (Array.isArray(readEmailIds)) {
+        const ids = new Set(fresh.read_email_ids ?? []);
+        for (const id of readEmailIds) if (typeof id === 'string' && id) ids.add(id);
+        fresh.read_email_ids = [...ids];
+      }
     });
     if (!record) return res.status(404).json({ error: 'Session not found' });
     res.json({ ok: true });
