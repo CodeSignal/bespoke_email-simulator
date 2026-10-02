@@ -2057,7 +2057,7 @@ body {
 .mail-toast.box.card:hover,
 .mail-toast.box.card:focus {
   border-radius: var(--UI-Radius-radius-s);
-  box-shadow: 0 3px 12px 0 var(--Colors-Emphasis-Shadow-Subtle);
+  box-shadow: 0 3px 12px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
 .mail-toast.box {
