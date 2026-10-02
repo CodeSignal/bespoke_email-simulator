@@ -1885,6 +1885,16 @@ body {
   outline-offset: 2px;
 }
 
+/* "Replace current draft?" confirm */
+.replace-draft-dialog .modal-header {
+  height: auto;
+}
+
+.replace-draft-dialog .modal-content {
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
 .attachment-preview-modal__body {
   margin: 0;
   white-space: pre-wrap;

@@ -2574,6 +2574,7 @@ function confirmReplaceDraft() {
       ],
       onClose: () => finish(false),
     });
+    modal.dialog.classList.add('replace-draft-dialog');
     modal.open();
   });
 }
