@@ -186,5 +186,23 @@
   </div>
 
   <script type="module" src="/app.bundle.js"></script>
+  <!-- Dev live reload: the endpoint only exists under `npm run dev`. -->
+  <script>
+    (function () {
+      if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname) || !window.EventSource) return;
+      var source = new EventSource('/__livereload');
+      source.onmessage = function (event) {
+        if (event.data !== 'css') return location.reload();
+        document.querySelectorAll('link[rel="stylesheet"]').forEach(function (link) {
+          var url = new URL(link.href);
+          if (url.origin !== location.origin) return;
+          url.searchParams.set('v', Date.now());
+          link.href = url.toString();
+        });
+      };
+      // No endpoint (not `npm run dev`): stop retrying.
+      source.onerror = function () { if (source.readyState === EventSource.CLOSED) source.close(); };
+    })();
+  </script>
 </body>
 </html>

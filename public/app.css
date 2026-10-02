@@ -346,7 +346,7 @@ body {
   align-items: center;
   gap: var(--UI-Spacing-spacing-xs);
   height: 64px;
-  padding: 0 var(--UI-Spacing-spacing-ml);
+  padding: 0 var(--UI-Spacing-spacing-xl);
   flex: 0 0 auto;
 }
 
@@ -425,6 +425,7 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 0 var(--UI-Spacing-spacing-xs);
 }
 
 .mail-list__rows {

@@ -2,6 +2,7 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import fs from 'fs/promises';
+import { watch as watchFiles } from 'fs';
 import { randomUUID } from 'crypto';
 import { fileURLToPath } from 'url';
 import { OctavusClient, toSSEStream } from '@octavus/server-sdk';
@@ -119,6 +120,40 @@ const CHARACTER_AGENT_ID =
 // ── Middleware ────────────────────────────────────────────────
 app.use(express.json({ limit: '5mb' }));
 app.use('/design-system', express.static(path.join(__dirname, 'design-system')));
+
+// Dev-only live reload (`npm run dev` sets LIVE_RELOAD=1): the page listens on
+// /__livereload and swaps stylesheets on CSS edits, reloads on anything else.
+if (process.env.LIVE_RELOAD === '1') {
+  const clients = new Set();
+  let timer = null;
+  let pending = new Set();
+  const notify = (file) => {
+    pending.add(file);
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      const kind = [...pending].every((f) => f.endsWith('.css')) ? 'css' : 'reload';
+      pending = new Set();
+      for (const res of clients) res.write(`data: ${kind}\n\n`);
+    }, 120);
+  };
+  for (const dir of ['public', 'design-system']) {
+    try {
+      watchFiles(path.join(__dirname, dir), { recursive: true }, (_event, file) => {
+        if (file && /\.(css|html|js|svg|png)$/.test(file)) notify(String(file));
+      });
+    } catch (err) {
+      console.warn(`[live-reload] cannot watch ${dir}:`, err.message);
+    }
+  }
+  app.get('/__livereload', (req, res) => {
+    res.set({ 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+    res.flushHeaders();
+    res.write(': connected\n\n');
+    clients.add(res);
+    req.on('close', () => clients.delete(res));
+  });
+  console.log('[live-reload] watching public/ and design-system/');
+}
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── Health ────────────────────────────────────────────────────
