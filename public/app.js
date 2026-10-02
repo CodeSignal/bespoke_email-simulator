@@ -2166,7 +2166,9 @@ function renderAssistantChips() {
   if (!host) return;
   const chips = visibleQuickActionChips();
   host.innerHTML = '';
-  if (!chips.length) {
+  // Hidden while the assistant works (thinking or streaming a reply); they
+  // come back when the turn ends.
+  if (!chips.length || assistantIsBusy()) {
     host.hidden = true;
     return;
   }
