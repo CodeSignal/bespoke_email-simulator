@@ -1750,7 +1750,7 @@ body {
 }
 
 .assistant__chip:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--Colors-Icon-Primary-Default) 16%, transparent);
+  background: color-mix(in srgb, var(--Colors-Icon-Primary-Default) 12%, transparent);
 }
 
 .assistant__chip:focus-visible {
