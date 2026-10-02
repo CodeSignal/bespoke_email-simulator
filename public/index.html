@@ -28,43 +28,6 @@
   <link rel="stylesheet" href="/global.css" />
 
   <link rel="stylesheet" href="/app.css" />
-  <!-- Dev aid (localhost only): ?theme=dark / ?theme=light forces a color
-       scheme by rewriting every (prefers-color-scheme) media rule, and makes
-       matchMedia agree (Rive thinking animation). -->
-  <script>
-    (function () {
-      if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) return;
-      var theme = new URLSearchParams(location.search).get('theme');
-      if (theme !== 'dark' && theme !== 'light') return;
-      document.documentElement.dataset.forcedTheme = theme;
-      function force(sheet) {
-        var rules;
-        try { rules = sheet.cssRules; } catch (e) { return; }
-        for (var i = 0; i < rules.length; i++) {
-          var rule = rules[i];
-          if (rule.media && /prefers-color-scheme/.test(rule.media.mediaText)) {
-            var isDark = /dark/.test(rule.media.mediaText);
-            rule.media.mediaText = (isDark === (theme === 'dark')) ? 'all' : 'not all';
-          } else if (rule.cssRules) {
-            force(rule);
-          }
-        }
-      }
-      function forceAll() { for (var i = 0; i < document.styleSheets.length; i++) force(document.styleSheets[i]); }
-      forceAll();
-      window.addEventListener('load', forceAll);
-      // Re-apply when live reload swaps a stylesheet.
-      document.addEventListener('load', function (e) { if (e.target.tagName === 'LINK') forceAll(); }, true);
-      var mq = window.matchMedia;
-      window.matchMedia = function (q) {
-        if (/prefers-color-scheme/.test(q)) {
-          var on = /dark/.test(q) === (theme === 'dark');
-          return { matches: on, media: q, addEventListener: function () {}, removeEventListener: function () {}, addListener: function () {}, removeListener: function () {} };
-        }
-        return mq.call(window, q);
-      };
-    })();
-  </script>
 </head>
 <body>
 
