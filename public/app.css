@@ -2018,16 +2018,32 @@ body {
   }
 }
 
+/* New-mail toasts: top right of the viewport, 12px in, sliding in from the
+   right (placement and motion follow co-design-al's ToastContainer). */
 .mail-toasts {
-  position: absolute;
-  left: var(--UI-Spacing-spacing-m);
-  bottom: var(--UI-Spacing-spacing-m);
+  position: fixed;
+  top: var(--UI-Spacing-spacing-mxs);
+  right: var(--UI-Spacing-spacing-mxs);
   z-index: 1100;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
+  align-items: flex-end;
   gap: var(--UI-Spacing-spacing-s);
-  width: min(22rem, calc(100vw - 2 * var(--UI-Spacing-spacing-m)));
+  width: min(22rem, calc(100vw - 2 * var(--UI-Spacing-spacing-mxs)));
   pointer-events: none;
+}
+
+.mail-toast {
+  animation: mail-toast-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes mail-toast-in {
+  from { opacity: 0.4; transform: translateX(150%) scale(0.4); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mail-toast { animation: none; }
 }
 
 .mail-toast.box {
