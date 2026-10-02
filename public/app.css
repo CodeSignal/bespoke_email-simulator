@@ -2056,6 +2056,8 @@ body {
 .mail-toast.box,
 .mail-toast.box.card:hover,
 .mail-toast.box.card:focus {
+  /* Same raised surface as the composer and assistant card. */
+  background: var(--Colors-Surface-Container-Highest);
   border-radius: var(--UI-Radius-radius-s);
   box-shadow: 0 3px 12px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
@@ -2097,7 +2099,7 @@ body {
 }
 
 .mail-toast__kicker {
-  color: var(--Colors-Text-Body-Secondary);
+  color: var(--Colors-Text-Body-Light);
 }
 
 .mail-toast__from {
@@ -2108,18 +2110,10 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--Colors-Text-Body-Secondary);
+  color: var(--Colors-Text-Body-Light);
 }
 
 .mail-toast__close {
   flex: 0 0 auto;
   align-self: flex-start;
-}
-
-/* Dark mode trial: mail column and AI Assistant card on library Grey/1250. */
-@media (prefers-color-scheme: dark) {
-  .mail-main,
-  .assistant__card {
-    background: var(--Colors-Base-Grey-1250);
-  }
 }
