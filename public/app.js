@@ -882,7 +882,8 @@ function renderMailList() {
     return;
   }
 
-  // Figma "Inbox Item": [marker] + container (row, then its own hrule).
+  // Figma "Inbox Item" (470:11383): first container (column) holds the
+  // second container — the row, which carries the new-mail marker — and the hrule.
   for (const thread of threads) {
     const last = thread.emails?.[thread.emails.length - 1];
     const snippet = threadSnippet(thread);
@@ -895,6 +896,7 @@ function renderMailList() {
     btn.dataset.threadId = thread.id;
     if (snippet) btn.title = snippet;
     btn.innerHTML = `
+      ${unread ? '<span class="mail-item__marker" aria-hidden="true"></span>' : ''}
       ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'lg')}
       <span class="mail-row__main">
         <span class="mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
@@ -909,7 +911,6 @@ function renderMailList() {
     const rule = document.createElement('hr');
     rule.className = 'mail-list__rule';
     container.append(btn, rule);
-    if (unread) item.insertAdjacentHTML('beforeend', '<span class="mail-item__marker" aria-hidden="true"></span>');
     item.appendChild(container);
     els.threadList.appendChild(item);
   }

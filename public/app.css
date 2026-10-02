@@ -438,10 +438,9 @@ body {
   padding: var(--UI-Spacing-spacing-mxs);
 }
 
-/* Figma "Inbox Item" (470:11678): 8px side gutter holds the new-mail marker;
-   the container stacks the row and its hairline 8px apart. */
+/* Figma "Inbox Item" (470:11383): 8px side padding (the marker sits in it);
+   the first container stacks the row and its hairline 8px apart. */
 .mail-item {
-  position: relative;
   flex: 0 0 auto;
   padding: 0 var(--UI-Spacing-spacing-s);
 }
@@ -452,11 +451,12 @@ body {
   gap: var(--UI-Spacing-spacing-s);
 }
 
-/* Figma "Badge Marker" (small): 6px dot + 3px 15% ring, centred on the item */
+/* Figma "Badge Marker" (small): 6px dot + 3px 15% ring, inside the row,
+   8px left of it and vertically centred on the content. */
 .mail-item__marker {
   position: absolute;
-  left: 0;
-  top: calc(50% + 0.5px);
+  left: calc(-1 * var(--UI-Spacing-spacing-s));
+  top: 50%;
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -467,6 +467,7 @@ body {
 }
 
 .mail-row {
+  position: relative;
   width: 100%;
   margin: 0;
   font: inherit;
@@ -532,12 +533,13 @@ body {
   color: var(--Colors-Text-Body-Medium);
 }
 
-/* Figma "hrule": spans the item content (same edges as the row), not the list. */
+/* Figma "hrule" (padding 0 12px around the line): inset so the line starts
+   and ends with the row's content rather than its rounded hover box. */
 .mail-list__rule {
   flex: 0 0 auto;
-  width: 100%;
+  width: auto;
   height: 0;
-  margin: 0;
+  margin: 0 var(--UI-Spacing-spacing-mxs);
   border: none;
   border-top: 1px solid var(--Colors-Border-Subtle);
 }
