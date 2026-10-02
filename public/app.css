@@ -164,12 +164,6 @@ body {
   opacity: 0.5;
 }
 
-/* Figma shows the message actions at rest even with no conversation open;
-   they stay disabled (cursor + aria) without fading. */
-.mail-toolbar__actions .icon-button:disabled {
-  opacity: 1;
-  cursor: not-allowed;
-}
 
 .icon-button--primary {
   background: var(--Colors-Primary-Default);
@@ -179,14 +173,6 @@ body {
 .icon-button--primary:hover:not(:disabled) {
   background: var(--Colors-Primary-Default);
   filter: brightness(0.92);
-}
-
-/* The provided reply / reply-all SVGs carry a fixed Icon/Neutral/Default
-   fill; lift them on dark surfaces. */
-@media (prefers-color-scheme: dark) {
-  .icon-button img[src*='/icons/reply'] {
-    filter: invert(1) brightness(1.6);
-  }
 }
 
 /* Figma assistant header button: 26px, 1.5px Border/Medium outline */
@@ -411,11 +397,13 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
-.mail-toolbar__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-s);
+.mail-toolbar__compose {
   margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.mail-toolbar__compose svg {
+  display: block;
   flex: 0 0 auto;
 }
 
@@ -605,6 +593,18 @@ body {
 .reading-pane--thread > .composer {
   margin-left: 0;
   margin-right: 0;
+}
+
+/* Reply / Reply all after the conversation */
+.thread-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-xs) 0 var(--UI-Spacing-spacing-s);
+}
+
+.reading-pane--single > .thread-actions {
+  padding-left: var(--UI-Spacing-spacing-mxs);
 }
 
 .thread-head {

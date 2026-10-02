@@ -164,9 +164,8 @@ const els = {
   mailToolbarCount: document.getElementById('mailToolbarCount'),
   backBtn: document.getElementById('backBtn'),
   backBtnLabel: document.getElementById('backBtnLabel'),
-  replyBtn: document.getElementById('replyBtn'),
-  replyAllBtn: document.getElementById('replyAllBtn'),
-  deleteBtn: document.getElementById('deleteBtn'),
+  toolbarComposeBtn: document.getElementById('toolbarComposeBtn'),
+  toolbarComposeLabel: document.getElementById('toolbarComposeLabel'),
   readingPane: document.getElementById('readingPane'),
   composer: document.getElementById('composer'),
   composerChrome: document.getElementById('composerChrome'),
@@ -824,15 +823,7 @@ function applyView() {
       if (els.mailToolbarCount) els.mailToolbarCount.textContent = `(${visibleThreads().length})`;
     }
   }
-  // Reply actions live in the toolbar and only apply to an open conversation.
-  const canReply = isThread && Boolean(state.activeThreadId);
-  for (const [btn, label] of [[els.replyBtn, t('Reply')], [els.replyAllBtn, t('Reply all')]]) {
-    if (!btn) continue;
-    btn.disabled = !canReply;
-    btn.setAttribute('aria-label', label);
-    btn.title = label;
-    btn.setAttribute('aria-pressed', String(canReply && state.replying === (btn === els.replyBtn ? 'reply' : 'replyAll')));
-  }
+  if (els.toolbarComposeLabel) els.toolbarComposeLabel.textContent = t('Compose');
   renderAssistantChips();
   renderQuickResultPanel();
 }
@@ -1037,7 +1028,23 @@ function renderThread(threadId) {
   const suggestions = renderSuggestedReplies(thread, replyTargetEmail(thread));
   if (suggestions) els.readingPane.appendChild(suggestions);
   if (state.replying) placeComposer();
+  else els.readingPane.appendChild(renderThreadActions());
   renderAssistantChips();
+}
+
+// Reply / Reply all sit after the conversation (the toolbar holds Compose).
+function renderThreadActions() {
+  const actions = document.createElement('div');
+  actions.className = 'thread-actions';
+  for (const [mode, label] of [['reply', t('Reply')], ['replyAll', t('Reply all')]]) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'button button-secondary button-xsmall';
+    btn.textContent = label;
+    btn.addEventListener('click', () => startReply(mode));
+    actions.appendChild(btn);
+  }
+  return actions;
 }
 
 // Visual selection inside a multi-message thread (no behavior attached).
@@ -1341,8 +1348,7 @@ function initComposer() {
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);
-  els.replyBtn?.addEventListener('click', () => startReply('reply'));
-  els.replyAllBtn?.addEventListener('click', () => startReply('replyAll'));
+  els.toolbarComposeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.discardBtn?.addEventListener('click', cancelComposer);
   els.composerMinimizeBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
