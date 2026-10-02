@@ -112,12 +112,13 @@ const state = {
   activeThreadId: null,
   view: 'list', // list | thread
   composingNew: false,
-  composeMinimized: false,
-  composeExpanded: false,
+  composeMinimized: false, // composer panel collapsed to its head
   replying: null, // null | 'reply' | 'replyAll'
   selectedEmailId: null, // highlighted message in a multi-message thread
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
+  recipientQuery: { to: '', cc: '' }, // typeahead text per field
+  recipientActiveIndex: 0, // highlighted suggestion in the open menu
   editor: null,
   draftSaveTimer: null,
   assistant: {
@@ -168,9 +169,8 @@ const els = {
   composer: document.getElementById('composer'),
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
+  composerIcon: document.getElementById('composerIcon'),
   composerMinimizeBtn: document.getElementById('composerMinimizeBtn'),
-  composerExpandBtn: document.getElementById('composerExpandBtn'),
-  composerCloseBtn: document.getElementById('composerCloseBtn'),
   assistantHint: document.getElementById('assistantHint'),
   composeToLabel: document.getElementById('composeToLabel'),
   composeCcLabel: document.getElementById('composeCcLabel'),
@@ -179,8 +179,8 @@ const els = {
   composeCcPicker: document.getElementById('composeCcPicker'),
   composeToChips: document.getElementById('composeToChips'),
   composeCcChips: document.getElementById('composeCcChips'),
-  composeToAdd: document.getElementById('composeToAdd'),
-  composeCcAdd: document.getElementById('composeCcAdd'),
+  composeToInput: document.getElementById('composeToInput'),
+  composeCcInput: document.getElementById('composeCcInput'),
   composeToMenu: document.getElementById('composeToMenu'),
   composeCcMenu: document.getElementById('composeCcMenu'),
   composeSubject: document.getElementById('composeSubject'),
@@ -381,16 +381,17 @@ function addRecipient(field, email) {
   if (!state.recipients[field].some((value) => value.toLowerCase() === canonical.toLowerCase())) {
     state.recipients[field] = [...state.recipients[field], canonical];
   }
-  state.openRecipientField = availableCharacters(directory, { selected: selectedRecipientEmails() }).length
-    ? field
-    : null;
+  // Typeahead: clear the query and keep the caret right after the new
+  // entry. The suggestions close so they don't cover the next row; typing
+  // (or ArrowDown) opens them again.
+  state.recipientQuery[field] = '';
+  state.recipientActiveIndex = 0;
+  const { input } = pickerEls(field);
+  if (input) input.value = '';
+  state.openRecipientField = null;
   renderRecipientPickers();
   scheduleDraftSave();
-  if (state.openRecipientField === field) {
-    pickerEls(field).menu?.querySelector('button')?.focus();
-  } else {
-    pickerEls(field).add?.focus();
-  }
+  input?.focus();
 }
 
 function removeRecipient(field, email) {
@@ -402,8 +403,37 @@ function removeRecipient(field, email) {
 
 function pickerEls(field) {
   return field === 'cc'
-    ? { picker: els.composeCcPicker, chips: els.composeCcChips, add: els.composeCcAdd, menu: els.composeCcMenu }
-    : { picker: els.composeToPicker, chips: els.composeToChips, add: els.composeToAdd, menu: els.composeToMenu };
+    ? { picker: els.composeCcPicker, chips: els.composeCcChips, input: els.composeCcInput, menu: els.composeCcMenu }
+    : { picker: els.composeToPicker, chips: els.composeToChips, input: els.composeToInput, menu: els.composeToMenu };
+}
+
+// Directory people not yet on the message, filtered by the typed query.
+// Name-prefix matches rank first, then word-prefix, then anywhere in
+// name / email / role.
+function recipientMatches(field) {
+  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
+  const query = String(state.recipientQuery[field] || '').trim().toLowerCase();
+  if (!query) return remaining;
+  const ranked = [];
+  for (const character of remaining) {
+    const name = String(characterLabel(character) || '').toLowerCase();
+    const email = String(character.email || '').toLowerCase();
+    const role = String(character.role || '').toLowerCase();
+    let rank = -1;
+    if (name.startsWith(query) || email.startsWith(query)) rank = 0;
+    else if (name.split(/\s+/).some((word) => word.startsWith(query))) rank = 1;
+    else if (name.includes(query) || email.includes(query) || role.includes(query)) rank = 2;
+    if (rank >= 0) ranked.push({ character, rank });
+  }
+  return ranked.sort((a, b) => a.rank - b.rank).map((entry) => entry.character);
+}
+
+function highlightMatch(text, query) {
+  const value = String(text ?? '');
+  const q = String(query || '').trim();
+  const index = q ? value.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (index < 0) return escapeHtml(value);
+  return `${escapeHtml(value.slice(0, index))}<mark class="recipient-picker__match">${escapeHtml(value.slice(index, index + q.length))}</mark>${escapeHtml(value.slice(index + q.length))}`;
 }
 
 function closeRecipientMenus() {
@@ -438,35 +468,49 @@ function renderRecipientChip(field, email) {
 }
 
 function renderRecipientMenu(field) {
-  const { picker, add, menu } = pickerEls(field);
-  const directory = directoryCharacters();
-  const remaining = availableCharacters(directory, { selected: selectedRecipientEmails() });
-  const open = state.openRecipientField === field && remaining.length > 0;
+  const { picker, input, menu } = pickerEls(field);
+  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
+  const matches = recipientMatches(field);
+  const query = state.recipientQuery[field] || '';
+  const open = state.openRecipientField === field && (matches.length > 0 || query.trim().length > 0);
+  if (state.recipientActiveIndex >= matches.length) state.recipientActiveIndex = Math.max(0, matches.length - 1);
 
   if (picker) {
     picker.classList.toggle('is-open', open);
     picker.classList.toggle('open', open);
   }
-  if (add) {
-    add.hidden = remaining.length === 0;
-    add.disabled = remaining.length === 0;
-    add.setAttribute('aria-expanded', open ? 'true' : 'false');
-    add.textContent = t('Select a recipient');
-    if (remaining.length === 0) add.setAttribute('aria-label', t('No more people to add'));
-    else add.setAttribute('aria-label', t('Select a recipient'));
+  if (input) {
+    input.setAttribute('aria-expanded', open ? 'true' : 'false');
+    // Placeholder only while the row is empty; entries speak for themselves.
+    input.placeholder = state.recipients[field].length ? '' : t('Type a name');
+    input.setAttribute('aria-label', remaining.length ? t('Add a recipient') : t('No more people to add'));
   }
   if (!menu) return;
   menu.hidden = !open;
   menu.innerHTML = '';
-  if (!open) return;
+  if (!open) {
+    input?.removeAttribute('aria-activedescendant');
+    return;
+  }
 
-  for (const character of remaining) {
+  if (!matches.length) {
+    const empty = document.createElement('li');
+    empty.className = 'recipient-picker__empty';
+    empty.setAttribute('role', 'presentation');
+    empty.textContent = remaining.length ? t('No matching people') : t('No more people to add');
+    menu.appendChild(empty);
+    input?.removeAttribute('aria-activedescendant');
+    return;
+  }
+
+  matches.forEach((character, index) => {
     const item = document.createElement('li');
     item.setAttribute('role', 'presentation');
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'dropdown-menu-item recipient-picker__option';
+    const option = document.createElement('div');
+    option.id = `${field}-recipient-option-${index}`;
+    option.className = 'dropdown-menu-item recipient-picker__option' + (index === state.recipientActiveIndex ? ' is-active' : '');
     option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', index === state.recipientActiveIndex ? 'true' : 'false');
     option.dataset.email = character.email;
     const content = document.createElement('span');
     content.className = 'dropdown-menu-item-content';
@@ -475,16 +519,24 @@ function renderRecipientMenu(field) {
     text.className = 'recipient-picker__option-text';
     const name = document.createElement('span');
     name.className = 'dropdown-menu-item-label';
-    name.textContent = characterLabel(character);
+    name.innerHTML = highlightMatch(characterLabel(character), query);
     text.appendChild(name);
-    if (character.role) {
+    const metaText = character.role || character.email;
+    if (metaText) {
       const meta = document.createElement('span');
       meta.className = 'body-xsmall recipient-picker__option-meta';
-      meta.textContent = character.role;
+      meta.innerHTML = highlightMatch(metaText, query);
       text.appendChild(meta);
     }
     content.appendChild(text);
     option.appendChild(content);
+    // mousedown keeps focus in the input so the caret never leaves the row.
+    option.addEventListener('mousedown', (event) => event.preventDefault());
+    option.addEventListener('mouseenter', () => {
+      if (state.recipientActiveIndex === index) return;
+      state.recipientActiveIndex = index;
+      renderRecipientMenu(field);
+    });
     option.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -492,7 +544,9 @@ function renderRecipientMenu(field) {
     });
     item.appendChild(option);
     menu.appendChild(item);
-  }
+  });
+  if (input) input.setAttribute('aria-activedescendant', `${field}-recipient-option-${state.recipientActiveIndex}`);
+  menu.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
 }
 
 function renderRecipientPickers() {
@@ -508,34 +562,95 @@ function renderRecipientPickers() {
   }
 }
 
-function toggleRecipientMenu(field) {
-  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
-  if (!remaining.length) return;
-  state.openRecipientField = state.openRecipientField === field ? null : field;
+function openRecipientMenu(field) {
+  if (state.openRecipientField !== field) {
+    state.openRecipientField = field;
+    state.recipientActiveIndex = 0;
+  }
   renderRecipientPickers();
-  if (state.openRecipientField === field) {
-    pickerEls(field).menu?.querySelector('button')?.focus();
+}
+
+function onRecipientKeydown(field, event) {
+  const { input } = pickerEls(field);
+  const matches = recipientMatches(field);
+  const open = state.openRecipientField === field;
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowUp': {
+      event.preventDefault();
+      if (!open) {
+        openRecipientMenu(field);
+        return;
+      }
+      if (!matches.length) return;
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      state.recipientActiveIndex = (state.recipientActiveIndex + step + matches.length) % matches.length;
+      renderRecipientMenu(field);
+      return;
+    }
+    case 'Enter':
+    case 'Tab':
+    case ',':
+    case ';': {
+      // Commit the highlighted match when the user has typed something
+      // (Enter also commits from an open, untyped list).
+      const typed = Boolean(String(input?.value || '').trim());
+      if (!open || !matches.length || (!typed && event.key !== 'Enter')) return;
+      event.preventDefault();
+      addRecipient(field, matches[state.recipientActiveIndex]?.email ?? matches[0].email);
+      return;
+    }
+    case 'Backspace': {
+      if (input && input.selectionStart === 0 && input.selectionEnd === 0 && state.recipients[field].length) {
+        event.preventDefault();
+        const last = state.recipients[field][state.recipients[field].length - 1];
+        removeRecipient(field, last);
+        state.openRecipientField = field;
+        renderRecipientPickers();
+      }
+      return;
+    }
+    case 'Escape':
+      if (open) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeRecipientMenus();
+      }
+      return;
+    default:
   }
 }
 
 function initRecipientPickers() {
   for (const field of ['to', 'cc']) {
-    const { picker, add } = pickerEls(field);
-    const open = (event) => {
+    const { picker, input } = pickerEls(field);
+    if (!input) continue;
+    input.addEventListener('focus', () => openRecipientMenu(field));
+    input.addEventListener('input', () => {
+      state.recipientQuery[field] = input.value;
+      state.openRecipientField = field;
+      state.recipientActiveIndex = 0;
+      renderRecipientMenu(field);
+    });
+    input.addEventListener('keydown', (event) => onRecipientKeydown(field, event));
+    input.addEventListener('blur', () => {
+      // Leaving the field drops the half-typed query (only directory people
+      // can be added) and closes the suggestions.
+      if (state.openRecipientField === field) state.openRecipientField = null;
+      state.recipientQuery[field] = '';
+      input.value = '';
+      renderRecipientPickers();
+    });
+    // Clicking anywhere on the row puts the caret after the last entry.
+    picker?.addEventListener('mousedown', (event) => {
+      if (event.target === input || event.target.closest('.recipient-picker__remove, .recipient-picker__option, .recipient-picker__menu')) return;
       event.preventDefault();
-      event.stopPropagation();
-      toggleRecipientMenu(field);
-    };
-    add?.addEventListener('click', open);
-    picker?.addEventListener('click', (event) => {
-      if (event.target.closest('.recipient-picker__remove, .recipient-picker__option')) return;
-      open(event);
+      input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
     });
   }
-  // Capture phase: the design-system Modal stops propagation on clicks inside
-  // its dialog (so overlay clicks only close via the overlay itself), which
-  // would otherwise prevent this document-level listener from ever seeing
-  // clicks made while the composer is expanded into that modal.
+  // Capture phase so components that stop propagation (e.g. design-system
+  // Modals) can't keep a suggestions menu open behind them.
   document.addEventListener(
     'click',
     (event) => {
@@ -597,37 +712,13 @@ function renderShell() {
   applyView();
 }
 
-const MINIMIZE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg>';
-const RESTORE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></svg>';
-const EXPAND_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5H12.5V9.5"/><path d="M12.5 3.5 3.5 12.5"/></svg>';
-const COLLAPSE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 12.5H3.5V6.5"/><path d="M3.5 12.5 12.5 3.5"/></svg>';
-
-let composeModal = null;
-let syncingComposeModal = false;
+// Composer head icons (Figma "Replying" › Head): reply arrow for replies,
+// untitled-ui edit-03 for a new message. Both tint with Icon/Primary/Default.
+const COMPOSER_REPLY_ICON = '<svg width="13" height="14" viewBox="0 0 12.9376 13.5058" fill="currentColor" aria-hidden="true"><path d="M6.18669 3.3738V0.561079C6.18639 0.447659 6.15182 0.336976 6.0875 0.243553C6.02319 0.15013 5.93214 0.0783306 5.82629 0.037574C5.72044 -0.00318247 5.60475 -0.0109922 5.49439 0.0151697C5.38403 0.0413316 5.28415 0.100243 5.20786 0.184175L0.144972 5.80961C0.05168 5.91298 3.91006e-05 6.04727 3.91006e-05 6.18651C3.91006e-05 6.32575 0.05168 6.46005 0.144972 6.56342L5.20786 12.1888C5.28415 12.2728 5.38403 12.3317 5.49439 12.3579C5.60475 12.384 5.72044 12.3762 5.82629 12.3355C5.93214 12.2947 6.02319 12.2229 6.0875 12.1295C6.15182 12.036 6.18639 11.9254 6.18669 11.8119V8.99923C9.48319 9.11174 10.1695 10.2818 11.4746 12.5039C11.604 12.7345 11.7446 12.9708 11.8909 13.2127C11.9392 13.2987 12.0094 13.3706 12.0943 13.4209C12.1793 13.4713 12.2759 13.4984 12.3747 13.4996C12.425 13.5078 12.4763 13.5078 12.5266 13.4996C12.6482 13.4655 12.7549 13.3915 12.8294 13.2895C12.9039 13.1875 12.9419 13.0633 12.9372 12.937C12.9372 9.67991 12.9372 3.70007 6.18669 3.3738ZM5.62414 7.87414C5.47495 7.87414 5.33186 7.93341 5.22637 8.03891C5.12087 8.1444 5.0616 8.28749 5.0616 8.43669V10.3437L1.32069 6.18651L5.0616 2.02932V3.93634C5.0616 4.08553 5.12087 4.22862 5.22637 4.33412C5.33186 4.43961 5.47495 4.49888 5.62414 4.49888C10.6027 4.49888 11.5759 7.78976 11.7671 10.8219C10.6083 8.99923 9.33693 7.87414 5.62414 7.87414Z"/></svg>';
+const COMPOSER_NEW_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20H21M3.00003 20H4.67457C5.16375 20 5.40834 20 5.63852 19.9447C5.84259 19.8957 6.03768 19.8149 6.21662 19.7053C6.41846 19.5816 6.59141 19.4086 6.93731 19.0627L19.5001 6.49999C20.3285 5.67156 20.3285 4.32842 19.5001 3.49999C18.6716 2.67156 17.3285 2.67156 16.5001 3.49999L3.93729 16.0627C3.59138 16.4086 3.41843 16.5816 3.29475 16.7834C3.18509 16.9624 3.10428 17.1575 3.05529 17.3615C3.00003 17.5917 3.00003 17.8363 3.00003 18.3255V20Z"/></svg>';
 
 function composeOverlayTitle() {
-  const subject = els.composeSubject?.value?.trim();
-  return subject || t('New message');
-}
-
-function ensureComposeModal() {
-  if (composeModal) return composeModal;
-  composeModal = new Modal({
-    size: 'xlarge',
-    title: null,
-    showCloseButton: false,
-    closeOnOverlayClick: false,
-    closeOnEscape: true,
-    onClose: () => {
-      if (syncingComposeModal) return;
-      if (!state.composeExpanded) return;
-      state.composeExpanded = false;
-      applyView();
-    },
-  });
-  composeModal.dialog.classList.add('compose-modal-dialog');
-  composeModal.overlay.setAttribute('aria-label', t('New message'));
-  return composeModal;
+  return state.composingNew ? t('New message') : t('Reply to');
 }
 
 function parkComposer() {
@@ -644,36 +735,16 @@ function dockComposer() {
   }
 }
 
+// One panel serves new messages and replies. A reply sits at the end of the
+// conversation (sticky to the pane bottom); a new message floats over the
+// bottom of the main column so it works from any view.
 function placeComposer() {
   if (!els.composer) return;
-  const overlayCompose = Boolean(state.composingNew);
-  const expanded = overlayCompose && state.composeExpanded;
-  const inlineReply = state.view === 'thread' && Boolean(state.replying);
-  els.composer.classList.toggle('is-overlay', overlayCompose && !expanded);
-  els.composer.classList.toggle('box', overlayCompose && !expanded);
-  els.composer.classList.toggle('card', overlayCompose && !expanded);
-  els.composer.classList.toggle('non-interactive', overlayCompose && !expanded);
-  els.composer.classList.toggle('is-expanded', expanded);
+  const newMessage = Boolean(state.composingNew);
+  const inlineReply = !newMessage && state.view === 'thread' && Boolean(state.replying);
+  els.composer.classList.toggle('is-new', newMessage);
   els.composer.classList.toggle('is-inline', inlineReply);
-  els.composer.classList.toggle('is-minimized', overlayCompose && !expanded && state.composeMinimized);
-
-  if (expanded) {
-    const modal = ensureComposeModal();
-    modal.overlay.setAttribute('aria-label', composeOverlayTitle());
-    modal.content.appendChild(els.composer);
-    if (!modal.isOpen) {
-      syncingComposeModal = true;
-      modal.open();
-      syncingComposeModal = false;
-    }
-    return;
-  }
-
-  if (composeModal?.isOpen) {
-    syncingComposeModal = true;
-    composeModal.close();
-    syncingComposeModal = false;
-  }
+  els.composer.classList.toggle('is-minimized', (newMessage || inlineReply) && state.composeMinimized);
 
   if (inlineReply && els.readingPane && !els.readingPane.hidden) {
     els.readingPane.appendChild(els.composer);
@@ -697,22 +768,17 @@ function applyView() {
     els.composer.hidden = !showComposer;
   }
   placeComposer();
-  if (els.composerChrome) els.composerChrome.hidden = !overlayCompose;
   if (els.composerTitle) els.composerTitle.textContent = composeOverlayTitle();
+  if (els.composerIcon) els.composerIcon.innerHTML = overlayCompose ? COMPOSER_NEW_ICON : COMPOSER_REPLY_ICON;
+  if (els.composer) els.composer.setAttribute('aria-label', composeOverlayTitle());
   if (els.composerMinimizeBtn) {
-    const minimized = overlayCompose && state.composeMinimized;
+    const minimized = showComposer && state.composeMinimized;
     els.composerMinimizeBtn.setAttribute('aria-label', minimized ? t('Restore') : t('Minimize'));
-    els.composerMinimizeBtn.innerHTML = minimized ? RESTORE_ICON : MINIMIZE_ICON;
+    els.composerMinimizeBtn.setAttribute('aria-expanded', minimized ? 'false' : 'true');
+    els.composerMinimizeBtn.title = minimized ? t('Restore') : t('Minimize');
   }
-  if (els.composerExpandBtn) {
-    const expanded = overlayCompose && state.composeExpanded;
-    els.composerExpandBtn.setAttribute('aria-label', expanded ? t('Collapse') : t('Expand'));
-    els.composerExpandBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    els.composerExpandBtn.innerHTML = expanded ? COLLAPSE_ICON : EXPAND_ICON;
-  }
-  if (els.composerCloseBtn) els.composerCloseBtn.setAttribute('aria-label', t('Close'));
   if (els.discardBtn) {
-    els.discardBtn.hidden = !state.replying;
+    els.discardBtn.hidden = !showComposer;
     els.discardBtn.textContent = t('Cancel');
   }
   if (els.backBtn) {
@@ -789,12 +855,7 @@ function renderMailList() {
     return;
   }
 
-  threads.forEach((thread, index) => {
-    if (index > 0) {
-      const rule = document.createElement('hr');
-      rule.className = 'mail-list__rule';
-      els.threadList.appendChild(rule);
-    }
+  for (const thread of threads) {
     const last = thread.emails?.[thread.emails.length - 1];
     const snippet = threadSnippet(thread);
     const btn = document.createElement('button');
@@ -812,7 +873,11 @@ function renderMailList() {
     `;
     btn.addEventListener('click', () => selectThread(thread.id));
     els.threadList.appendChild(btn);
-  });
+    // Every row, including the last (or only) one, gets a divider below it.
+    const rule = document.createElement('hr');
+    rule.className = 'mail-list__rule';
+    els.threadList.appendChild(rule);
+  }
 }
 
 function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } = {}) {
@@ -1000,8 +1065,8 @@ function startReply(mode) {
   state.view = 'thread';
   state.composingNew = false;
   state.composeMinimized = false;
-  state.composeExpanded = false;
   state.replying = mode;
+  state.composeMinimized = false;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
   els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -1027,13 +1092,12 @@ function startCompose({ blank = true } = {}) {
   if (state.composingNew) {
     state.composeMinimized = false;
     applyView();
-    els.composeToAdd?.focus();
+    els.composeToInput?.focus();
     return;
   }
   const wasReplying = Boolean(state.replying);
   state.composingNew = true;
   state.composeMinimized = false;
-  state.composeExpanded = false;
   state.replying = null;
   if (state.view === 'compose') state.view = 'list';
   if (blank) {
@@ -1045,7 +1109,7 @@ function startCompose({ blank = true } = {}) {
   scheduleDraftSave();
   if (wasReplying && state.view === 'thread') renderThread(state.activeThreadId);
   applyView();
-  els.composeToAdd?.focus();
+  els.composeToInput?.focus();
 }
 
 function closeComposeOverlay() {
@@ -1054,29 +1118,21 @@ function closeComposeOverlay() {
   void saveDraftNow();
   state.composingNew = false;
   state.composeMinimized = false;
-  state.composeExpanded = false;
   applyView();
 }
 
 function toggleComposeMinimized() {
-  if (!state.composingNew) return;
-  if (state.composeExpanded) {
-    state.composeExpanded = false;
-    state.composeMinimized = true;
-  } else {
-    state.composeMinimized = !state.composeMinimized;
-  }
+  if (!state.composingNew && !state.replying) return;
+  state.composeMinimized = !state.composeMinimized;
+  closeRecipientMenus();
   applyView();
-  if (!state.composeMinimized) els.composeToAdd?.focus();
+  if (!state.composeMinimized) state.editor?.commands.focus();
 }
 
-function toggleComposeExpanded() {
-  if (!state.composingNew) return;
-  state.composeMinimized = false;
-  state.composeExpanded = !state.composeExpanded;
-  applyView();
-  if (state.composeExpanded) state.editor?.commands.focus();
-  else els.composeToAdd?.focus();
+// Cancel: a reply is discarded; a new message closes and keeps its draft.
+function cancelComposer() {
+  if (state.composingNew) closeComposeOverlay();
+  else cancelReply();
 }
 
 function composeNewTo(email) {
@@ -1244,39 +1300,20 @@ function initComposer() {
   });
 
   initRecipientPickers();
-  els.composeSubject.addEventListener('input', () => {
-    scheduleDraftSave();
-    if (els.composerTitle && state.composingNew) {
-      els.composerTitle.textContent = composeOverlayTitle();
-    }
-    if (state.composeExpanded && composeModal) {
-      composeModal.overlay.setAttribute('aria-label', composeOverlayTitle());
-    }
-  });
+  els.composeSubject.addEventListener('input', scheduleDraftSave);
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);
   els.replyBtn?.addEventListener('click', () => startReply('reply'));
   els.replyAllBtn?.addEventListener('click', () => startReply('replyAll'));
-  els.discardBtn?.addEventListener('click', cancelReply);
+  els.discardBtn?.addEventListener('click', cancelComposer);
   els.composerMinimizeBtn?.addEventListener('click', (event) => {
     event.stopPropagation();
     toggleComposeMinimized();
   });
-  els.composerExpandBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleComposeExpanded();
-  });
-  els.composerCloseBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    closeComposeOverlay();
-  });
+  // A collapsed panel reopens from anywhere on its head.
   els.composerChrome?.addEventListener('click', () => {
-    if (state.composeMinimized) {
-      state.composeMinimized = false;
-      applyView();
-      els.composeToAdd?.focus();
-    }
+    if (state.composeMinimized) toggleComposeMinimized();
   });
   updateSendEnabled();
 }
@@ -1530,8 +1567,7 @@ async function sendEmail() {
     replaceThread(thread);
     state.composingNew = false;
     state.composeMinimized = false;
-    state.composeExpanded = false;
-    state.replying = null;
+      state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
@@ -2262,9 +2298,6 @@ async function applyHeaderSuggestion(headers, draftId) {
   if (fields.to.length || fields.cc.length) applyRecipientDraft(fields);
   if (fields.subject) {
     els.composeSubject.value = fields.subject;
-    if (els.composerTitle && state.composingNew) {
-      els.composerTitle.textContent = composeOverlayTitle();
-    }
   }
   const scope = draftScope() || { scope: 'new' };
   const draftFields = normalizeDraftFields({
@@ -2406,9 +2439,6 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
   if (fields.to.length || fields.cc.length) applyRecipientDraft(fields);
   if (fields.subject) {
     els.composeSubject.value = fields.subject;
-    if (els.composerTitle && state.composingNew) {
-      els.composerTitle.textContent = composeOverlayTitle();
-    }
   }
   setEditorMarkdown(fields.body);
 

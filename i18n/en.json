@@ -57,6 +57,10 @@
     "Back to inbox": "Back to inbox",
     "Back to sent": "Back to sent",
     "Back to spam": "Back to spam",
-    "You're already writing an email. Replace it with the AI Assistant's draft?": "You're already writing an email. Replace it with the AI Assistant's draft?"
+    "You're already writing an email. Replace it with the AI Assistant's draft?": "You're already writing an email. Replace it with the AI Assistant's draft?",
+    "Reply to": "Reply to",
+    "Type a name": "Type a name",
+    "Add a recipient": "Add a recipient",
+    "No matching people": "No matching people"
   }
 }

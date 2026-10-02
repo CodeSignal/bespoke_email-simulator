@@ -48,7 +48,7 @@ body {
 /* ── App shell: fixed rail + resizable mail/assistant split ── */
 .mail-app {
   display: grid;
-  grid-template-columns: 202px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
 }
@@ -201,7 +201,7 @@ body {
   background: var(--Colors-Control-Neutral-Subtle);
 }
 
-/* ── Mailbox rail (Figma "Sidebar": 202px) ── */
+/* ── Mailbox rail (260px; Figma "Sidebar" is 202px) ── */
 .rail {
   display: flex;
   flex-direction: column;
@@ -887,13 +887,17 @@ body {
   cursor: pointer;
 }
 
-/* ── Composer ── */
+/* ── Composer (Figma "Replying" 470:12849) ──
+   One floating panel for new messages and replies. */
 .composer {
-  padding: var(--UI-Spacing-spacing-ms);
-  background: var(--Colors-Surface-Container-Highest);
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-ms);
+  border: 1px solid var(--Colors-Border-Subtle);
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Surface-Container-Highest);
+  box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
 .composer__panel {
@@ -904,153 +908,50 @@ body {
   flex: 1 1 auto;
 }
 
-.composer.is-overlay.box {
-  position: absolute;
-  right: var(--UI-Spacing-spacing-m);
-  bottom: 0;
-  z-index: 50;
-  width: min(30rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
-  height: min(32rem, calc(100% - 6rem));
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: 0;
-  gap: 0;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
-}
-
-.composer.is-overlay.box.card,
-.composer.is-overlay.box.card:hover,
-.composer.is-overlay.box.card:focus,
-.composer.is-overlay.box.non-interactive.card:hover,
-.composer.is-overlay.box.non-interactive.card:focus {
-  border: 1px solid var(--Colors-Border-Subtle);
-  border-bottom: none;
-  border-radius: var(--UI-Radius-radius-s) var(--UI-Radius-radius-s) 0 0;
-  background: var(--Colors-Surface-Container-Highest);
-  box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft), 0 12px 38px 0 var(--Colors-Emphasis-Shadow-Soft);
-}
-
-.composer.is-overlay.is-minimized {
-  height: auto;
-  width: min(20rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
-}
-
-.composer.is-overlay .composer__panel {
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-ms) var(--UI-Spacing-spacing-ms);
-}
-
-.composer.is-overlay .composer__body,
-.composer.is-overlay .composer__editor,
-.composer.is-overlay .composer__body .tiptap {
-  flex: 1 1 auto;
-  min-height: 8rem;
-}
-
 .composer.is-minimized .composer__panel {
   display: none;
 }
 
-.compose-modal-dialog.modal-dialog.size-xlarge {
-  width: min(72rem, calc(100vw - 2 * var(--UI-Spacing-spacing-xxxl)));
-  height: min(48rem, calc(100vh - 2 * var(--UI-Spacing-spacing-xxxl)));
-  max-height: calc(100vh - 2 * var(--UI-Spacing-spacing-xxxl));
-}
-
-.compose-modal-dialog .modal-content {
-  padding: 0;
-  align-items: stretch;
-  gap: 0;
-  overflow: hidden;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.composer.is-expanded {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  border: none;
-  padding: 0;
-  gap: 0;
-  background: var(--Colors-Modal-Background);
-}
-
-.composer.is-expanded .composer__chrome {
-  border-radius: var(--UI-Radius-radius-s) var(--UI-Radius-radius-s) 0 0;
-}
-
-.composer.is-expanded .composer__panel {
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-xl) var(--UI-Spacing-spacing-xl);
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.composer.is-expanded .composer__fields,
-.composer.is-expanded .composer__toolbar,
-.composer.is-expanded .composer__attachments {
-  flex: 0 0 auto;
-}
-
-.composer.is-expanded .composer__body,
-.composer.is-expanded .composer__editor,
-.composer.is-expanded .composer__body .tiptap {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* Inline reply (Figma "Replying"): floating card pinned to the pane bottom. */
+/* Reply: at the end of the conversation, pinned to the pane bottom. */
 .composer.is-inline {
   position: sticky;
   bottom: 0;
   z-index: 2;
   flex: 0 0 auto;
-  min-height: auto;
-  border: 1px solid var(--Colors-Border-Subtle);
-  border-radius: var(--UI-Radius-radius-s);
-  padding: var(--UI-Spacing-spacing-ms);
-  background: var(--Colors-Surface-Container-Highest);
-  box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
-.composer.is-inline .composer__panel {
-  flex: 0 0 auto;
-  min-height: auto;
+/* New message: floats over the bottom of the main column (same 12px inset
+   as the reply panel inside the reading pane). */
+.composer.is-new {
+  position: absolute;
+  left: var(--UI-Spacing-spacing-mxs);
+  right: var(--UI-Spacing-spacing-mxs);
+  bottom: var(--UI-Spacing-spacing-mxs);
+  z-index: 50;
+  max-height: calc(100% - 64px - var(--UI-Spacing-spacing-mxs));
+  overflow-y: auto;
 }
 
-.composer.is-inline .composer__body {
-  overflow: auto;
-  max-height: 40vh;
+.composer.is-minimized {
+  cursor: pointer;
 }
 
-.composer.is-inline .composer__body,
-.composer.is-inline .composer__editor,
-.composer.is-inline .composer__body .tiptap {
-  flex: 0 0 auto;
-  min-height: 170px;
-}
-
-.composer__chrome {
+/* Head: icon · title · collapse */
+.composer__head {
   display: flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-s);
-  min-height: var(--UI-Input-xs);
-  padding: var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-ms);
-  background: var(--Colors-Surface-Container-Subtle);
-  border-bottom: 1px solid var(--Colors-Border-Subtle);
-  border-radius: inherit;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
   flex: 0 0 auto;
 }
 
-.composer.is-minimized .composer__chrome {
-  cursor: pointer;
-  border-bottom: none;
+.composer__head-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--Colors-Icon-Primary-Default);
+}
+
+.composer__head-icon svg {
+  display: block;
 }
 
 .composer__title {
@@ -1067,42 +968,50 @@ body {
   color: var(--Colors-Text-Black);
 }
 
-.composer__chrome-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-xxs);
+/* Figma "Button Icon" 26px, no fill, chevron-down 14px */
+.icon-button--ghost {
+  width: 26px;
+  height: 26px;
+  background: transparent;
 }
 
-.composer__chrome-btn {
-  min-width: var(--UI-Input-xs);
-  min-height: var(--UI-Input-xs);
-  color: var(--Colors-Icon-Neutral-Default);
+.icon-button--ghost:hover:not(:disabled) {
+  background: var(--Colors-Control-Neutral-Subtle);
 }
 
-.composer__chrome-btn svg {
-  width: 14px;
-  height: 14px;
-  display: block;
+.composer__collapse svg {
+  transition: transform 0.15s ease;
 }
 
-/* Header rows (Figma "Replying" › Head): To / Cc / Subject */
+.composer.is-minimized .composer__collapse svg {
+  transform: rotate(180deg);
+}
+
+/* Header rows: 42px, 6px side padding; To / Cc carry a bottom hairline */
 .composer__fields {
   display: flex;
   flex-direction: column;
-  gap: 0;
 }
 
 .composer__field {
   display: flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-xxs);
-  padding: var(--UI-Spacing-spacing-xs);
+  min-height: 42px;
+  padding: 0 var(--UI-Spacing-spacing-xs);
+}
+
+.composer__field--recipients {
+  border-bottom: 1px solid var(--Colors-Border-Subtle);
+}
+
+.composer__field--subject {
   border-radius: var(--UI-Radius-radius-s);
+  cursor: text;
 }
 
 .composer__label {
   flex: 0 0 auto;
-  min-width: 27px;
   font-size: var(--Fonts-Body-Default-xxs);
   font-weight: 400;
   line-height: 1.35;
@@ -1110,22 +1019,18 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
+.composer__field--recipients .composer__label {
+  width: 27px;
+}
+
 .composer__label::after {
   content: ':';
-}
-
-.composer__field--subject {
-  background: var(--Colors-Control-Neutral-Subtle);
-  cursor: text;
-}
-
-.composer__field--subject:focus-within {
-  box-shadow: inset 0 0 0 1.5px var(--Colors-Border-Primary-Soft);
 }
 
 .composer__input {
   flex: 1 1 auto;
   min-width: 0;
+  height: 32px;
   margin: 0;
   padding: 0;
   border: none;
@@ -1136,12 +1041,10 @@ body {
   line-height: 1.35;
   letter-spacing: -0.01em;
   color: var(--Colors-Text-Body-Default);
+  caret-color: var(--Colors-Primary-Default);
 }
 
-.composer__input::placeholder {
-  color: var(--Colors-Text-Body-Lighter);
-}
-
+/* Typeahead row: entries, then the caret right after the last one */
 .recipient-picker {
   position: relative;
   flex: 1 1 auto;
@@ -1149,24 +1052,27 @@ body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  column-gap: var(--UI-Spacing-spacing-mxs);
-  row-gap: var(--UI-Spacing-spacing-xxs);
-  min-height: 19px;
-  border-radius: var(--UI-Radius-radius-xs);
-  cursor: pointer;
+  gap: var(--UI-Spacing-spacing-xs);
+  min-height: 32px;
+  padding: 3px 0;
+  cursor: text;
 }
 
 .recipient-picker__chips {
   display: contents;
 }
 
-/* Figma recipient "Entry": 18px thumbnail + XSmall/Strong name */
+/* Figma recipient "Entry": filled chip, 4px pad, radius 6 */
 .recipient-picker__chip {
   display: inline-flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-xxs);
   max-width: 100%;
   min-width: 0;
+  padding: var(--UI-Spacing-spacing-xxs);
+  border-radius: var(--UI-Radius-radius-xs);
+  background: var(--Colors-Control-Neutral-Subtle);
+  cursor: default;
 }
 
 .recipient-picker__chip-name {
@@ -1181,6 +1087,7 @@ body {
   color: var(--Colors-Text-Body-Strong);
 }
 
+/* Remove control: hidden at rest (matches Figma), shown on hover / focus. */
 .recipient-picker__remove {
   display: inline-flex;
   align-items: center;
@@ -1199,8 +1106,6 @@ body {
   transition: opacity 0.15s ease;
 }
 
-/* The remove control appears on hover / keyboard focus so the resting state
-   matches the Figma recipient list. */
 .recipient-picker__chip:hover .recipient-picker__remove,
 .recipient-picker__remove:focus-visible {
   width: 18px;
@@ -1208,7 +1113,6 @@ body {
 }
 
 .recipient-picker__remove:hover {
-  background: var(--Colors-Control-Neutral-Subtle);
   color: var(--Colors-Text-Body-Strong);
 }
 
@@ -1217,68 +1121,44 @@ body {
   outline-offset: 0;
 }
 
+.recipient-picker__input {
+  flex: 1 1 80px;
+  min-width: 80px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Strong);
+  caret-color: var(--Colors-Primary-Default);
+}
+
+.recipient-picker__input::placeholder {
+  color: var(--Colors-Text-Body-Lighter);
+}
+
 .mail-toast__close {
   min-width: var(--UI-Input-min);
   min-height: var(--UI-Input-min);
 }
 
-.recipient-picker__add {
-  flex: 1 1 6rem;
-  min-width: 6rem;
-  margin: 0;
-  padding: 0;
-  border: none;
-  background: transparent;
-  font: inherit;
-  font-size: var(--Fonts-Body-Default-xxs);
-  line-height: 1.35;
-  letter-spacing: -0.01em;
-  color: var(--Colors-Text-Body-Lighter);
-  text-align: left;
-  cursor: pointer;
-}
-
-/* Once recipients are chosen, the add affordance recedes until hovered or
-   focused (keeps keyboard access; matches the Figma resting state). */
-.recipient-picker:has(.recipient-picker__chip) .recipient-picker__add {
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.recipient-picker:has(.recipient-picker__chip):hover .recipient-picker__add,
-.recipient-picker:has(.recipient-picker__chip) .recipient-picker__add:focus-visible,
-.recipient-picker.open .recipient-picker__add {
-  opacity: 1;
-}
-
-.recipient-picker__add:hover {
-  color: var(--Colors-Text-Body-Medium);
-}
-
-.recipient-picker__add:focus {
-  outline: none;
-}
-
-.recipient-picker__add:focus-visible {
-  outline: 2px solid var(--Colors-Stroke-Primary);
-  outline-offset: 2px;
-  border-radius: var(--UI-Radius-radius-xxs);
-}
-
-.composer__field:has(.recipient-picker):hover {
-  background: var(--Colors-Control-Neutral-Subtle);
-}
-
+/* Suggestions panel */
 .recipient-picker .dropdown-menu {
   width: auto;
-  top: calc(100% + var(--UI-Spacing-spacing-xs));
-  left: calc(-1 * var(--UI-Spacing-spacing-xs));
-  right: 0;
+  min-width: 260px;
+  max-width: 100%;
+  top: calc(100% + var(--UI-Spacing-spacing-xxs));
+  left: 0;
   max-height: 240px;
   overflow-y: auto;
   list-style: none;
   margin: 0;
-  z-index: 5;
+  z-index: 60;
 }
 
 .recipient-picker.dropdown-container.open .dropdown-menu {
@@ -1290,6 +1170,11 @@ body {
   width: 100%;
   height: auto !important;
   min-height: var(--UI-Input-sm) !important;
+  cursor: pointer;
+}
+
+.recipient-picker .dropdown-menu-item.is-active {
+  background: var(--Colors-Control-Primary-Subtle);
 }
 
 .recipient-picker__option-text {
@@ -1303,11 +1188,25 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
+.recipient-picker__match {
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+}
+
+.recipient-picker__empty {
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  color: var(--Colors-Text-Body-Light);
+}
+
 /* Message box (Figma "Input Text"): 1.5px Border/Subtle, radius 8, 12px pad */
 .composer__body {
   display: flex;
   flex-direction: column;
-  min-height: 8rem;
+  min-height: 170px;
+  max-height: 40vh;
   margin-top: 0;
   padding: 0;
   overflow: auto;
@@ -1330,7 +1229,7 @@ body {
 .composer__body .tiptap {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 8rem;
+  min-height: 0;
   padding: var(--UI-Spacing-spacing-mxs);
   outline: none;
   white-space: pre-wrap;

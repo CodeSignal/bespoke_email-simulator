@@ -95,49 +95,38 @@
            (e.g. a large margin/padding/border under the composer title). role="group" keeps
            the same accessible semantics a <section aria-label> would have had. -->
       <div class="composer" id="composer" role="group" aria-label="Compose" hidden>
-        <header class="composer__chrome" id="composerChrome" hidden>
+        <!-- Figma "Replying" (470:12849): one panel for new messages and replies. -->
+        <header class="composer__head" id="composerChrome">
+          <span class="composer__head-icon" id="composerIcon" aria-hidden="true"></span>
           <h2 class="composer__title" id="composerTitle">New message</h2>
-          <div class="composer__chrome-actions">
-            <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerMinimizeBtn" aria-label="Minimize">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                <path d="M3.5 8h9"/>
-              </svg>
-            </button>
-            <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerExpandBtn" aria-label="Expand" aria-expanded="false">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M6.5 3.5H12.5V9.5"/>
-                <path d="M12.5 3.5 3.5 12.5"/>
-              </svg>
-            </button>
-            <button type="button" class="button button-text button-xsmall composer__chrome-btn" id="composerCloseBtn" aria-label="Close">
-              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
-                <path d="m4 4 8 8M12 4l-8 8"/>
-              </svg>
-            </button>
-          </div>
+          <button type="button" class="icon-button icon-button--ghost composer__collapse" id="composerMinimizeBtn" aria-label="Minimize" aria-expanded="true" aria-controls="composerPanel">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M6 9L12 15L18 9"/>
+            </svg>
+          </button>
         </header>
-        <div class="composer__panel">
+        <div class="composer__panel" id="composerPanel">
           <div class="composer__fields">
-            <div class="composer__field">
+            <div class="composer__field composer__field--recipients">
               <span class="composer__label" id="composeToLabel">To</span>
-              <div class="recipient-picker dropdown-container" id="composeToPicker" data-field="to" role="group" aria-labelledby="composeToLabel">
+              <div class="recipient-picker dropdown-container" id="composeToPicker" data-field="to">
                 <div class="recipient-picker__chips" id="composeToChips"></div>
-                <button type="button" class="recipient-picker__add" id="composeToAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeToMenu">Select a recipient</button>
-                <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeToMenu" role="listbox" hidden></ul>
+                <input type="text" class="recipient-picker__input" id="composeToInput" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="composeToMenu" aria-labelledby="composeToLabel" autocomplete="off" spellcheck="false" />
+                <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeToMenu" role="listbox" aria-labelledby="composeToLabel" hidden></ul>
               </div>
             </div>
-            <div class="composer__field">
+            <div class="composer__field composer__field--recipients">
               <span class="composer__label" id="composeCcLabel">Cc</span>
-              <div class="recipient-picker dropdown-container" id="composeCcPicker" data-field="cc" role="group" aria-labelledby="composeCcLabel">
+              <div class="recipient-picker dropdown-container" id="composeCcPicker" data-field="cc">
                 <div class="recipient-picker__chips" id="composeCcChips"></div>
-                <button type="button" class="recipient-picker__add" id="composeCcAdd" aria-haspopup="listbox" aria-expanded="false" aria-controls="composeCcMenu">Select a recipient</button>
-                <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeCcMenu" role="listbox" hidden></ul>
+                <input type="text" class="recipient-picker__input" id="composeCcInput" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="composeCcMenu" aria-labelledby="composeCcLabel" autocomplete="off" spellcheck="false" />
+                <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeCcMenu" role="listbox" aria-labelledby="composeCcLabel" hidden></ul>
               </div>
             </div>
-            <label class="composer__field composer__field--subject">
-              <span class="composer__label" id="composeSubjectLabel">Subject</span>
-              <input type="text" class="composer__input" id="composeSubject" />
-            </label>
+            <div class="composer__field composer__field--subject">
+              <label class="composer__label" id="composeSubjectLabel" for="composeSubject">Subject</label>
+              <input type="text" class="composer__input" id="composeSubject" autocomplete="off" />
+            </div>
           </div>
           <div class="composer__body" id="composerBody">
             <!-- TipTap editor mounts here (Stage 4) -->
