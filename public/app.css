@@ -51,6 +51,7 @@ body {
   grid-template-columns: 260px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
+  background: var(--Colors-Surface-Container-Base);
 }
 
 /*
@@ -195,7 +196,7 @@ body {
   min-height: 0;
   overflow: hidden;
   padding: var(--UI-Spacing-spacing-ms) var(--UI-Spacing-spacing-mxs);
-  background: var(--Colors-Surface-App-Base);
+  background: transparent;
   border-right: 1px solid var(--Colors-Border-Subtle);
 }
 
@@ -324,7 +325,7 @@ body {
   min-width: 0;
   position: relative;
   overflow: hidden;
-  background: var(--Colors-Surface-App-Base);
+  background: transparent;
 }
 
 .mail-toolbar {
@@ -656,9 +657,9 @@ body {
   flex: 0 0 auto;
   max-height: 428px;
   padding: var(--UI-Spacing-spacing-mxs);
-  border: 1.5px solid var(--Colors-Border-Subtle);
+  border: 1.5px solid var(--Colors-Border-Subtle-Alt);
   border-radius: var(--UI-Radius-radius-m);
-  background: var(--Colors-Surface-App-Base);
+  background: var(--Colors-Surface-Container-Subtle-Alt);
   transition: border-color 0.15s ease;
 }
 
@@ -892,6 +893,13 @@ body {
   color: var(--Colors-Text-Body-Strong);
 }
 
+/* Initials avatars (e.g. "You" without a photo) on dark: Grey/1200. */
+@media (prefers-color-scheme: dark) {
+  .person-avatar--initials {
+    background: var(--Colors-Base-Neutral-1200);
+  }
+}
+
 .person-avatar--lg.person-avatar--initials {
   font-size: var(--Fonts-Body-Default-sm);
 }
@@ -995,7 +1003,9 @@ body {
   padding: var(--UI-Spacing-spacing-ms);
   border: 1px solid var(--Colors-Border-Subtle);
   border-radius: var(--UI-Radius-radius-s);
-  background: var(--Colors-Surface-Container-Highest);
+  /* Surface/Container/Subtle Alt, except in light mode where the token is
+     transparent and this panel floats over content: Surface/Container/Base. */
+  background: var(--Colors-Surface-Container-Base);
   box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
@@ -1005,6 +1015,12 @@ body {
   gap: var(--UI-Spacing-spacing-s);
   min-height: 0;
   flex: 1 1 auto;
+}
+
+@media (prefers-color-scheme: dark) {
+  .composer {
+    background: var(--Colors-Surface-Container-Subtle-Alt);
+  }
 }
 
 /* Reply: at the end of the conversation, pinned to the pane bottom. */
@@ -1243,6 +1259,8 @@ body {
   list-style: none;
   margin: 0;
   z-index: 60;
+  background: var(--Colors-Surface-Container-Highest);
+  box-shadow: 0 8px 24px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
 .recipient-picker.dropdown-container.open .dropdown-menu {
@@ -1257,8 +1275,18 @@ body {
   cursor: pointer;
 }
 
+/* The design-system dropdown paints items with !important; let the panel's
+   Surface/Container/Highest show through and keep our hover / keyboard states. */
+.recipient-picker .dropdown-menu-item {
+  background: transparent !important;
+}
+
+.recipient-picker .dropdown-menu-item:hover:not(.selected) {
+  background: var(--Colors-Control-Neutral-Subtle) !important;
+}
+
 .recipient-picker .dropdown-menu-item.is-active {
-  background: var(--Colors-Control-Primary-Subtle);
+  background: var(--Colors-Control-Primary-Subtle) !important;
 }
 
 .recipient-picker__option-text {
@@ -1430,7 +1458,7 @@ body {
   flex-direction: column;
   min-height: 0;
   padding: var(--UI-Spacing-spacing-mxs);
-  background: var(--Colors-Surface-App-Base);
+  background: transparent;
 }
 
 .assistant[hidden] {
@@ -1444,9 +1472,9 @@ body {
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-ml);
   padding: var(--UI-Spacing-spacing-ms);
-  border: 1px solid var(--Colors-Border-Subtle);
+  border: 1px solid var(--Colors-Border-Subtle-Alt);
   border-radius: var(--UI-Radius-radius-s);
-  background: var(--Colors-Surface-Container-Highest);
+  background: var(--Colors-Surface-Container-Subtle-Alt);
   box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
@@ -1780,7 +1808,7 @@ body {
   flex-direction: column;
   padding: var(--UI-Spacing-spacing-xxs);
   border-radius: var(--UI-Radius-radius-ml);
-  background: var(--Colors-Surface-Container-Subtle);
+  background: var(--Colors-Control-Neutral-Subtle);
   transition: box-shadow 0.15s ease;
 }
 
