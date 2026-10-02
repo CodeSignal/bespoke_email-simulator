@@ -749,11 +749,72 @@ body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  /* Figma: 16px between the text column and the 6px scrollbar */
-  padding: var(--UI-Spacing-spacing-ms) var(--UI-Spacing-spacing-ms) 0 0;
-  border-top: 1px solid var(--Colors-Border-Subtle);
+  /* Figma: 16px between the text column and the 6px scrollbar; the head
+     divider (with its reply toolbar) sits above, 16px away via the gap. */
+  padding: 0 var(--UI-Spacing-spacing-ms) 0 0;
   scrollbar-width: thin;
   scrollbar-color: var(--Colors-Control-Neutral-Strong) transparent;
+}
+
+/* Head divider with the reply toolbar centred on the line (Figma 490:13178) */
+.email__divider {
+  position: relative;
+  flex: 0 0 auto;
+  height: 1px;
+  background: var(--Colors-Border-Subtle);
+}
+
+.email__actions {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: 0 var(--UI-Spacing-spacing-s);
+  border: 1.5px solid var(--Colors-Border-Subtle);
+  border-radius: var(--UI-Radius-radius-l);
+  background: var(--Colors-Surface-Container-Highest);
+  transform: translate(-50%, -50%);
+}
+
+.email__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--Button-Radius);
+  background: transparent;
+  color: var(--Colors-Icon-Neutral-Default);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.email__action svg {
+  display: block;
+}
+
+/* Reply-all glyph sits in a 16px box like the Figma "fi_2704829" frame */
+.email__action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.email__action:hover {
+  color: var(--Colors-Icon-Neutral-Strong);
+}
+
+.email__action:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 0;
 }
 
 /* Figma "Scrollbar Vertical": 6px thumb, radius 8, Control/Neutral/Strong */

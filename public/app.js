@@ -117,6 +117,7 @@ const state = {
   composeMinimized: false, // composer panel collapsed to its head
   replying: null, // null | 'reply' | 'replyAll'
   selectedEmailId: null, // highlighted message in a multi-message thread
+  replyToEmailId: null, // email a per-message reply button targeted
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
   recipientQuery: { to: '', cc: '' }, // typeahead text per field
@@ -722,6 +723,10 @@ const MAILBOX_ICONS = {
   spam: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.28667 3.28667L12.7133 12.7133M1.33333 5.68183V10.3182C1.33333 10.4812 1.33333 10.5628 1.35175 10.6395C1.36808 10.7075 1.39502 10.7725 1.43157 10.8322C1.4728 10.8995 1.53045 10.9571 1.64575 11.0724L4.92758 14.3542C5.04288 14.4695 5.10053 14.5272 5.16781 14.5684C5.22746 14.605 5.29249 14.6319 5.36051 14.6482C5.43724 14.6667 5.51877 14.6667 5.68183 14.6667H10.3182C10.4812 14.6667 10.5628 14.6667 10.6395 14.6482C10.7075 14.6319 10.7725 14.605 10.8322 14.5684C10.8995 14.5272 10.9571 14.4695 11.0724 14.3542L14.3542 11.0724C14.4695 10.9571 14.5272 10.8995 14.5684 10.8322C14.605 10.7725 14.6319 10.7075 14.6482 10.6395C14.6667 10.5628 14.6667 10.4812 14.6667 10.3182V5.68183C14.6667 5.51877 14.6667 5.43724 14.6482 5.36051C14.6319 5.29249 14.605 5.22746 14.5684 5.16781C14.5272 5.10053 14.4695 5.04288 14.3542 4.92758L11.0724 1.64575C10.9571 1.53045 10.8995 1.4728 10.8322 1.43157C10.7725 1.39502 10.7075 1.36808 10.6395 1.35175C10.5628 1.33333 10.4812 1.33333 10.3182 1.33333H5.68183C5.51877 1.33333 5.43724 1.33333 5.36051 1.35175C5.29249 1.36808 5.22746 1.39502 5.16781 1.43157C5.10053 1.4728 5.04288 1.53045 4.92758 1.64575L1.64575 4.92758C1.53045 5.04288 1.4728 5.10053 1.43157 5.16781C1.39502 5.22746 1.36808 5.29249 1.35175 5.36051C1.33333 5.43724 1.33333 5.51877 1.33333 5.68183Z"/></svg>',
 };
 
+// Figma "Row" (490:13178): reply / reply-all on the email head divider.
+const EMAIL_REPLY_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="currentColor" aria-hidden="true"><path d="M13.125 12.6875C12.9622 12.6875 12.8088 12.5965 12.7337 12.4457C11.9236 10.8256 11.1567 9.29218 7 9.19265V12.25C7 12.4239 6.89708 12.5811 6.73805 12.6508C6.57902 12.7204 6.3933 12.6896 6.26555 12.5712L0.578047 7.32124C0.488359 7.23888 0.4375 7.12218 0.4375 7.00001C0.4375 6.87784 0.488359 6.76113 0.578047 6.67866L6.26555 1.42867C6.3933 1.31032 6.57956 1.28002 6.73805 1.34915C6.89708 1.41893 7 1.5761 7 1.75001V4.81765C13.0596 4.96804 13.5625 8.27445 13.5625 12.25C13.5625 12.4529 13.4228 12.629 13.2254 12.676C13.192 12.6837 13.1584 12.6875 13.125 12.6875ZM1.52009 7.00001L6.125 11.2506V8.75001C6.125 8.50818 6.32067 8.31251 6.5625 8.31251C10.1902 8.31251 11.7347 9.3251 12.6409 10.5423C12.4363 7.55673 11.3956 5.68751 6.5625 5.68751C6.32067 5.68751 6.125 5.49184 6.125 5.25001V2.74937L1.52009 7.00001Z"/></svg>';
+const EMAIL_REPLY_ALL_ICON = '<svg width="14" height="12" viewBox="0 0 13.9992 12.0274" fill="currentColor" aria-hidden="true"><path d="M7.99885 3.02193V0.521928C7.99859 0.421117 7.96786 0.32274 7.91069 0.239704C7.85353 0.156668 7.7726 0.0928509 7.67852 0.0566257C7.58444 0.0204004 7.48161 0.013459 7.38352 0.0367122C7.28543 0.0599655 7.19665 0.112327 7.12885 0.186928L2.62885 5.18693C2.54593 5.2788 2.50003 5.39817 2.50003 5.52193C2.50003 5.64569 2.54593 5.76505 2.62885 5.85693L7.12885 10.8569C7.19665 10.9315 7.28543 10.9839 7.38352 11.0071C7.48161 11.0304 7.58444 11.0235 7.67852 10.9872C7.7726 10.951 7.85353 10.8872 7.91069 10.8042C7.96786 10.7211 7.99859 10.6227 7.99885 10.5219V8.02193C10.9288 8.12193 11.5388 9.16193 12.6988 11.1369C12.8138 11.3419 12.9388 11.5519 13.0688 11.7669C13.1118 11.8434 13.1742 11.9073 13.2497 11.952C13.3252 11.9968 13.4111 12.0209 13.4988 12.0219C13.5436 12.0292 13.5891 12.0292 13.6338 12.0219C13.742 11.9917 13.8368 11.9259 13.903 11.8352C13.9692 11.7445 14.003 11.6342 13.9988 11.5219C13.9988 8.62693 13.9988 3.31193 7.99885 3.02193ZM7.49885 7.02193C7.36624 7.02193 7.23906 7.07461 7.14529 7.16837C7.05153 7.26214 6.99885 7.38932 6.99885 7.52193V9.21693L3.67385 5.52193L6.99885 1.82693V3.52193C6.99885 3.65454 7.05153 3.78171 7.14529 3.87548C7.23906 3.96925 7.36624 4.02193 7.49885 4.02193C11.9238 4.02193 12.7888 6.94693 12.9588 9.64193C11.9288 8.02193 10.7988 7.02193 7.49885 7.02193Z"/><path d="M1.17382 5.52193L5.36882 0.856928C5.41747 0.809201 5.45585 0.752033 5.4816 0.688933C5.50736 0.625834 5.51994 0.558136 5.51857 0.489997C5.51721 0.421859 5.50193 0.354718 5.47367 0.292699C5.44542 0.23068 5.40478 0.175093 5.35426 0.129351C5.30374 0.0836086 5.2444 0.0486778 5.17989 0.0267035C5.11538 0.00472912 5.04705 -0.00382471 4.97911 0.00156747C4.91117 0.00695964 4.84506 0.0261839 4.78482 0.0580596C4.72458 0.0899352 4.67149 0.133789 4.62882 0.186928L0.128819 5.18693C0.0458995 5.2788 0 5.39817 0 5.52193C0 5.64569 0.0458995 5.76505 0.128819 5.85693L4.62882 10.8569C4.67557 10.9087 4.73264 10.9502 4.79636 10.9786C4.86008 11.007 4.92905 11.0218 4.99882 11.0219C5.12274 11.0216 5.24212 10.9753 5.33382 10.8919C5.43174 10.803 5.49041 10.6788 5.49697 10.5467C5.50353 10.4145 5.45745 10.2852 5.36882 10.1869L1.17382 5.52193Z"/></svg>';
+
 // Figma untitled-ui mail-01 with lines (thread header).
 const THREAD_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 5.14583L6.59962 8.59889C6.99907 8.87851 7.1988 9.01832 7.41605 9.07247C7.60795 9.12031 7.80866 9.12031 8.00056 9.07247C8.21781 9.01832 8.41754 8.87851 8.817 8.59889L13.7499 5.14583M13.7499 8.16665V6.23332C13.7499 5.21823 13.7499 4.71068 13.5524 4.32297C13.3786 3.98193 13.1014 3.70465 12.7603 3.53088C12.3726 3.33333 11.8651 3.33333 10.85 3.33333H4.56665C3.55156 3.33333 3.04402 3.33333 2.6563 3.53088C2.31526 3.70465 2.03799 3.98193 1.86422 4.32297C1.66667 4.71068 1.66667 5.21823 1.66667 6.23332V10.1C1.66667 11.1151 1.66667 11.6226 1.86422 12.0103C2.03799 12.3514 2.31526 12.6286 2.6563 12.8024C3.04402 13 3.55156 13 4.56665 13H8.70831"/><path d="M11 10.5H18M11 13.5H18M11 16.5H16"/></svg>';
 
@@ -962,11 +967,23 @@ function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } =
         ${ccRow}
       </div>
     </div>
+    <div class="email__divider">
+      <div class="email__actions" role="group" aria-label="${escapeHtml(t('Reply options'))}">
+        <button type="button" class="email__action" data-reply-mode="reply" aria-label="${escapeHtml(t('Reply'))}" title="${escapeHtml(t('Reply'))}">${EMAIL_REPLY_ICON}</button>
+        <button type="button" class="email__action" data-reply-mode="replyAll" aria-label="${escapeHtml(t('Reply all'))}" title="${escapeHtml(t('Reply all'))}"><span class="email__action-icon">${EMAIL_REPLY_ALL_ICON}</span></button>
+      </div>
+    </div>
     <div class="email__content">
       <div class="email__body">${renderMarkdown(email.body)}</div>
       ${attachmentsHtml}
     </div>
   `;
+  for (const btn of wrap.querySelectorAll('.email__action')) {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      startReply(btn.dataset.replyMode, email.id);
+    });
+  }
   for (const btn of wrap.querySelectorAll('.email__attachment--preview')) {
     btn.addEventListener('click', () => {
       const index = Number(btn.dataset.attachmentIndex);
@@ -1087,7 +1104,10 @@ function replyTargetEmail(thread) {
 function applyThreadComposer(threadId, mode = state.replying || 'reply') {
   const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
   if (!thread) return;
-  const headers = buildReplyHeaders(replyTargetEmail(thread), {
+  // A per-email reply button targets that email; otherwise the thread tip.
+  const target = (state.replyToEmailId && thread.emails?.find((email) => email.id === state.replyToEmailId))
+    || replyTargetEmail(thread);
+  const headers = buildReplyHeaders(target, {
     mode,
     learnerEmail: learnerEmail(),
     subjectFallback: thread.subject || '',
@@ -1113,15 +1133,17 @@ function selectThread(threadId) {
   state.replying = null;
   state.activeThreadId = threadId;
   state.selectedEmailId = null;
+  state.replyToEmailId = null;
   renderShell();
 }
 
-function startReply(mode) {
+function startReply(mode, emailId = null) {
   state.view = 'thread';
   state.composingNew = false;
   state.composeMinimized = false;
   state.replying = mode;
-  state.composeMinimized = false;
+  state.replyToEmailId = emailId;
+  if (emailId) state.selectedEmailId = emailId;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
   els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });

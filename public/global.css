@@ -31,6 +31,9 @@
 
   /* Icons */
   --Colors-Icon-Neutral-Default: #3c4767b8;
+  /* Not exported by the Figma MCP; value from the design-system branch that
+     syncs the Figma tokens (Icon/Neutral/Strong → Base/Grey/800). */
+  --Colors-Icon-Neutral-Strong: #67718e;
   --Colors-Icon-Primary-Default: #377dff;
   --Colors-Icon-Illustrative-Primary-Base: #90b7ff33;
   --Colors-Icon-Switch-Off: #c7cbd6;
@@ -78,6 +81,7 @@
     --Colors-Control-Input-Default: var(--Colors-Backgrounds-Main-Top);
 
     --Colors-Icon-Neutral-Default: var(--Colors-Icon-Medium);
+    --Colors-Icon-Neutral-Strong: var(--Colors-Icon-Strong);
     --Colors-Icon-Primary-Default: var(--Colors-Icon-Primary);
     --Colors-Icon-Illustrative-Primary-Base: rgba(144, 183, 255, 0.2);
     --Colors-Icon-Switch-Off: var(--Colors-Stroke-Strong);
