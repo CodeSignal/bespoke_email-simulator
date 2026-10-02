@@ -1481,38 +1481,8 @@ body {
   color: var(--Colors-Text-Black);
 }
 
-.assistant__thinking {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-xs);
-  color: var(--Colors-Text-Body-Light);
-}
-
-.assistant__thinking[hidden] {
-  display: none !important;
-}
-
-.assistant__spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--Colors-Border-Subtle);
-  border-top-color: var(--Colors-Icon-Primary-Default);
-  border-radius: 50%;
-  animation: assistant-spin 0.7s linear infinite;
-}
-
-.assistant__thinking-label {
-  white-space: nowrap;
-  font-size: var(--Fonts-Body-Default-xxs);
-  line-height: 1.35;
-}
-
 .assistant__clear {
   flex: 0 0 auto;
-}
-
-@keyframes assistant-spin {
-  to { transform: rotate(360deg); }
 }
 
 /* Messages, quick results and chips share one scroll region. */
@@ -1546,6 +1516,36 @@ body {
   line-height: 1.35;
   letter-spacing: -0.01em;
   color: var(--Colors-Text-Body-Default);
+}
+
+/* Thinking row (thinking.riv) while a turn runs, then "Thought for Ns". */
+.assistant__status {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.assistant__status-anim {
+  display: block;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+
+.assistant__status-anim.is-fallback {
+  display: none;
+}
+
+.assistant__thought {
+  margin: 0;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Lighter);
 }
 
 .assistant__row {
@@ -1709,13 +1709,6 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant__spinner {
-    animation: none;
-    border-top-color: var(--Colors-Border-Subtle);
-    background: var(--Colors-Text-Body-Light);
-    opacity: 0.55;
-  }
-
   .assistant__typing-dot {
     animation: none;
     opacity: 0.7;

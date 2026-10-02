@@ -26,6 +26,7 @@
   "dependencies": {
     "@octavus/client-sdk": "^6.10.0",
     "@octavus/server-sdk": "^6.10.0",
+    "@rive-app/canvas": "^2.44.0",
     "@tiptap/core": "^3.0.0",
     "@tiptap/markdown": "^3.0.0",
     "@tiptap/pm": "^3.0.0",

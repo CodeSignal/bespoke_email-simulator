@@ -12,6 +12,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import { Placeholder } from '@tiptap/extensions';
 import Modal from '../design-system/components/modal/modal.js';
+import { Rive, RuntimeLoader } from '@rive-app/canvas';
 import SplitPanel from '../design-system/components/split-panel/split-panel.js';
 import {
   MAILBOXES,
@@ -135,6 +136,12 @@ const state = {
     lastInserted: null,
     seenToolCallIds: new Set(),
     quickActionBusy: false,
+    // Thinking indicator: when the current turn started, and how long each
+    // finished turn thought (by live message id) for the "Thought for Ns" line.
+    thinkingSince: null,
+    thinkingKind: null, // 'chat' | 'quick'
+    thoughtMs: {},
+    quickThoughtMs: null, // last quick action's thinking time (not persisted)
     // One-shot rewrite/shorten/tone/proofread card (not part of chat transcript).
     quickDraft: null,
     // Inbox triage ranking from the prioritize chip (Markdown; not chat transcript).
@@ -155,8 +162,6 @@ const els = {
   composeBtnLabel: document.getElementById('composeBtnLabel'),
   mailboxList: document.getElementById('mailboxList'),
   mailSplit: document.getElementById('mailSplit'),
-  assistantThinking: document.getElementById('assistantThinking'),
-  assistantThinkingLabel: document.getElementById('assistantThinkingLabel'),
   mailMain: document.getElementById('mailMain'),
   mailList: document.getElementById('mailList'),
   threadList: document.getElementById('threadList'),
@@ -1941,6 +1946,7 @@ function renderAssistant(liveMessages = []) {
   }
 
   for (const m of persisted) {
+    if (m.role === 'assistant' && m.thoughtMs) container.appendChild(thoughtLine(m.thoughtMs));
     const html = m.role === 'user' ? escapeHtml(m.content) : renderMarkdown(m.content);
     const row = makeBubble(m.role, html);
     if (m.role === 'assistant') {
@@ -1959,6 +1965,10 @@ function renderAssistant(liveMessages = []) {
       const text = messageText(m);
       const drafts = draftsFromLiveMessage(m);
       const streaming = m.status === 'streaming';
+      noteThinkingProgress(m, Boolean(text || drafts.length));
+      // Until the reply has content, the thinking row stands in for it.
+      if (streaming && !text && !drafts.length) continue;
+      if (state.assistant.thoughtMs[m.id]) container.appendChild(thoughtLine(state.assistant.thoughtMs[m.id]));
       const row = makeBubble(
         'ai',
         renderMarkdown(text) || (drafts.length || streaming
@@ -1971,10 +1981,81 @@ function renderAssistant(liveMessages = []) {
     }
   }
 
+  if (state.assistant.quickThoughtMs && !state.assistant.thinkingSince) {
+    container.appendChild(thoughtLine(state.assistant.quickThoughtMs));
+  }
+  updateAssistantThinking();
   const scroller = els.assistantContent || container;
   scroller.scrollTop = scroller.scrollHeight;
   updateAssistantClearBtn();
-  updateAssistantThinking();
+}
+
+// ── Thinking indicator (in the chat body) ────────────────────
+// thinking.riv: artboard "Icon", "State Machine 1", view model { speed, darkMode }.
+// One loop takes ~2.6s ÷ speed; 1.5 (~1.7s) reads as calm but alive.
+const THINKING_RIVE_SPEED = 1.5;
+let thinkingEl = null;
+let thinkingRive = null;
+
+function thinkingIndicator() {
+  if (thinkingEl) return thinkingEl;
+  thinkingEl = document.createElement('div');
+  thinkingEl.className = 'assistant__status';
+  thinkingEl.setAttribute('role', 'status');
+  thinkingEl.innerHTML = '<canvas class="assistant__status-anim" width="40" height="40" aria-hidden="true"></canvas><span class="assistant__status-label"></span>';
+  const canvas = thinkingEl.querySelector('canvas');
+  try {
+    RuntimeLoader.setWasmUrl('/vendor/rive.wasm');
+    const dark = window.matchMedia?.('(prefers-color-scheme: dark)');
+    thinkingRive = new Rive({
+      src: '/animations/thinking.riv',
+      canvas,
+      autoplay: true,
+      autoBind: true,
+      stateMachine: 'State Machine 1',
+      onLoad: () => {
+        thinkingRive.resizeDrawingSurfaceToCanvas();
+        const vm = thinkingRive.viewModelInstance;
+        const speed = vm?.number('speed');
+        if (speed) speed.value = THINKING_RIVE_SPEED;
+        const darkMode = vm?.boolean('darkMode');
+        if (darkMode && dark) {
+          darkMode.value = dark.matches;
+          dark.addEventListener?.('change', (event) => { darkMode.value = event.matches; });
+        }
+      },
+      onLoadError: () => canvas.classList.add('is-fallback'),
+    });
+  } catch (err) {
+    console.error('[Mail] thinking animation unavailable:', err);
+    canvas.classList.add('is-fallback');
+  }
+  return thinkingEl;
+}
+
+function thoughtLine(ms) {
+  const line = document.createElement('p');
+  line.className = 'assistant__thought';
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  line.textContent = t('Thought for {seconds}s').replace('{seconds}', String(seconds));
+  return line;
+}
+
+function startThinking(kind) {
+  state.assistant.thinkingSince = performance.now();
+  state.assistant.thinkingKind = kind;
+  state.assistant.quickThoughtMs = null;
+}
+
+// Chat turns stop "thinking" once the reply has content (or the stream ends).
+function noteThinkingProgress(message, hasContent) {
+  if (state.assistant.thinkingKind !== 'chat' || !state.assistant.thinkingSince) return;
+  if (!hasContent && message.status === 'streaming') return;
+  if (!state.assistant.thoughtMs[message.id]) {
+    state.assistant.thoughtMs[message.id] = performance.now() - state.assistant.thinkingSince;
+  }
+  state.assistant.thinkingSince = null;
+  state.assistant.thinkingKind = null;
 }
 
 function assistantIsBusy() {
@@ -1983,14 +2064,17 @@ function assistantIsBusy() {
 }
 
 function updateAssistantThinking() {
-  const host = els.assistantThinking;
-  if (!host) return;
   const busy = assistantIsBusy();
-  host.hidden = !busy;
-  if (els.assistantThinkingLabel) {
-    els.assistantThinkingLabel.textContent = state.assistant.quickActionBusy && state.assistant.chat?.status !== 'streaming'
+  // A chat stream that has started answering is no longer "thinking".
+  const thinking = busy && (state.assistant.quickActionBusy || Boolean(state.assistant.thinkingSince));
+  const el = thinkingIndicator();
+  if (thinking) {
+    el.querySelector('.assistant__status-label').textContent = state.assistant.quickActionBusy && state.assistant.chat?.status !== 'streaming'
       ? t('Working…')
       : t('Thinking…');
+    if (el.parentElement !== els.assistantMessages || el.nextSibling) els.assistantMessages.appendChild(el);
+  } else if (el.parentElement) {
+    el.remove();
   }
   // Limit aria-busy to the message log so the status live region in the header can announce.
   if (els.assistantMessages) {
@@ -2035,6 +2119,8 @@ async function clearAssistant() {
     const { octavusSessionId } = await res.json();
 
     state.assistant.persisted = [];
+    state.assistant.thoughtMs = {};
+    state.assistant.quickThoughtMs = null;
     state.session.assistantMessages = [];
     state.assistant.lastContextHash = null; // resend the full mailbox on the next turn
     if (octavusSessionId) state.assistant.octavusSessionId = octavusSessionId;
@@ -2207,6 +2293,8 @@ async function runQuickAction(action, detail = '') {
   if (state.assistant.quickActionBusy) return;
   if (!state.session?.sessionId) return;
   state.assistant.quickActionBusy = true;
+  startThinking('quick');
+  renderAssistant(state.assistant.chat?.messages ?? []);
   renderAssistantChips();
   syncAssistantBusyControls();
 
@@ -2295,6 +2383,12 @@ async function runQuickAction(action, detail = '') {
     console.error('[CosmoMail] quick action failed:', err);
   } finally {
     state.assistant.quickActionBusy = false;
+    if (state.assistant.thinkingKind === 'quick' && state.assistant.thinkingSince) {
+      state.assistant.quickThoughtMs = performance.now() - state.assistant.thinkingSince;
+      state.assistant.thinkingSince = null;
+      state.assistant.thinkingKind = null;
+    }
+    renderAssistant(state.assistant.chat?.messages ?? []);
     renderAssistantChips();
     syncAssistantBusyControls();
   }
@@ -2554,10 +2648,12 @@ function persistAssistant() {
       seenToolCallIds: state.assistant.seenToolCallIds,
     });
     proposedEvents.push(...events);
+    const thoughtMs = state.assistant.thoughtMs[m.id];
     return {
       role: 'assistant',
       content,
       drafts,
+      ...(thoughtMs ? { thoughtMs: Math.round(thoughtMs) } : {}),
       timestamp: new Date().toISOString(),
     };
   });
@@ -2726,6 +2822,7 @@ async function sendAssistant() {
   if (!text) return;
   els.assistantInput.value = '';
   setAssistantEnabled(false);
+  startThinking('chat');
 
   const context = assistantMailboxContext();
   state.assistant.lastContextHash = context.hash;
@@ -2743,6 +2840,9 @@ async function sendAssistant() {
   } catch (err) {
     // The turn may not have reached the model; resend the full mailbox next time.
     state.assistant.lastContextHash = null;
+    state.assistant.thinkingSince = null;
+    state.assistant.thinkingKind = null;
+    updateAssistantThinking();
     console.error('[CosmoMail] assistant send failed:', err);
     setAssistantEnabled(true);
   }

@@ -153,8 +153,16 @@ if (process.env.LIVE_RELOAD === '1') {
     req.on('close', () => clients.delete(res));
   });
   console.log('[live-reload] watching public/ and design-system/');
+} else {
+  // Outside `npm run dev`, answer the page's probe quietly (204 ends the
+  // EventSource without a console 404).
+  app.get('/__livereload', (_req, res) => res.status(204).end());
 }
 app.use(express.static(path.join(__dirname, 'public')));
+// Rive runtime WASM for the AI Assistant thinking animation (thinking.riv).
+app.get('/vendor/rive.wasm', (_req, res) => {
+  res.type('application/wasm').sendFile(path.join(__dirname, 'node_modules/@rive-app/canvas/rive.wasm'));
+});
 
 // ── Health ────────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
