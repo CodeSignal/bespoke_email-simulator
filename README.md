@@ -272,14 +272,21 @@ npm run pack     # client + server bundles → dist/ and dist.tar.gz
 ```
 
 CI (`.github/workflows/ci.yml`) runs build + tests on push/PR.
-`.github/workflows/release.yml` tests, then `npm run pack`: a minified client
-bundle, a single-file server bundle (Express + Octavus inlined — no
-`node_modules`), a single-file `extract-conversations.js` (for the `report` /
-`extract` scripts, with `lib/character-replies.js` inlined the same way), and
-the static files the server serves. Extract `dist.tar.gz` and run
-`node server.js`. Supply `scenario.json` and `.env` at runtime; use
-`npm run report` (or `node extract-conversations.js ...` directly) against
-the `sessions.json` it produces.
+`.github/workflows/release.yml` runs tests, stamps `package.json` from the
+release tag, then `npm run pack`: a minified client bundle, a single-file
+server bundle (Express + Octavus inlined — no `node_modules`), a single-file
+`extract-conversations.js` (for the `report` / `extract` scripts, with
+`lib/character-replies.js` inlined the same way), and the static files the
+server serves. Extract `dist.tar.gz` and run `node server.js`. Supply
+`scenario.json` and `.env` at runtime; use `npm run report` (or
+`node extract-conversations.js ...` directly) against the `sessions.json` it
+produces.
+
+Download URLs:
+
+- Stable: `.../releases/latest/download/dist.tar.gz`
+- Newest (incl. pre-release): `.../releases/download/prerelease/dist.tar.gz`
+  (floating tag; refreshed on every versioned release, stable or RC)
 
 ## Project layout
 
