@@ -2211,8 +2211,8 @@ function renderQuickResultPanel() {
     const card = document.createElement('div');
     card.className = 'assistant__triage';
     card.setAttribute('aria-label', t('Inbox priority'));
-    const label = document.createElement('p');
-    label.className = 'body-xsmall assistant__triage-label';
+    const label = document.createElement('h3');
+    label.className = 'assistant__triage-label';
     label.textContent = t('Inbox priority');
     card.appendChild(label);
     const body = document.createElement('div');

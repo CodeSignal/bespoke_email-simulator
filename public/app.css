@@ -1931,9 +1931,14 @@ body {
   border-radius: var(--UI-Radius-radius-s);
 }
 
+/* Headline for the inbox priority result */
 .assistant__triage-label {
-  color: var(--Colors-Text-Body-Light);
   margin: 0;
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--Colors-Text-Body-Strong);
 }
 
 .assistant__triage-body {
