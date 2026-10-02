@@ -787,6 +787,22 @@ function placeComposer() {
   }
 }
 
+// Toolbar hairline while the visible content is scrolled: the list, the
+// reading pane, or a single message's body.
+function updateToolbarScrolled() {
+  const toolbar = document.getElementById('mailToolbar');
+  if (!toolbar) return;
+  const scrollers = state.view === 'thread'
+    ? [els.readingPane, els.readingPane?.querySelector('.reading-pane--single > .email .email__content')]
+    : [els.threadList];
+  toolbar.classList.toggle('is-scrolled', scrollers.some((el) => el && !el.hidden && el.scrollTop > 0));
+}
+
+function initToolbarScrollShadow() {
+  // Capture phase: scroll events don't bubble, and message bodies are rendered later.
+  els.mailMain?.addEventListener('scroll', updateToolbarScrolled, { capture: true, passive: true });
+}
+
 function applyView() {
   if (state.view === 'compose') state.view = 'list';
   const view = state.view;
@@ -836,6 +852,7 @@ function applyView() {
   if (els.toolbarComposeLabel) els.toolbarComposeLabel.textContent = t('Compose');
   renderAssistantChips();
   renderQuickResultPanel();
+  requestAnimationFrame(updateToolbarScrolled);
 }
 
 // ── Rendering ─────────────────────────────────────────────────
@@ -2875,6 +2892,7 @@ async function boot() {
 
     applyScenarioChrome();
     initMailSplit();
+    initToolbarScrollShadow();
     initComposer();
     initMailtoCompose();
     initAttachments();

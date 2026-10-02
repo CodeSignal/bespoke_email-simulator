@@ -332,8 +332,15 @@ body {
   align-items: center;
   gap: var(--UI-Spacing-spacing-xs);
   height: 64px;
+  /* Hairline appears only while the content below is scrolled. */
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
   padding: 0 var(--UI-Spacing-spacing-xl);
   flex: 0 0 auto;
+}
+
+.mail-toolbar.is-scrolled {
+  border-bottom-color: var(--Colors-Border-Subtle);
 }
 
 .mail-back {
@@ -2018,18 +2025,18 @@ body {
   }
 }
 
-/* New-mail toasts: top right of the viewport, 12px in, sliding in from the
-   right (placement and motion follow co-design-al's ToastContainer). */
+/* New-mail toasts: inside the main column, 8px below the 64px toolbar and
+   8px from its right edge; slide in from the right (co-design-al motion). */
 .mail-toasts {
-  position: fixed;
-  top: var(--UI-Spacing-spacing-mxs);
-  right: var(--UI-Spacing-spacing-mxs);
+  position: absolute;
+  top: calc(64px + var(--UI-Spacing-spacing-s));
+  right: var(--UI-Spacing-spacing-s);
   z-index: 1100;
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: var(--UI-Spacing-spacing-s);
-  width: min(22rem, calc(100vw - 2 * var(--UI-Spacing-spacing-mxs)));
+  width: min(22rem, calc(100% - 2 * var(--UI-Spacing-spacing-s)));
   pointer-events: none;
 }
 
