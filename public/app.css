@@ -2053,6 +2053,13 @@ body {
   .mail-toast { animation: none; }
 }
 
+.mail-toast.box,
+.mail-toast.box.card:hover,
+.mail-toast.box.card:focus {
+  border-radius: var(--UI-Radius-radius-s);
+  box-shadow: 0 3px 12px 0 var(--Colors-Shadow-Card);
+}
+
 .mail-toast.box {
   pointer-events: auto;
   display: flex;
