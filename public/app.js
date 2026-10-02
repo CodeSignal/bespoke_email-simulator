@@ -147,7 +147,7 @@ const state = {
     // Inbox triage ranking from the prioritize chip (Markdown; not chat transcript).
     triageRanking: null,
     // Suggested reply options under the focused email.
-    suggestedReplies: null, // { threadId, emailId, replies: string[] }
+    suggestedReplies: null, // { threadId, emailId, replies: string[], index }
   },
   characterSessions: {},
   attachments: [],
@@ -1076,12 +1076,10 @@ function renderThread(threadId) {
     }
     els.readingPane.appendChild(card);
   });
-  // Always at the end of the thread — never mid-history under a stale focus.
-  const suggestions = renderSuggestedReplies(thread, replyTargetEmail(thread));
-  if (suggestions) els.readingPane.appendChild(suggestions);
   if (state.replying) placeComposer();
   else els.readingPane.appendChild(renderThreadActions());
   renderAssistantChips();
+  renderQuickResultPanel();
 }
 
 // Reply / Reply all sit after the conversation (the toolbar holds Compose).
@@ -2213,6 +2211,80 @@ function renderAssistantChips() {
   }
 }
 
+// Suggested replies for the open conversation, while they still target its
+// reply email (they go stale once the thread moves on).
+function activeSuggestedReplies() {
+  const pack = state.assistant.suggestedReplies;
+  if (!pack?.replies?.length) return null;
+  if (state.view !== 'thread' || state.activeThreadId !== pack.threadId) return null;
+  const thread = (state.session?.threads ?? []).find((th) => th.id === pack.threadId);
+  const email = thread ? replyTargetEmail(thread) : null;
+  if (pack.emailId && email?.id && pack.emailId !== email.id) return null;
+  return pack;
+}
+
+const CYCLE_PREV_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18L9 12L15 6"/></svg>';
+const CYCLE_NEXT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18L15 12L9 6"/></svg>';
+
+// One suggestion at a time; ‹ › cycle (wrapping), Insert drops it in the reply.
+function renderSuggestedRepliesCard(pack) {
+  const total = pack.replies.length;
+  const index = ((pack.index ?? 0) % total + total) % total;
+  const row = document.createElement('div');
+  row.className = 'assistant__row assistant__row--ai';
+  const turn = document.createElement('div');
+  turn.className = 'assistant__turn';
+  const card = document.createElement('article');
+  card.className = 'assistant__draft assistant__suggestions';
+  card.setAttribute('aria-label', t('Suggested replies'));
+
+  const label = document.createElement('div');
+  label.className = 'body-xsmall assistant__draft-label';
+  label.textContent = t('Suggested replies');
+  card.appendChild(label);
+
+  const body = document.createElement('div');
+  body.className = 'assistant__suggestion-body body-small';
+  body.setAttribute('aria-live', 'polite');
+  body.textContent = String(pack.replies[index] ?? '').trim();
+  card.appendChild(body);
+
+  const actions = document.createElement('div');
+  actions.className = 'assistant__draft-actions';
+  const step = (delta) => {
+    pack.index = (index + delta + total) % total;
+    renderQuickResultPanel();
+    els.assistantQuickResult?.querySelector(`.assistant__cycle[data-step="${delta}"]`)?.focus();
+  };
+  const cycleBtn = (delta, icon, text) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-button icon-button--ghost assistant__cycle';
+    btn.dataset.step = String(delta);
+    btn.innerHTML = icon;
+    btn.setAttribute('aria-label', text);
+    btn.title = text;
+    btn.disabled = total < 2;
+    btn.addEventListener('click', () => step(delta));
+    return btn;
+  };
+  const count = document.createElement('span');
+  count.className = 'assistant__cycle-count';
+  count.textContent = t('{current} of {total}').replace('{current}', String(index + 1)).replace('{total}', String(total));
+  const insert = document.createElement('button');
+  insert.type = 'button';
+  insert.className = 'button button-text-primary button-xsmall assistant__insert';
+  insert.textContent = t('Insert');
+  insert.setAttribute('aria-label', t('Insert into composer'));
+  insert.addEventListener('click', () => void applySuggestedReply(pack.replies[index]));
+  actions.append(cycleBtn(-1, CYCLE_PREV_ICON, t('Previous suggestion')), count, cycleBtn(1, CYCLE_NEXT_ICON, t('Next suggestion')), insert);
+  card.appendChild(actions);
+
+  turn.appendChild(card);
+  row.appendChild(turn);
+  return row;
+}
+
 function quickDraftBelongsToActiveThread(draft) {
   if (!draft?.sourceThreadId) return true;
   return state.view === 'thread' && state.activeThreadId === draft.sourceThreadId;
@@ -2225,11 +2297,14 @@ function renderQuickResultPanel() {
   const draft = state.assistant.quickDraft;
   const ranking = String(state.assistant.triageRanking ?? '').trim();
   const showDraft = draft && quickDraftBelongsToActiveThread(draft);
-  if (!showDraft && !ranking) {
+  const suggestions = activeSuggestedReplies();
+  if (!showDraft && !ranking && !suggestions) {
     host.hidden = true;
     return;
   }
   host.hidden = false;
+
+  if (suggestions) host.appendChild(renderSuggestedRepliesCard(suggestions));
 
   if (ranking) {
     const row = document.createElement('div');
@@ -2261,48 +2336,6 @@ function renderQuickResultPanel() {
     host.appendChild(row);
     appendDraftCard(row, draft, { actionsAtBottom: true });
   }
-}
-
-function renderSuggestedReplies(thread, email) {
-  const pack = state.assistant.suggestedReplies;
-  if (!pack?.replies?.length) return null;
-  if (pack.threadId !== thread.id) return null;
-  // Drop suggestions that targeted an older message once the thread moved on.
-  if (pack.emailId && email?.id && pack.emailId !== email.id) return null;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'suggested-replies';
-  wrap.setAttribute('aria-label', t('Suggested replies'));
-
-  const label = document.createElement('p');
-  label.className = 'body-xsmall suggested-replies__label';
-  label.textContent = t('Suggested replies');
-  wrap.appendChild(label);
-
-  const list = document.createElement('div');
-  list.className = 'suggested-replies__list';
-
-  for (const body of pack.replies) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    // Not a design-system .button — those are fixed-height single-line controls.
-    btn.className = 'suggested-replies__option body-small';
-    btn.textContent = String(body ?? '').trim();
-    btn.title = t('Insert into composer');
-    btn.addEventListener('click', () => void applySuggestedReply(body));
-    list.appendChild(btn);
-  }
-  wrap.appendChild(list);
-  return wrap;
-}
-
-/** Scroll the reading pane so end-of-thread UI (e.g. suggested replies) is visible. */
-function scrollReadingPaneToEnd() {
-  const pane = els.readingPane;
-  if (!pane || pane.hidden) return;
-  requestAnimationFrame(() => {
-    pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' });
-  });
 }
 
 function focusedEmailMarkdown(thread) {
@@ -2375,14 +2408,11 @@ async function runQuickAction(action, detail = '') {
         threadId: sourceThreadId,
         emailId: focus?.id || null,
         replies: body.replies,
+        index: 0,
       };
       state.assistant.quickDraft = null;
       state.assistant.triageRanking = null;
-      if (state.view === 'thread' && state.activeThreadId === sourceThreadId) {
-        renderThread(sourceThreadId);
-        // Suggestions render at the end of the thread — bring them into view.
-        scrollReadingPaneToEnd();
-      }
+      renderQuickResultPanel();
     } else if (action === 'prioritize_inbox' && body.ranking) {
       state.assistant.triageRanking = body.ranking;
       state.assistant.quickDraft = null;
@@ -2445,12 +2475,11 @@ async function applySuggestedReply(body) {
   }
   // Dismiss the suggestion picker once the learner picks one.
   state.assistant.suggestedReplies = null;
+  renderQuickResultPanel();
   if (!state.replying && state.view === 'thread' && state.activeThreadId) {
     startReply('reply');
   } else if (!composerIsOpen()) {
     startCompose({ blank: true });
-  } else if (state.view === 'thread' && state.activeThreadId) {
-    renderThread(state.activeThreadId);
   }
   setEditorMarkdown(body);
   const scope = draftScope() || { scope: 'new' };

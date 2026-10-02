@@ -1930,6 +1930,31 @@ body {
   gap: var(--UI-Spacing-spacing-s);
 }
 
+/* Suggested replies: one at a time, cycled from the actions row */
+.assistant__suggestion-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.assistant__cycle.icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.assistant__cycle-count {
+  min-width: 3.5em;
+  text-align: center;
+  font-size: var(--Fonts-Body-Default-xxs);
+  line-height: 1.35;
+  color: var(--Colors-Text-Body-Light);
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant__suggestions .assistant__insert {
+  margin-left: auto;
+}
+
 /* Bold in assistant output is Work Sans Medium, not Bold. */
 .assistant__msg strong,
 .assistant__msg b,
@@ -1980,54 +2005,6 @@ body {
 
 .assistant__triage-body li + li {
   margin-top: var(--UI-Spacing-spacing-xs);
-}
-
-/* Suggested replies (end of the reading pane) */
-.suggested-replies {
-  flex: 0 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: var(--UI-Spacing-spacing-xs);
-  margin: var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-mxs) var(--UI-Spacing-spacing-s);
-}
-
-.suggested-replies__label {
-  color: var(--Colors-Text-Body-Light);
-  margin: 0;
-}
-
-.suggested-replies__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--UI-Spacing-spacing-xs);
-}
-
-.suggested-replies__option {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.45;
-  color: var(--Colors-Text-Body-Strong);
-  background: var(--Colors-Control-Primary-Subtle);
-  border: 1px solid transparent;
-  border-radius: var(--UI-Radius-radius-m);
-  cursor: pointer;
-  font: inherit;
-  box-sizing: border-box;
-}
-
-.suggested-replies__option:hover,
-.suggested-replies__option:focus-visible {
-  border-color: var(--Colors-Border-Primary-Soft);
-  outline: none;
-}
-
-.suggested-replies__option:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--Colors-Primary-Default) 35%, transparent);
 }
 
 .email--arrive {
