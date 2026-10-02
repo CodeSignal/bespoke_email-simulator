@@ -856,8 +856,19 @@ function renderMailboxes() {
   if (els.composeBtn) els.composeBtn.title = t('Compose');
 }
 
+// Newest activity first (a thread's time is its latest email's date).
+function threadTime(thread) {
+  let latest = -Infinity;
+  for (const email of thread.emails ?? []) {
+    const time = Date.parse(email?.date);
+    if (!Number.isNaN(time) && time > latest) latest = time;
+  }
+  return latest;
+}
+
 function renderMailList() {
-  const threads = visibleThreads();
+  // Stable sort: threads without dates keep their seeded order at the end.
+  const threads = [...visibleThreads()].sort((a, b) => (threadTime(b) - threadTime(a)) || 0);
   els.threadList.innerHTML = '';
 
   if (!threads.length) {

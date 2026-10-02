@@ -423,7 +423,7 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  gap: var(--UI-Spacing-spacing-xxs);
+  gap: var(--UI-Spacing-spacing-s);
   padding: var(--UI-Spacing-spacing-mxs);
 }
 
