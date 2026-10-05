@@ -1895,7 +1895,8 @@ body {
 .email__attachment--preview:focus-visible {
   border-color: var(--Colors-Stroke-Strong, var(--Colors-Stroke-Default));
   outline: 2px solid var(--Colors-Stroke-Focus, rgba(92, 148, 255, 0.6));
-  outline-offset: 2px;
+  outline-offset: -2px;
+  box-shadow: none;
 }
 
 /* "Replace current draft?" confirm */
