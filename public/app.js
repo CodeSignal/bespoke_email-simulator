@@ -1,9 +1,9 @@
 /**
- * CosmoMail — app.js (frontend entry, bundled by esbuild).
+ * Mail — app.js (frontend entry, bundled by esbuild).
  *
- * Stage 3: load the scenario + session and render the thread rail and reading
- * pane (emails rendered from Markdown). Composer (TipTap) and the Cosmo
- * assistant are wired in later stages.
+ * Loads the scenario + session and renders the mailbox rail, mail list and
+ * reading pane (emails rendered from Markdown), the TipTap composer, and the
+ * AI Assistant panel (backed by the Cosmo agent on Octavus).
  */
 
 import { OctavusChat, createHttpTransport } from '@octavus/client-sdk';
@@ -12,6 +12,7 @@ import StarterKit from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 import { Placeholder } from '@tiptap/extensions';
 import Modal from '../design-system/components/modal/modal.js';
+import { Rive, RuntimeLoader } from '@rive-app/canvas';
 import SplitPanel from '../design-system/components/split-panel/split-panel.js';
 import {
   MAILBOXES,
@@ -21,6 +22,8 @@ import {
   buildReplyHeaders,
   threadListCorrespondent,
   latestInboundEmail,
+  threadIsUnread,
+  unreadEmailKeys,
 } from '../lib/mailboxes.js';
 import {
   availableCharacters,
@@ -112,11 +115,13 @@ const state = {
   activeThreadId: null,
   view: 'list', // list | thread
   composingNew: false,
-  composeMinimized: false,
-  composeExpanded: false,
   replying: null, // null | 'reply' | 'replyAll'
+  selectedEmailId: null, // highlighted message in a multi-message thread
+  replyToEmailId: null, // email a per-message reply button targeted
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
+  recipientQuery: { to: '', cc: '' }, // typeahead text per field
+  recipientActiveIndex: 0, // highlighted suggestion in the open menu
   editor: null,
   draftSaveTimer: null,
   assistant: {
@@ -130,12 +135,18 @@ const state = {
     lastInserted: null,
     seenToolCallIds: new Set(),
     quickActionBusy: false,
+    // Thinking indicator: when the current turn started, and how long each
+    // finished turn thought (by live message id) for the "Thought for Ns" line.
+    thinkingSince: null,
+    thinkingKind: null, // 'chat' | 'quick'
+    thoughtMs: {},
+    quickThoughtMs: null, // last quick action's thinking time (not persisted)
     // One-shot rewrite/shorten/tone/proofread card (not part of chat transcript).
     quickDraft: null,
     // Inbox triage ranking from the prioritize chip (Markdown; not chat transcript).
     triageRanking: null,
     // Suggested reply options under the focused email.
-    suggestedReplies: null, // { threadId, emailId, replies: string[] }
+    suggestedReplies: null, // { threadId, emailId, replies: string[], index }
   },
   characterSessions: {},
   attachments: [],
@@ -150,29 +161,32 @@ const els = {
   composeBtnLabel: document.getElementById('composeBtnLabel'),
   mailboxList: document.getElementById('mailboxList'),
   mailSplit: document.getElementById('mailSplit'),
-  assistantThinking: document.getElementById('assistantThinking'),
-  assistantThinkingLabel: document.getElementById('assistantThinkingLabel'),
   mailMain: document.getElementById('mailMain'),
   mailList: document.getElementById('mailList'),
   threadList: document.getElementById('threadList'),
   mailToolbarTitle: document.getElementById('mailToolbarTitle'),
+  mailToolbarName: document.getElementById('mailToolbarName'),
+  mailToolbarCount: document.getElementById('mailToolbarCount'),
   backBtn: document.getElementById('backBtn'),
+  backBtnLabel: document.getElementById('backBtnLabel'),
+  toolbarComposeBtn: document.getElementById('toolbarComposeBtn'),
+  toolbarComposeLabel: document.getElementById('toolbarComposeLabel'),
   readingPane: document.getElementById('readingPane'),
   composer: document.getElementById('composer'),
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
-  composerMinimizeBtn: document.getElementById('composerMinimizeBtn'),
-  composerExpandBtn: document.getElementById('composerExpandBtn'),
+  composerIcon: document.getElementById('composerIcon'),
   composerCloseBtn: document.getElementById('composerCloseBtn'),
   assistantHint: document.getElementById('assistantHint'),
   composeToLabel: document.getElementById('composeToLabel'),
   composeCcLabel: document.getElementById('composeCcLabel'),
+  composeSubjectLabel: document.getElementById('composeSubjectLabel'),
   composeToPicker: document.getElementById('composeToPicker'),
   composeCcPicker: document.getElementById('composeCcPicker'),
   composeToChips: document.getElementById('composeToChips'),
   composeCcChips: document.getElementById('composeCcChips'),
-  composeToAdd: document.getElementById('composeToAdd'),
-  composeCcAdd: document.getElementById('composeCcAdd'),
+  composeToInput: document.getElementById('composeToInput'),
+  composeCcInput: document.getElementById('composeCcInput'),
   composeToMenu: document.getElementById('composeToMenu'),
   composeCcMenu: document.getElementById('composeCcMenu'),
   composeSubject: document.getElementById('composeSubject'),
@@ -184,6 +198,7 @@ const els = {
   fileInput: document.getElementById('fileInput'),
   attachmentPreview: document.getElementById('attachmentPreview'),
   assistantPanel: document.getElementById('assistantPanel'),
+  assistantContent: document.getElementById('assistantContent'),
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
@@ -233,9 +248,9 @@ function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  return d.toLocaleString(undefined, {
-    year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  const day = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `${day} ${time}`;
 }
 
 function formatListDate(iso) {
@@ -323,6 +338,21 @@ function learnerEmail() {
   return state.config?.learner?.email || '';
 }
 
+function isLearnerAddress(addr) {
+  const email = addressEmail(addr).toLowerCase();
+  const learner = learnerEmail().toLowerCase();
+  return Boolean(email && learner && email === learner);
+}
+
+// Header recipient list: names only, with the learner shown as "You".
+function recipientNames(list) {
+  const items = Array.isArray(list) ? list : [list];
+  return items
+    .filter(Boolean)
+    .map((addr) => (isLearnerAddress(addr) ? t('You') : displayName(personForAddress(addr)) || addressEmail(addr)))
+    .join(', ');
+}
+
 function directoryCharacters() {
   const learner = learnerEmail().toLowerCase();
   return (state.config?.characters ?? []).filter(
@@ -357,16 +387,17 @@ function addRecipient(field, email) {
   if (!state.recipients[field].some((value) => value.toLowerCase() === canonical.toLowerCase())) {
     state.recipients[field] = [...state.recipients[field], canonical];
   }
-  state.openRecipientField = availableCharacters(directory, { selected: selectedRecipientEmails() }).length
-    ? field
-    : null;
+  // Typeahead: clear the query and keep the caret right after the new
+  // entry. The suggestions close so they don't cover the next row; typing
+  // (or ArrowDown) opens them again.
+  state.recipientQuery[field] = '';
+  state.recipientActiveIndex = 0;
+  const { input } = pickerEls(field);
+  if (input) input.value = '';
+  state.openRecipientField = null;
   renderRecipientPickers();
   scheduleDraftSave();
-  if (state.openRecipientField === field) {
-    pickerEls(field).menu?.querySelector('button')?.focus();
-  } else {
-    pickerEls(field).add?.focus();
-  }
+  input?.focus();
 }
 
 function removeRecipient(field, email) {
@@ -378,8 +409,37 @@ function removeRecipient(field, email) {
 
 function pickerEls(field) {
   return field === 'cc'
-    ? { picker: els.composeCcPicker, chips: els.composeCcChips, add: els.composeCcAdd, menu: els.composeCcMenu }
-    : { picker: els.composeToPicker, chips: els.composeToChips, add: els.composeToAdd, menu: els.composeToMenu };
+    ? { picker: els.composeCcPicker, chips: els.composeCcChips, input: els.composeCcInput, menu: els.composeCcMenu }
+    : { picker: els.composeToPicker, chips: els.composeToChips, input: els.composeToInput, menu: els.composeToMenu };
+}
+
+// Directory people not yet on the message, filtered by the typed query.
+// Name-prefix matches rank first, then word-prefix, then anywhere in
+// name / email / role.
+function recipientMatches(field) {
+  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
+  const query = String(state.recipientQuery[field] || '').trim().toLowerCase();
+  if (!query) return remaining;
+  const ranked = [];
+  for (const character of remaining) {
+    const name = String(characterLabel(character) || '').toLowerCase();
+    const email = String(character.email || '').toLowerCase();
+    const role = String(character.role || '').toLowerCase();
+    let rank = -1;
+    if (name.startsWith(query) || email.startsWith(query)) rank = 0;
+    else if (name.split(/\s+/).some((word) => word.startsWith(query))) rank = 1;
+    else if (name.includes(query) || email.includes(query) || role.includes(query)) rank = 2;
+    if (rank >= 0) ranked.push({ character, rank });
+  }
+  return ranked.sort((a, b) => a.rank - b.rank).map((entry) => entry.character);
+}
+
+function highlightMatch(text, query) {
+  const value = String(text ?? '');
+  const q = String(query || '').trim();
+  const index = q ? value.toLowerCase().indexOf(q.toLowerCase()) : -1;
+  if (index < 0) return escapeHtml(value);
+  return `${escapeHtml(value.slice(0, index))}<mark class="recipient-picker__match">${escapeHtml(value.slice(index, index + q.length))}</mark>${escapeHtml(value.slice(index + q.length))}`;
 }
 
 function closeRecipientMenus() {
@@ -390,19 +450,20 @@ function closeRecipientMenus() {
 function renderRecipientChip(field, email) {
   const character = characterByEmail(directoryCharacters(), email) || personForAddress(email);
   const chip = document.createElement('span');
-  chip.className = 'tag outline recipient-picker__chip';
+  chip.className = 'recipient-picker__chip';
   chip.dataset.email = email;
   chip.insertAdjacentHTML('afterbegin', avatarMarkup(character, 'xs'));
 
   const label = document.createElement('span');
+  label.className = 'recipient-picker__chip-name';
   label.textContent = characterLabel(character) || email;
   chip.appendChild(label);
 
   const remove = document.createElement('button');
   remove.type = 'button';
-  remove.className = 'button button-text button-xsmall recipient-picker__remove';
+  remove.className = 'recipient-picker__remove';
   remove.setAttribute('aria-label', `${t('Remove')} ${label.textContent}`);
-  remove.textContent = '×';
+  remove.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true"><path d="m4 4 8 8M12 4l-8 8"/></svg>';
   remove.addEventListener('click', (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -413,35 +474,49 @@ function renderRecipientChip(field, email) {
 }
 
 function renderRecipientMenu(field) {
-  const { picker, add, menu } = pickerEls(field);
-  const directory = directoryCharacters();
-  const remaining = availableCharacters(directory, { selected: selectedRecipientEmails() });
-  const open = state.openRecipientField === field && remaining.length > 0;
+  const { picker, input, menu } = pickerEls(field);
+  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
+  const matches = recipientMatches(field);
+  const query = state.recipientQuery[field] || '';
+  const open = state.openRecipientField === field && (matches.length > 0 || query.trim().length > 0);
+  if (state.recipientActiveIndex >= matches.length) state.recipientActiveIndex = Math.max(0, matches.length - 1);
 
   if (picker) {
     picker.classList.toggle('is-open', open);
     picker.classList.toggle('open', open);
   }
-  if (add) {
-    add.hidden = remaining.length === 0;
-    add.disabled = remaining.length === 0;
-    add.setAttribute('aria-expanded', open ? 'true' : 'false');
-    add.textContent = t('Select a recipient');
-    if (remaining.length === 0) add.setAttribute('aria-label', t('No more people to add'));
-    else add.setAttribute('aria-label', t('Select a recipient'));
+  if (input) {
+    input.setAttribute('aria-expanded', open ? 'true' : 'false');
+    // Placeholder only while the row is empty; entries speak for themselves.
+    input.placeholder = state.recipients[field].length ? '' : t('Type a name');
+    input.setAttribute('aria-label', remaining.length ? t('Add a recipient') : t('No more people to add'));
   }
   if (!menu) return;
   menu.hidden = !open;
   menu.innerHTML = '';
-  if (!open) return;
+  if (!open) {
+    input?.removeAttribute('aria-activedescendant');
+    return;
+  }
 
-  for (const character of remaining) {
+  if (!matches.length) {
+    const empty = document.createElement('li');
+    empty.className = 'recipient-picker__empty';
+    empty.setAttribute('role', 'presentation');
+    empty.textContent = remaining.length ? t('No matching people') : t('No more people to add');
+    menu.appendChild(empty);
+    input?.removeAttribute('aria-activedescendant');
+    return;
+  }
+
+  matches.forEach((character, index) => {
     const item = document.createElement('li');
     item.setAttribute('role', 'presentation');
-    const option = document.createElement('button');
-    option.type = 'button';
-    option.className = 'dropdown-menu-item recipient-picker__option';
+    const option = document.createElement('div');
+    option.id = `${field}-recipient-option-${index}`;
+    option.className = 'dropdown-menu-item recipient-picker__option' + (index === state.recipientActiveIndex ? ' is-active' : '');
     option.setAttribute('role', 'option');
+    option.setAttribute('aria-selected', index === state.recipientActiveIndex ? 'true' : 'false');
     option.dataset.email = character.email;
     const content = document.createElement('span');
     content.className = 'dropdown-menu-item-content';
@@ -450,16 +525,24 @@ function renderRecipientMenu(field) {
     text.className = 'recipient-picker__option-text';
     const name = document.createElement('span');
     name.className = 'dropdown-menu-item-label';
-    name.textContent = characterLabel(character);
+    name.innerHTML = highlightMatch(characterLabel(character), query);
     text.appendChild(name);
-    if (character.role) {
+    const metaText = character.role || character.email;
+    if (metaText) {
       const meta = document.createElement('span');
       meta.className = 'body-xsmall recipient-picker__option-meta';
-      meta.textContent = character.role;
+      meta.innerHTML = highlightMatch(metaText, query);
       text.appendChild(meta);
     }
     content.appendChild(text);
     option.appendChild(content);
+    // mousedown keeps focus in the input so the caret never leaves the row.
+    option.addEventListener('mousedown', (event) => event.preventDefault());
+    option.addEventListener('mouseenter', () => {
+      if (state.recipientActiveIndex === index) return;
+      state.recipientActiveIndex = index;
+      renderRecipientMenu(field);
+    });
     option.addEventListener('click', (event) => {
       event.preventDefault();
       event.stopPropagation();
@@ -467,7 +550,9 @@ function renderRecipientMenu(field) {
     });
     item.appendChild(option);
     menu.appendChild(item);
-  }
+  });
+  if (input) input.setAttribute('aria-activedescendant', `${field}-recipient-option-${state.recipientActiveIndex}`);
+  menu.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
 }
 
 function renderRecipientPickers() {
@@ -483,34 +568,98 @@ function renderRecipientPickers() {
   }
 }
 
-function toggleRecipientMenu(field) {
-  const remaining = availableCharacters(directoryCharacters(), { selected: selectedRecipientEmails() });
-  if (!remaining.length) return;
-  state.openRecipientField = state.openRecipientField === field ? null : field;
+function openRecipientMenu(field) {
+  if (state.openRecipientField !== field) {
+    state.openRecipientField = field;
+    state.recipientActiveIndex = 0;
+  }
   renderRecipientPickers();
-  if (state.openRecipientField === field) {
-    pickerEls(field).menu?.querySelector('button')?.focus();
+}
+
+function onRecipientKeydown(field, event) {
+  const { input } = pickerEls(field);
+  const matches = recipientMatches(field);
+  const open = state.openRecipientField === field;
+  switch (event.key) {
+    case 'ArrowDown':
+    case 'ArrowUp': {
+      event.preventDefault();
+      if (!open) {
+        openRecipientMenu(field);
+        return;
+      }
+      if (!matches.length) return;
+      const step = event.key === 'ArrowDown' ? 1 : -1;
+      state.recipientActiveIndex = (state.recipientActiveIndex + step + matches.length) % matches.length;
+      renderRecipientMenu(field);
+      return;
+    }
+    case 'Enter':
+    case 'Tab':
+    case ',':
+    case ';': {
+      // Commit the highlighted match when the user has typed something
+      // (Enter also commits from an open, untyped list).
+      const typed = Boolean(String(input?.value || '').trim());
+      if (!open || !matches.length || (!typed && event.key !== 'Enter')) return;
+      event.preventDefault();
+      addRecipient(field, matches[state.recipientActiveIndex]?.email ?? matches[0].email);
+      return;
+    }
+    case 'Backspace': {
+      if (input && input.selectionStart === 0 && input.selectionEnd === 0 && state.recipients[field].length) {
+        event.preventDefault();
+        const last = state.recipients[field][state.recipients[field].length - 1];
+        removeRecipient(field, last);
+        state.openRecipientField = field;
+        renderRecipientPickers();
+      }
+      return;
+    }
+    case 'Escape':
+      if (open) {
+        event.preventDefault();
+        event.stopPropagation();
+        closeRecipientMenus();
+      }
+      return;
+    default:
   }
 }
 
 function initRecipientPickers() {
   for (const field of ['to', 'cc']) {
-    const { picker, add } = pickerEls(field);
-    const open = (event) => {
+    const { picker, input } = pickerEls(field);
+    if (!input) continue;
+    input.addEventListener('focus', () => openRecipientMenu(field));
+    input.addEventListener('input', () => {
+      state.recipientQuery[field] = input.value;
+      state.openRecipientField = field;
+      state.recipientActiveIndex = 0;
+      renderRecipientMenu(field);
+    });
+    input.addEventListener('keydown', (event) => onRecipientKeydown(field, event));
+    input.addEventListener('blur', () => {
+      // Leaving the field drops the half-typed query (only directory people
+      // can be added) and closes the suggestions.
+      if (state.openRecipientField === field) state.openRecipientField = null;
+      state.recipientQuery[field] = '';
+      input.value = '';
+      renderRecipientPickers();
+    });
+    // Clicking anywhere on the whole 42px row (label, padding, entries, empty
+    // space) puts the caret after the last entry.
+    const row = picker?.closest('.composer__field') || picker;
+    row?.addEventListener('mousedown', (event) => {
+      if (event.target === input || event.target.closest('.recipient-picker__remove, .recipient-picker__option, .recipient-picker__menu')) return;
       event.preventDefault();
-      event.stopPropagation();
-      toggleRecipientMenu(field);
-    };
-    add?.addEventListener('click', open);
-    picker?.addEventListener('click', (event) => {
-      if (event.target.closest('.recipient-picker__remove, .recipient-picker__option')) return;
-      open(event);
+      if (document.activeElement === input) openRecipientMenu(field);
+      else input.focus();
+      input.setSelectionRange(input.value.length, input.value.length);
     });
   }
-  // Capture phase: the design-system Modal stops propagation on clicks inside
-  // its dialog (so overlay clicks only close via the overlay itself), which
-  // would otherwise prevent this document-level listener from ever seeing
-  // clicks made while the composer is expanded into that modal.
+  // Capture phase so components that stop propagation (e.g. design-system
+  // Modals) can't keep a suggestions menu open behind them.
   document.addEventListener(
     'click',
     (event) => {
@@ -527,6 +676,29 @@ function initRecipientPickers() {
   });
 }
 
+function readEmailIdSet() {
+  return new Set(state.session?.readEmailIds ?? []);
+}
+
+function isThreadUnread(thread) {
+  return threadIsUnread(thread, readEmailIdSet(), learnerEmail());
+}
+
+// Opening a conversation reads all of its received mail. Persisted on the
+// session so the inbox markers survive a reload.
+function markThreadRead(thread) {
+  const keys = unreadEmailKeys(thread, readEmailIdSet(), learnerEmail());
+  if (!keys.length || !state.session) return;
+  state.session.readEmailIds = [...(state.session.readEmailIds ?? []), ...keys];
+  renderMailboxes();
+  if (!state.session.sessionId) return;
+  fetch('/api/session/save', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ sessionId: state.session.sessionId, readEmailIds: keys }),
+  }).catch((err) => console.error('[Mail] read state save failed:', err));
+}
+
 function visibleThreads() {
   return threadsInMailbox(state.session?.threads ?? [], state.activeMailbox, learnerEmail());
 }
@@ -534,6 +706,12 @@ function visibleThreads() {
 function mailboxLabel(mailbox) {
   const box = MAILBOXES.find((m) => m.id === mailbox);
   return t(box?.label || 'Inbox');
+}
+
+function backLabel(mailbox) {
+  if (mailbox === 'sent') return t('Back to sent');
+  if (mailbox === 'spam') return t('Back to spam');
+  return t('Back to inbox');
 }
 
 function emptyMailboxCopy(mailbox) {
@@ -547,10 +725,22 @@ function emptyMailboxCopy(mailbox) {
 }
 
 const MAILBOX_ICONS = {
-  inbox: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M2 9.5 4.2 4h7.6L14 9.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V9.5Z"/><path d="M2 9.5h3l.8 1.5h4.4l.8-1.5H14"/></svg>',
-  sent: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" aria-hidden="true"><path d="M14 2 7 9M14 2 9.2 14 7 9 2 6.8 14 2Z"/></svg>',
-  spam: '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8" cy="8" r="5.25"/><path d="m4.4 11.6 7.2-7.2"/></svg>',
+  inbox: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 8H3.92131C4.37811 8 4.79571 8.25809 5 8.66667C5.20429 9.07524 5.62189 9.33333 6.07869 9.33333H9.92131C10.3781 9.33333 10.7957 9.07524 11 8.66667C11.2043 8.25809 11.6219 8 12.0787 8H14.3333M5.97771 2.66667H10.0223C10.7402 2.66667 11.0992 2.66667 11.4161 2.77598C11.6963 2.87264 11.9516 3.0304 12.1634 3.23783C12.4029 3.4724 12.5634 3.79347 12.8845 4.43558L14.3288 7.32433C14.4548 7.57632 14.5178 7.70232 14.5623 7.83437C14.6017 7.95163 14.6302 8.07231 14.6473 8.19484C14.6667 8.33282 14.6667 8.47368 14.6667 8.75542V10.1333C14.6667 11.2534 14.6667 11.8135 14.4487 12.2413C14.2569 12.6176 13.951 12.9236 13.5746 13.1153C13.1468 13.3333 12.5868 13.3333 11.4667 13.3333H4.53333C3.41323 13.3333 2.85318 13.3333 2.42535 13.1153C2.04903 12.9236 1.74307 12.6176 1.55132 12.2413C1.33333 11.8135 1.33333 11.2534 1.33333 10.1333V8.75542C1.33333 8.47368 1.33333 8.33282 1.35265 8.19484C1.3698 8.07231 1.39829 7.95163 1.43775 7.83437C1.48217 7.70232 1.54517 7.57632 1.67117 7.32433L3.11554 4.43558C3.4366 3.79346 3.59713 3.4724 3.83663 3.23783C4.04842 3.0304 4.30368 2.87264 4.58393 2.77598C4.90084 2.66667 5.25979 2.66667 5.97771 2.66667Z"/></svg>',
+  sent: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.00028 8.00002H3.33362M3.27718 8.19436L1.72057 12.8442C1.59828 13.2094 1.53713 13.3921 1.58101 13.5046C1.61912 13.6022 1.70096 13.6763 1.80195 13.7045C1.91824 13.7369 2.09388 13.6579 2.44517 13.4998L13.5862 8.48638C13.929 8.33209 14.1005 8.25494 14.1535 8.14776C14.1995 8.05465 14.1995 7.9454 14.1535 7.85229C14.1005 7.74511 13.929 7.66796 13.5862 7.51367L2.44129 2.49851C2.09106 2.3409 1.91595 2.2621 1.79977 2.29443C1.69888 2.3225 1.61704 2.39636 1.57881 2.49385C1.53478 2.60612 1.59527 2.78837 1.71625 3.15287L3.27761 7.85704C3.29839 7.91965 3.30878 7.95095 3.31288 7.98296C3.31652 8.01137 3.31649 8.04013 3.31277 8.06853C3.30859 8.10053 3.29812 8.13181 3.27718 8.19436Z"/></svg>',
+  spam: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.28667 3.28667L12.7133 12.7133M1.33333 5.68183V10.3182C1.33333 10.4812 1.33333 10.5628 1.35175 10.6395C1.36808 10.7075 1.39502 10.7725 1.43157 10.8322C1.4728 10.8995 1.53045 10.9571 1.64575 11.0724L4.92758 14.3542C5.04288 14.4695 5.10053 14.5272 5.16781 14.5684C5.22746 14.605 5.29249 14.6319 5.36051 14.6482C5.43724 14.6667 5.51877 14.6667 5.68183 14.6667H10.3182C10.4812 14.6667 10.5628 14.6667 10.6395 14.6482C10.7075 14.6319 10.7725 14.605 10.8322 14.5684C10.8995 14.5272 10.9571 14.4695 11.0724 14.3542L14.3542 11.0724C14.4695 10.9571 14.5272 10.8995 14.5684 10.8322C14.605 10.7725 14.6319 10.7075 14.6482 10.6395C14.6667 10.5628 14.6667 10.4812 14.6667 10.3182V5.68183C14.6667 5.51877 14.6667 5.43724 14.6482 5.36051C14.6319 5.29249 14.605 5.22746 14.5684 5.16781C14.5272 5.10053 14.4695 5.04288 14.3542 4.92758L11.0724 1.64575C10.9571 1.53045 10.8995 1.4728 10.8322 1.43157C10.7725 1.39502 10.7075 1.36808 10.6395 1.35175C10.5628 1.33333 10.4812 1.33333 10.3182 1.33333H5.68183C5.51877 1.33333 5.43724 1.33333 5.36051 1.35175C5.29249 1.36808 5.22746 1.39502 5.16781 1.43157C5.10053 1.4728 5.04288 1.53045 4.92758 1.64575L1.64575 4.92758C1.53045 5.04288 1.4728 5.10053 1.43157 5.16781C1.39502 5.22746 1.36808 5.29249 1.35175 5.36051C1.33333 5.43724 1.33333 5.51877 1.33333 5.68183Z"/></svg>',
 };
+
+// Figma "Row" (490:13178): reply / reply-all on the email head divider.
+// Stroke redraws of the Figma glyphs (fi_2990259 / reply all) so the line
+// weight can be set: 1.25px.
+const EMAIL_REPLY_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.25 2.5 1.25 7l5 4.5M1.75 7h4.5c4.25 0 6.5 1.75 6.5 5.5"/></svg>';
+const EMAIL_REPLY_ALL_ICON = '<svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.75 2.5 0.75 7l4 4.5M8.25 2.5 3.75 7l4.5 4.5M4.25 7h3.75c4.25 0 6.5 1.75 6.5 5.5"/></svg>';
+
+// Figma untitled-ui mail-01 with lines (thread header).
+const THREAD_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 5.14583L6.59962 8.59889C6.99907 8.87851 7.1988 9.01832 7.41605 9.07247C7.60795 9.12031 7.80866 9.12031 8.00056 9.07247C8.21781 9.01832 8.41754 8.87851 8.817 8.59889L13.7499 5.14583M13.7499 8.16665V6.23332C13.7499 5.21823 13.7499 4.71068 13.5524 4.32297C13.3786 3.98193 13.1014 3.70465 12.7603 3.53088C12.3726 3.33333 11.8651 3.33333 10.85 3.33333H4.56665C3.55156 3.33333 3.04402 3.33333 2.6563 3.53088C2.31526 3.70465 2.03799 3.98193 1.86422 4.32297C1.66667 4.71068 1.66667 5.21823 1.66667 6.23332V10.1C1.66667 11.1151 1.66667 11.6226 1.86422 12.0103C2.03799 12.3514 2.31526 12.6286 2.6563 12.8024C3.04402 13 3.55156 13 4.56665 13H8.70831"/><path d="M11 10.5H18M11 13.5H18M11 16.5H16"/></svg>';
+
+// Figma "Content Icon" sparkles used inside AI Assistant action chips.
+const CHIP_ICON = '<span class="assistant__chip-icon" aria-hidden="true"><img src="/icons/chip-sparkles.svg" width="18" height="18" alt="" /></span>';
 
 function renderShell() {
   if (state.view === 'compose') state.view = 'list';
@@ -560,37 +750,13 @@ function renderShell() {
   applyView();
 }
 
-const MINIMIZE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3.5 8h9"/></svg>';
-const RESTORE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="3.5" y="3.5" width="9" height="9" rx="1"/></svg>';
-const EXPAND_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.5 3.5H12.5V9.5"/><path d="M12.5 3.5 3.5 12.5"/></svg>';
-const COLLAPSE_ICON = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 12.5H3.5V6.5"/><path d="M3.5 12.5 12.5 3.5"/></svg>';
-
-let composeModal = null;
-let syncingComposeModal = false;
+// Composer head icons (Figma "Replying" › Head): reply arrow for replies,
+// untitled-ui edit-03 for a new message. Both tint with Icon/Primary/Default.
+const COMPOSER_REPLY_ICON = '<svg width="13" height="14" viewBox="0 0 12.9376 13.5058" fill="currentColor" aria-hidden="true"><path d="M6.18669 3.3738V0.561079C6.18639 0.447659 6.15182 0.336976 6.0875 0.243553C6.02319 0.15013 5.93214 0.0783306 5.82629 0.037574C5.72044 -0.00318247 5.60475 -0.0109922 5.49439 0.0151697C5.38403 0.0413316 5.28415 0.100243 5.20786 0.184175L0.144972 5.80961C0.05168 5.91298 3.91006e-05 6.04727 3.91006e-05 6.18651C3.91006e-05 6.32575 0.05168 6.46005 0.144972 6.56342L5.20786 12.1888C5.28415 12.2728 5.38403 12.3317 5.49439 12.3579C5.60475 12.384 5.72044 12.3762 5.82629 12.3355C5.93214 12.2947 6.02319 12.2229 6.0875 12.1295C6.15182 12.036 6.18639 11.9254 6.18669 11.8119V8.99923C9.48319 9.11174 10.1695 10.2818 11.4746 12.5039C11.604 12.7345 11.7446 12.9708 11.8909 13.2127C11.9392 13.2987 12.0094 13.3706 12.0943 13.4209C12.1793 13.4713 12.2759 13.4984 12.3747 13.4996C12.425 13.5078 12.4763 13.5078 12.5266 13.4996C12.6482 13.4655 12.7549 13.3915 12.8294 13.2895C12.9039 13.1875 12.9419 13.0633 12.9372 12.937C12.9372 9.67991 12.9372 3.70007 6.18669 3.3738ZM5.62414 7.87414C5.47495 7.87414 5.33186 7.93341 5.22637 8.03891C5.12087 8.1444 5.0616 8.28749 5.0616 8.43669V10.3437L1.32069 6.18651L5.0616 2.02932V3.93634C5.0616 4.08553 5.12087 4.22862 5.22637 4.33412C5.33186 4.43961 5.47495 4.49888 5.62414 4.49888C10.6027 4.49888 11.5759 7.78976 11.7671 10.8219C10.6083 8.99923 9.33693 7.87414 5.62414 7.87414Z"/></svg>';
+const COMPOSER_NEW_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20H21M3.00003 20H4.67457C5.16375 20 5.40834 20 5.63852 19.9447C5.84259 19.8957 6.03768 19.8149 6.21662 19.7053C6.41846 19.5816 6.59141 19.4086 6.93731 19.0627L19.5001 6.49999C20.3285 5.67156 20.3285 4.32842 19.5001 3.49999C18.6716 2.67156 17.3285 2.67156 16.5001 3.49999L3.93729 16.0627C3.59138 16.4086 3.41843 16.5816 3.29475 16.7834C3.18509 16.9624 3.10428 17.1575 3.05529 17.3615C3.00003 17.5917 3.00003 17.8363 3.00003 18.3255V20Z"/></svg>';
 
 function composeOverlayTitle() {
-  const subject = els.composeSubject?.value?.trim();
-  return subject || t('New message');
-}
-
-function ensureComposeModal() {
-  if (composeModal) return composeModal;
-  composeModal = new Modal({
-    size: 'xlarge',
-    title: null,
-    showCloseButton: false,
-    closeOnOverlayClick: false,
-    closeOnEscape: true,
-    onClose: () => {
-      if (syncingComposeModal) return;
-      if (!state.composeExpanded) return;
-      state.composeExpanded = false;
-      applyView();
-    },
-  });
-  composeModal.dialog.classList.add('compose-modal-dialog');
-  composeModal.overlay.setAttribute('aria-label', t('New message'));
-  return composeModal;
+  return state.composingNew ? t('New message') : t('Reply to');
 }
 
 function parkComposer() {
@@ -607,42 +773,37 @@ function dockComposer() {
   }
 }
 
+// One panel serves new messages and replies. A reply sits at the end of the
+// conversation (sticky to the pane bottom); a new message floats over the
+// bottom of the main column so it works from any view.
 function placeComposer() {
   if (!els.composer) return;
-  const overlayCompose = Boolean(state.composingNew);
-  const expanded = overlayCompose && state.composeExpanded;
-  const inlineReply = state.view === 'thread' && Boolean(state.replying);
-  els.composer.classList.toggle('is-overlay', overlayCompose && !expanded);
-  els.composer.classList.toggle('box', overlayCompose && !expanded);
-  els.composer.classList.toggle('card', overlayCompose && !expanded);
-  els.composer.classList.toggle('non-interactive', overlayCompose && !expanded);
-  els.composer.classList.toggle('is-expanded', expanded);
+  const newMessage = Boolean(state.composingNew);
+  const inlineReply = !newMessage && state.view === 'thread' && Boolean(state.replying);
+  els.composer.classList.toggle('is-new', newMessage);
   els.composer.classList.toggle('is-inline', inlineReply);
-  els.composer.classList.toggle('is-minimized', overlayCompose && !expanded && state.composeMinimized);
-
-  if (expanded) {
-    const modal = ensureComposeModal();
-    modal.overlay.setAttribute('aria-label', composeOverlayTitle());
-    modal.content.appendChild(els.composer);
-    if (!modal.isOpen) {
-      syncingComposeModal = true;
-      modal.open();
-      syncingComposeModal = false;
-    }
-    return;
-  }
-
-  if (composeModal?.isOpen) {
-    syncingComposeModal = true;
-    composeModal.close();
-    syncingComposeModal = false;
-  }
 
   if (inlineReply && els.readingPane && !els.readingPane.hidden) {
     els.readingPane.appendChild(els.composer);
   } else {
     dockComposer();
   }
+}
+
+// Toolbar hairline while the visible content is scrolled: the list, the
+// reading pane, or a single message's body.
+function updateToolbarScrolled() {
+  const toolbar = document.getElementById('mailToolbar');
+  if (!toolbar) return;
+  const scrollers = state.view === 'thread'
+    ? [els.readingPane, els.readingPane?.querySelector('.reading-pane--single > .email .email__content')]
+    : [els.threadList];
+  toolbar.classList.toggle('is-scrolled', scrollers.some((el) => el && !el.hidden && el.scrollTop > 0));
+}
+
+function initToolbarScrollShadow() {
+  // Capture phase: scroll events don't bubble, and message bodies are rendered later.
+  els.mailMain?.addEventListener('scroll', updateToolbarScrolled, { capture: true, passive: true });
 }
 
 function applyView() {
@@ -660,39 +821,39 @@ function applyView() {
     els.composer.hidden = !showComposer;
   }
   placeComposer();
-  if (els.composerChrome) els.composerChrome.hidden = !overlayCompose;
   if (els.composerTitle) els.composerTitle.textContent = composeOverlayTitle();
-  if (els.composerMinimizeBtn) {
-    const minimized = overlayCompose && state.composeMinimized;
-    els.composerMinimizeBtn.setAttribute('aria-label', minimized ? t('Restore') : t('Minimize'));
-    els.composerMinimizeBtn.innerHTML = minimized ? RESTORE_ICON : MINIMIZE_ICON;
+  if (els.composerIcon) els.composerIcon.innerHTML = overlayCompose ? COMPOSER_NEW_ICON : COMPOSER_REPLY_ICON;
+  if (els.composer) els.composer.setAttribute('aria-label', composeOverlayTitle());
+  if (els.composerCloseBtn) {
+    els.composerCloseBtn.setAttribute('aria-label', t('Close'));
+    els.composerCloseBtn.title = t('Close');
   }
-  if (els.composerExpandBtn) {
-    const expanded = overlayCompose && state.composeExpanded;
-    els.composerExpandBtn.setAttribute('aria-label', expanded ? t('Collapse') : t('Expand'));
-    els.composerExpandBtn.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    els.composerExpandBtn.innerHTML = expanded ? COLLAPSE_ICON : EXPAND_ICON;
-  }
-  if (els.composerCloseBtn) els.composerCloseBtn.setAttribute('aria-label', t('Close'));
   if (els.discardBtn) {
-    els.discardBtn.hidden = !state.replying;
-    els.discardBtn.textContent = t('Discard');
+    els.discardBtn.hidden = !showComposer;
+    els.discardBtn.textContent = t('Cancel');
   }
   if (els.backBtn) {
     els.backBtn.hidden = isList;
-    els.backBtn.setAttribute('aria-label', t('Back to list'));
+    if (els.backBtnLabel) els.backBtnLabel.textContent = backLabel(state.activeMailbox);
   }
 
   if (els.mailToolbarTitle) {
+    // In a conversation the subject is shown in the reading pane; keep the
+    // heading for screen readers only.
+    els.mailToolbarTitle.classList.toggle('visually-hidden', isThread);
     if (isThread) {
       const thread = (state.session?.threads ?? []).find((th) => th.id === state.activeThreadId);
-      els.mailToolbarTitle.textContent = thread?.subject || t('Inbox');
+      if (els.mailToolbarName) els.mailToolbarName.textContent = thread?.subject || t('Inbox');
+      if (els.mailToolbarCount) els.mailToolbarCount.textContent = '';
     } else {
-      els.mailToolbarTitle.textContent = mailboxLabel(state.activeMailbox);
+      if (els.mailToolbarName) els.mailToolbarName.textContent = mailboxLabel(state.activeMailbox);
+      if (els.mailToolbarCount) els.mailToolbarCount.textContent = `(${visibleThreads().length})`;
     }
   }
+  if (els.toolbarComposeLabel) els.toolbarComposeLabel.textContent = t('Compose');
   renderAssistantChips();
   renderQuickResultPanel();
+  requestAnimationFrame(updateToolbarScrolled);
 }
 
 // ── Rendering ─────────────────────────────────────────────────
@@ -707,19 +868,35 @@ function renderMailboxes() {
     btn.dataset.mailbox = box.id;
     if (box.id === state.activeMailbox) btn.setAttribute('aria-current', 'true');
     const count = counts[box.id] ?? 0;
+    // Figma: the inbox carries a badge marker while it holds new (unread) mail.
+    const hasNew = box.id === 'inbox' && threadsInMailbox(state.session?.threads ?? [], 'inbox', learnerEmail())
+      .some((thread) => isThreadUnread(thread));
+    const marker = hasNew ? `<span class="rail__mailbox-marker" role="img" aria-label="${escapeHtml(t('New messages'))}"></span>` : '';
     btn.innerHTML = `
       <span class="rail__mailbox-icon">${MAILBOX_ICONS[box.id] || ''}</span>
-      <span class="body-small rail__mailbox-label">${escapeHtml(t(box.label))}</span>
-      <span class="body-xsmall rail__mailbox-count">${count ? escapeHtml(String(count)) : ''}</span>
+      <span class="rail__mailbox-label">${escapeHtml(t(box.label))}</span>
+      <span class="rail__mailbox-meta">${marker}<span class="rail__mailbox-count">${escapeHtml(String(count))}</span></span>
     `;
     btn.addEventListener('click', () => selectMailbox(box.id));
     els.mailboxList.appendChild(btn);
   }
   if (els.composeBtnLabel) els.composeBtnLabel.textContent = t('Compose');
+  if (els.composeBtn) els.composeBtn.title = t('Compose');
+}
+
+// Newest activity first (a thread's time is its latest email's date).
+function threadTime(thread) {
+  let latest = -Infinity;
+  for (const email of thread.emails ?? []) {
+    const time = Date.parse(email?.date);
+    if (!Number.isNaN(time) && time > latest) latest = time;
+  }
+  return latest;
 }
 
 function renderMailList() {
-  const threads = visibleThreads();
+  // Stable sort: threads without dates keep their seeded order at the end.
+  const threads = [...visibleThreads()].sort((a, b) => (threadTime(b) - threadTime(a)) || 0);
   els.threadList.innerHTML = '';
 
   if (!threads.length) {
@@ -727,44 +904,65 @@ function renderMailList() {
     const empty = document.createElement('div');
     empty.className = 'mail-list__empty';
     empty.innerHTML = `
-      <span class="icon icon-cosmo-black icon-xlarge icon-secondary" aria-hidden="true"></span>
-      <p class="heading-small mail-list__empty-title">${escapeHtml(copy.title)}</p>
-      <p class="body-small mail-list__empty-body">${escapeHtml(copy.body)}</p>
+      <img class="mail-list__empty-icon" src="/icons/mail-logo.svg" width="22" height="22" alt="" />
+      <p class="mail-list__empty-title">${escapeHtml(copy.title)}</p>
+      <p class="mail-list__empty-body">${escapeHtml(copy.body)}</p>
     `;
     els.threadList.appendChild(empty);
     return;
   }
 
+  // Figma "Inbox Item" (470:11383): first container (column) holds the
+  // second container — the row, which carries the new-mail marker — and the hrule.
   for (const thread of threads) {
     const last = thread.emails?.[thread.emails.length - 1];
     const snippet = threadSnippet(thread);
+    const unread = isThreadUnread(thread);
+    const item = document.createElement('div');
+    item.className = 'mail-item' + (unread ? ' is-unread' : '');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mail-row';
     btn.dataset.threadId = thread.id;
+    if (snippet) btn.title = snippet;
     btn.innerHTML = `
-      ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'sm')}
-      <span class="body-small mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
+      ${unread ? '<span class="mail-item__marker" aria-hidden="true"></span>' : ''}
+      ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'lg')}
       <span class="mail-row__main">
-        <span class="body-small mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
-        ${snippet ? `<span class="body-xsmall mail-row__snippet"> – ${escapeHtml(snippet)}</span>` : ''}
+        <span class="mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
+        <span class="mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
       </span>
-      <span class="body-xsmall mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
+      <span class="mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
+      ${unread ? `<span class="visually-hidden">, ${escapeHtml(t('New'))}</span>` : ''}
     `;
     btn.addEventListener('click', () => selectThread(thread.id));
-    els.threadList.appendChild(btn);
+    const container = document.createElement('div');
+    container.className = 'mail-item__container';
+    const rule = document.createElement('hr');
+    rule.className = 'mail-list__rule';
+    container.append(btn, rule);
+    item.appendChild(container);
+    els.threadList.appendChild(item);
   }
 }
 
-function renderEmail(email, learnerEmail) {
+function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } = {}) {
   const isOutbound =
     email.outbound === true ||
     (learnerEmail && formatAddress(email.from).includes(learnerEmail));
   const wrap = document.createElement('article');
-  wrap.className = 'email box card non-interactive' + (isOutbound ? ' email--outbound' : '');
+  wrap.className = 'email' + (isOutbound ? ' email--outbound' : '');
   if (email.id) wrap.dataset.emailId = email.id;
-  const toLine = formatAddressList(email.to);
-  const ccLine = email.cc && email.cc.length ? `<div class="body-xsmall email__to">Cc: ${escapeHtml(formatAddressList(email.cc))}</div>` : '';
+  const sender = isOutbound ? learnerPerson() : personForAddress(email.from);
+  const senderName = displayName(email.from) || sender.name || addressEmail(email.from);
+  const senderEmail = addressEmail(email.from);
+  const subjectText = email.subject || subject;
+  const subjectRow = showSubject && subjectText
+    ? `<div class="email__row"><span class="email__label">${escapeHtml(t('Subject'))}:</span> <span class="email__subject">${escapeHtml(subjectText)}</span></div>`
+    : '';
+  const ccRow = email.cc && email.cc.length
+    ? `<div class="email__row"><span class="email__label">${escapeHtml(t('Cc'))}:</span> <span class="email__recipients">${escapeHtml(recipientNames(email.cc))}</span></div>`
+    : '';
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
   const attachmentsHtml = attachments.length
     ? `<div class="email__attachments">${attachments
@@ -780,17 +978,35 @@ function renderEmail(email, learnerEmail) {
     : '';
   wrap.innerHTML = `
     <div class="email__meta">
-      ${avatarMarkup(isOutbound ? learnerPerson() : personForAddress(email.from), 'md')}
+      ${avatarMarkup(sender, 'lg')}
       <div class="email__meta-text">
-        <div class="heading-xxxsmall email__from">${escapeHtml(formatAddress(email.from))}</div>
-        <div class="body-xsmall email__to">To: ${escapeHtml(toLine)}</div>
-        ${ccLine}
+        <div class="email__row email__row--from">
+          <span class="email__from">${escapeHtml(senderName)}</span>
+          ${senderEmail && senderEmail !== senderName ? `<span class="email__address">&lt;${escapeHtml(senderEmail)}&gt;</span>` : ''}
+          <span class="email__date">${escapeHtml(formatDate(email.date))}</span>
+        </div>
+        ${subjectRow}
+        <div class="email__row"><span class="email__label">${escapeHtml(t('To'))}:</span> <span class="email__recipients">${escapeHtml(recipientNames(email.to))}</span></div>
+        ${ccRow}
       </div>
-      <div class="body-xsmall email__date">${escapeHtml(formatDate(email.date))}</div>
     </div>
-    <div class="email__body">${renderMarkdown(email.body)}</div>
-    ${attachmentsHtml}
+    <div class="email__divider">
+      <div class="email__actions" role="group" aria-label="${escapeHtml(t('Reply options'))}">
+        <button type="button" class="email__action" data-reply-mode="reply" aria-label="${escapeHtml(t('Reply'))}" title="${escapeHtml(t('Reply'))}">${EMAIL_REPLY_ICON}</button>
+        <button type="button" class="email__action" data-reply-mode="replyAll" aria-label="${escapeHtml(t('Reply all'))}" title="${escapeHtml(t('Reply all'))}"><span class="email__action-icon">${EMAIL_REPLY_ALL_ICON}</span></button>
+      </div>
+    </div>
+    <div class="email__content">
+      <div class="email__body">${renderMarkdown(email.body)}</div>
+      ${attachmentsHtml}
+    </div>
   `;
+  for (const btn of wrap.querySelectorAll('.email__action')) {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
+      startReply(btn.dataset.replyMode, email.id);
+    });
+  }
   for (const btn of wrap.querySelectorAll('.email__attachment--preview')) {
     btn.addEventListener('click', () => {
       const index = Number(btn.dataset.attachmentIndex);
@@ -831,35 +1047,62 @@ function renderThread(threadId) {
     backToList();
     return;
   }
-  for (const email of thread.emails ?? []) {
-    els.readingPane.appendChild(renderEmail(email, learnerAddr));
+  markThreadRead(thread);
+  const emails = thread.emails ?? [];
+  const isThread = emails.length > 1;
+  els.readingPane.classList.toggle('reading-pane--thread', isThread);
+  els.readingPane.classList.toggle('reading-pane--single', !isThread);
+
+  if (isThread) {
+    const head = document.createElement('div');
+    head.className = 'thread-head';
+    head.innerHTML = `${THREAD_ICON}<h2 class="thread-head__subject">${escapeHtml(thread.subject || '(no subject)')}</h2>`;
+    els.readingPane.appendChild(head);
+    if (!emails.some((email) => email.id && email.id === state.selectedEmailId)) {
+      state.selectedEmailId = emails[0]?.id ?? null;
+    }
   }
-  // Always at the end of the thread — never mid-history under a stale focus.
-  const suggestions = renderSuggestedReplies(thread, replyTargetEmail(thread));
-  if (suggestions) els.readingPane.appendChild(suggestions);
-  if (!state.replying) els.readingPane.appendChild(renderThreadActions());
-  else placeComposer();
+  emails.forEach((email, index) => {
+    const card = renderEmail(email, learnerAddr, {
+      // A thread repeats the subject only on its first message.
+      showSubject: index === 0,
+      subject: thread.subject,
+    });
+    if (isThread) {
+      card.classList.add('email--card');
+      card.classList.toggle('is-selected', Boolean(email.id) && email.id === state.selectedEmailId);
+      card.addEventListener('click', () => selectEmail(email.id));
+    }
+    els.readingPane.appendChild(card);
+  });
+  if (state.replying) placeComposer();
+  else els.readingPane.appendChild(renderThreadActions());
   renderAssistantChips();
+  renderQuickResultPanel();
 }
 
+// Reply / Reply all sit after the conversation (the toolbar holds Compose).
 function renderThreadActions() {
   const actions = document.createElement('div');
   actions.className = 'thread-actions';
-
-  const reply = document.createElement('button');
-  reply.type = 'button';
-  reply.className = 'button button-tertiary button-small';
-  reply.textContent = t('Reply');
-  reply.addEventListener('click', () => startReply('reply'));
-
-  const replyAll = document.createElement('button');
-  replyAll.type = 'button';
-  replyAll.className = 'button button-tertiary button-small';
-  replyAll.textContent = t('Reply all');
-  replyAll.addEventListener('click', () => startReply('replyAll'));
-
-  actions.append(reply, replyAll);
+  for (const [mode, label] of [['reply', t('Reply')], ['replyAll', t('Reply all')]]) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'button button-secondary button-xsmall';
+    btn.textContent = label;
+    btn.addEventListener('click', () => startReply(mode));
+    actions.appendChild(btn);
+  }
   return actions;
+}
+
+// Visual selection inside a multi-message thread (no behavior attached).
+function selectEmail(emailId) {
+  if (!emailId || state.selectedEmailId === emailId) return;
+  state.selectedEmailId = emailId;
+  for (const card of els.readingPane.querySelectorAll('.email--card')) {
+    card.classList.toggle('is-selected', card.dataset.emailId === emailId);
+  }
 }
 
 /**
@@ -882,7 +1125,10 @@ function replyTargetEmail(thread) {
 function applyThreadComposer(threadId, mode = state.replying || 'reply') {
   const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
   if (!thread) return;
-  const headers = buildReplyHeaders(replyTargetEmail(thread), {
+  // A per-email reply button targets that email; otherwise the thread tip.
+  const target = (state.replyToEmailId && thread.emails?.find((email) => email.id === state.replyToEmailId))
+    || replyTargetEmail(thread);
+  const headers = buildReplyHeaders(target, {
     mode,
     learnerEmail: learnerEmail(),
     subjectFallback: thread.subject || '',
@@ -907,15 +1153,17 @@ function selectThread(threadId) {
   state.view = 'thread';
   state.replying = null;
   state.activeThreadId = threadId;
+  state.selectedEmailId = null;
+  state.replyToEmailId = null;
   renderShell();
 }
 
-function startReply(mode) {
+function startReply(mode, emailId = null) {
   state.view = 'thread';
   state.composingNew = false;
-  state.composeMinimized = false;
-  state.composeExpanded = false;
   state.replying = mode;
+  state.replyToEmailId = emailId;
+  if (emailId) state.selectedEmailId = emailId;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
   els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -939,15 +1187,12 @@ function cancelReply() {
 
 function startCompose({ blank = true } = {}) {
   if (state.composingNew) {
-    state.composeMinimized = false;
     applyView();
-    els.composeToAdd?.focus();
+    els.composeToInput?.focus();
     return;
   }
   const wasReplying = Boolean(state.replying);
   state.composingNew = true;
-  state.composeMinimized = false;
-  state.composeExpanded = false;
   state.replying = null;
   if (state.view === 'compose') state.view = 'list';
   if (blank) {
@@ -959,7 +1204,7 @@ function startCompose({ blank = true } = {}) {
   scheduleDraftSave();
   if (wasReplying && state.view === 'thread') renderThread(state.activeThreadId);
   applyView();
-  els.composeToAdd?.focus();
+  els.composeToInput?.focus();
 }
 
 function closeComposeOverlay() {
@@ -967,30 +1212,28 @@ function closeComposeOverlay() {
   clearTimeout(state.draftSaveTimer);
   void saveDraftNow();
   state.composingNew = false;
-  state.composeMinimized = false;
-  state.composeExpanded = false;
   applyView();
 }
 
-function toggleComposeMinimized() {
-  if (!state.composingNew) return;
-  if (state.composeExpanded) {
-    state.composeExpanded = false;
-    state.composeMinimized = true;
-  } else {
-    state.composeMinimized = !state.composeMinimized;
+// Close (×): hide the panel but keep what was written. New messages keep
+// their draft as before; a reply's draft is restored when it's reopened.
+function closeComposer() {
+  closeRecipientMenus();
+  if (state.composingNew) {
+    closeComposeOverlay();
+    return;
   }
-  applyView();
-  if (!state.composeMinimized) els.composeToAdd?.focus();
+  if (!state.replying) return;
+  clearTimeout(state.draftSaveTimer);
+  void saveDraftNow();
+  state.replying = null;
+  renderShell();
 }
 
-function toggleComposeExpanded() {
-  if (!state.composingNew) return;
-  state.composeMinimized = false;
-  state.composeExpanded = !state.composeExpanded;
-  applyView();
-  if (state.composeExpanded) state.editor?.commands.focus();
-  else els.composeToAdd?.focus();
+// Cancel: a reply is discarded; a new message closes and keeps its draft.
+function cancelComposer() {
+  if (state.composingNew) closeComposeOverlay();
+  else cancelReply();
 }
 
 function composeNewTo(email) {
@@ -1022,11 +1265,20 @@ function backToList() {
 }
 
 function applyScenarioChrome() {
-  const title = state.config?.title || 'CosmoMail';
+  const title = state.config?.title || t('Mail');
   document.title = title;
   if (els.appTitle) els.appTitle.textContent = title;
   if (els.composeToLabel) els.composeToLabel.textContent = t('To');
   if (els.composeCcLabel) els.composeCcLabel.textContent = t('Cc');
+  if (els.composeSubjectLabel) els.composeSubjectLabel.textContent = t('Subject');
+  if (els.assistantInput) {
+    els.assistantInput.placeholder = t('Ask me anything...');
+    els.assistantInput.setAttribute('aria-label', t('Message the AI Assistant'));
+  }
+  if (els.assistantClearBtn) {
+    els.assistantClearBtn.setAttribute('aria-label', t('New conversation'));
+    els.assistantClearBtn.title = t('New conversation');
+  }
   if (els.assistantHint && state.config?.assistant?.initialMessage) {
     els.assistantHint.textContent = state.config.assistant.initialMessage;
   }
@@ -1149,38 +1401,13 @@ function initComposer() {
   });
 
   initRecipientPickers();
-  els.composeSubject.addEventListener('input', () => {
-    scheduleDraftSave();
-    if (els.composerTitle && state.composingNew) {
-      els.composerTitle.textContent = composeOverlayTitle();
-    }
-    if (state.composeExpanded && composeModal) {
-      composeModal.overlay.setAttribute('aria-label', composeOverlayTitle());
-    }
-  });
+  els.composeSubject.addEventListener('input', scheduleDraftSave);
   els.sendBtn.addEventListener('click', sendEmail);
   els.composeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.backBtn?.addEventListener('click', backToList);
-  els.discardBtn?.addEventListener('click', cancelReply);
-  els.composerMinimizeBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleComposeMinimized();
-  });
-  els.composerExpandBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    toggleComposeExpanded();
-  });
-  els.composerCloseBtn?.addEventListener('click', (event) => {
-    event.stopPropagation();
-    closeComposeOverlay();
-  });
-  els.composerChrome?.addEventListener('click', () => {
-    if (state.composeMinimized) {
-      state.composeMinimized = false;
-      applyView();
-      els.composeToAdd?.focus();
-    }
-  });
+  els.toolbarComposeBtn?.addEventListener('click', () => startCompose({ blank: true }));
+  els.discardBtn?.addEventListener('click', cancelComposer);
+  els.composerCloseBtn?.addEventListener('click', closeComposer);
   updateSendEnabled();
 }
 
@@ -1432,9 +1659,7 @@ async function sendEmail() {
 
     replaceThread(thread);
     state.composingNew = false;
-    state.composeMinimized = false;
-    state.composeExpanded = false;
-    state.replying = null;
+        state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
@@ -1566,7 +1791,7 @@ function assistantMailboxContext() {
     learnerEmail: state.config?.learner?.email || 'you@example.com',
     viewing: {
       threadId: state.view === 'thread' ? state.activeThreadId : null,
-      composingNew: state.composingNew && !state.composeMinimized,
+      composingNew: state.composingNew,
       mailbox: state.activeMailbox,
     },
     previousHash: state.assistant.lastContextHash,
@@ -1622,17 +1847,10 @@ function makeBubble(role, contentHtml) {
   const row = document.createElement('div');
   row.className = `assistant__row assistant__row--${isUser ? 'user' : 'ai'}`;
 
-  if (!isUser) {
-    const avatar = document.createElement('span');
-    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-    avatar.setAttribute('aria-hidden', 'true');
-    row.appendChild(avatar);
-  }
-
   const bubble = document.createElement('div');
   bubble.className = isUser
-    ? 'assistant__msg assistant__msg--user box non-interactive'
-    : 'assistant__msg assistant__msg--ai box non-interactive';
+    ? 'assistant__msg assistant__msg--user'
+    : 'assistant__msg assistant__msg--ai';
   bubble.innerHTML = contentHtml;
 
   if (isUser) {
@@ -1660,7 +1878,8 @@ function appendDraftField(list, label, value) {
   list.appendChild(dd);
 }
 
-function appendDraftCard(row, draft, { streaming = false } = {}) {
+// actionsAtBottom: quick results put Insert in a row under the content.
+function appendDraftCard(row, draft, { streaming = false, actionsAtBottom = false } = {}) {
   const turn = row.querySelector('.assistant__turn');
   const bubble = row.querySelector('.assistant__msg');
   if (!turn) return;
@@ -1675,16 +1894,17 @@ function appendDraftCard(row, draft, { streaming = false } = {}) {
   label.className = 'body-xsmall assistant__draft-label';
   label.textContent = streaming ? t('Drafting email…') : t('Draft');
   toolbar.appendChild(label);
+  let insertBtn = null;
   if (!streaming) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'button button-text-primary button-xsmall assistant__insert';
-    btn.textContent = t('Insert');
-    btn.setAttribute('aria-label', t('Insert into composer'));
-    btn.addEventListener('click', () => {
+    insertBtn = document.createElement('button');
+    insertBtn.type = 'button';
+    insertBtn.className = 'button button-text-primary button-xsmall assistant__insert';
+    insertBtn.textContent = t('Insert');
+    insertBtn.setAttribute('aria-label', t('Insert into composer'));
+    insertBtn.addEventListener('click', () => {
       void insertProposedDraft(draft, { source: draft.source || PROPOSE_DRAFT_TOOL });
     });
-    toolbar.appendChild(btn);
+    if (!actionsAtBottom) toolbar.appendChild(insertBtn);
   }
   card.appendChild(toolbar);
 
@@ -1700,6 +1920,13 @@ function appendDraftCard(row, draft, { streaming = false } = {}) {
     bodyEl.className = 'assistant__draft-body body-small';
     bodyEl.innerHTML = renderMarkdown(draft.body);
     card.appendChild(bodyEl);
+  }
+
+  if (insertBtn && actionsAtBottom) {
+    const actions = document.createElement('div');
+    actions.className = 'assistant__draft-actions';
+    actions.appendChild(insertBtn);
+    card.appendChild(actions);
   }
 
   turn.appendChild(card);
@@ -1730,15 +1957,16 @@ function renderAssistant(liveMessages = []) {
   const hasAny = persisted.length > 0 || liveMessages.length > 0;
   if (!hasAny) {
     const hint = document.createElement('p');
-    hint.className = 'body-xsmall assistant__hint';
+    hint.className = 'assistant__hint';
     hint.textContent = state.config?.assistant?.initialMessage
-      || t('Ask Cosmo to help draft, summarize, or answer questions about this thread.');
+      || t('Ask the AI Assistant to help draft, summarize, or answer questions about this thread.');
     container.appendChild(hint);
     updateAssistantClearBtn();
     return;
   }
 
   for (const m of persisted) {
+    if (m.role === 'assistant' && m.thoughtMs) container.appendChild(thoughtLine(m.thoughtMs));
     const html = m.role === 'user' ? escapeHtml(m.content) : renderMarkdown(m.content);
     const row = makeBubble(m.role, html);
     if (m.role === 'assistant') {
@@ -1757,6 +1985,10 @@ function renderAssistant(liveMessages = []) {
       const text = messageText(m);
       const drafts = draftsFromLiveMessage(m);
       const streaming = m.status === 'streaming';
+      noteThinkingProgress(m, Boolean(text || drafts.length));
+      // Until the reply has content, the thinking row stands in for it.
+      if (streaming && !text && !drafts.length) continue;
+      if (state.assistant.thoughtMs[m.id]) container.appendChild(thoughtLine(state.assistant.thoughtMs[m.id]));
       const row = makeBubble(
         'ai',
         renderMarkdown(text) || (drafts.length || streaming
@@ -1769,9 +2001,81 @@ function renderAssistant(liveMessages = []) {
     }
   }
 
-  container.scrollTop = container.scrollHeight;
-  updateAssistantClearBtn();
+  if (state.assistant.quickThoughtMs && !state.assistant.thinkingSince) {
+    container.appendChild(thoughtLine(state.assistant.quickThoughtMs));
+  }
   updateAssistantThinking();
+  const scroller = els.assistantContent || container;
+  scroller.scrollTop = scroller.scrollHeight;
+  updateAssistantClearBtn();
+}
+
+// ── Thinking indicator (in the chat body) ────────────────────
+// thinking.riv: artboard "Icon", "State Machine 1", view model { speed, darkMode }.
+// One loop takes ~2.6s ÷ speed; 1.5 (~1.7s) reads as calm but alive.
+const THINKING_RIVE_SPEED = 1.5;
+let thinkingEl = null;
+let thinkingRive = null;
+
+function thinkingIndicator() {
+  if (thinkingEl) return thinkingEl;
+  thinkingEl = document.createElement('div');
+  thinkingEl.className = 'assistant__status';
+  thinkingEl.setAttribute('role', 'status');
+  thinkingEl.innerHTML = '<canvas class="assistant__status-anim" width="40" height="40" aria-hidden="true"></canvas><span class="assistant__status-label"></span>';
+  const canvas = thinkingEl.querySelector('canvas');
+  try {
+    RuntimeLoader.setWasmUrl('/vendor/rive.wasm');
+    const dark = window.matchMedia?.('(prefers-color-scheme: dark)');
+    thinkingRive = new Rive({
+      src: '/animations/thinking.riv',
+      canvas,
+      autoplay: true,
+      autoBind: true,
+      stateMachine: 'State Machine 1',
+      onLoad: () => {
+        thinkingRive.resizeDrawingSurfaceToCanvas();
+        const vm = thinkingRive.viewModelInstance;
+        const speed = vm?.number('speed');
+        if (speed) speed.value = THINKING_RIVE_SPEED;
+        const darkMode = vm?.boolean('darkMode');
+        if (darkMode && dark) {
+          darkMode.value = dark.matches;
+          dark.addEventListener?.('change', (event) => { darkMode.value = event.matches; });
+        }
+      },
+      onLoadError: () => canvas.classList.add('is-fallback'),
+    });
+  } catch (err) {
+    console.error('[Mail] thinking animation unavailable:', err);
+    canvas.classList.add('is-fallback');
+  }
+  return thinkingEl;
+}
+
+function thoughtLine(ms) {
+  const line = document.createElement('p');
+  line.className = 'assistant__thought';
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  line.textContent = t('Thought for {seconds}s').replace('{seconds}', String(seconds));
+  return line;
+}
+
+function startThinking(kind) {
+  state.assistant.thinkingSince = performance.now();
+  state.assistant.thinkingKind = kind;
+  state.assistant.quickThoughtMs = null;
+}
+
+// Chat turns stop "thinking" once the reply has content (or the stream ends).
+function noteThinkingProgress(message, hasContent) {
+  if (state.assistant.thinkingKind !== 'chat' || !state.assistant.thinkingSince) return;
+  if (!hasContent && message.status === 'streaming') return;
+  if (!state.assistant.thoughtMs[message.id]) {
+    state.assistant.thoughtMs[message.id] = performance.now() - state.assistant.thinkingSince;
+  }
+  state.assistant.thinkingSince = null;
+  state.assistant.thinkingKind = null;
 }
 
 function assistantIsBusy() {
@@ -1780,14 +2084,17 @@ function assistantIsBusy() {
 }
 
 function updateAssistantThinking() {
-  const host = els.assistantThinking;
-  if (!host) return;
   const busy = assistantIsBusy();
-  host.hidden = !busy;
-  if (els.assistantThinkingLabel) {
-    els.assistantThinkingLabel.textContent = state.assistant.quickActionBusy && state.assistant.chat?.status !== 'streaming'
+  // A chat stream that has started answering is no longer "thinking".
+  const thinking = busy && (state.assistant.quickActionBusy || Boolean(state.assistant.thinkingSince));
+  const el = thinkingIndicator();
+  if (thinking) {
+    el.querySelector('.assistant__status-label').textContent = state.assistant.quickActionBusy && state.assistant.chat?.status !== 'streaming'
       ? t('Working…')
       : t('Thinking…');
+    if (el.parentElement !== els.assistantMessages || el.nextSibling) els.assistantMessages.appendChild(el);
+  } else if (el.parentElement) {
+    el.remove();
   }
   // Limit aria-busy to the message log so the status live region in the header can announce.
   if (els.assistantMessages) {
@@ -1832,6 +2139,8 @@ async function clearAssistant() {
     const { octavusSessionId } = await res.json();
 
     state.assistant.persisted = [];
+    state.assistant.thoughtMs = {};
+    state.assistant.quickThoughtMs = null;
     state.session.assistantMessages = [];
     state.assistant.lastContextHash = null; // resend the full mailbox on the next turn
     if (octavusSessionId) state.assistant.octavusSessionId = octavusSessionId;
@@ -1877,7 +2186,9 @@ function renderAssistantChips() {
   if (!host) return;
   const chips = visibleQuickActionChips();
   host.innerHTML = '';
-  if (!chips.length) {
+  // Hidden while the assistant works (thinking or streaming a reply); they
+  // come back when the turn ends.
+  if (!chips.length || assistantIsBusy()) {
     host.hidden = true;
     return;
   }
@@ -1885,13 +2196,87 @@ function renderAssistantChips() {
   for (const chip of chips) {
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'button button-tertiary button-xsmall assistant__chip';
-    btn.textContent = t(chip.label);
+    btn.className = 'assistant__chip';
+    btn.innerHTML = `${CHIP_ICON}<span class="assistant__chip-label">${escapeHtml(t(chip.label))}</span>`;
     btn.disabled = state.assistant.quickActionBusy
       || state.assistant.chat?.status === 'streaming';
     btn.addEventListener('click', () => void runQuickAction(chip.id));
     host.appendChild(btn);
   }
+}
+
+// Suggested replies for the open conversation, while they still target its
+// reply email (they go stale once the thread moves on).
+function activeSuggestedReplies() {
+  const pack = state.assistant.suggestedReplies;
+  if (!pack?.replies?.length) return null;
+  if (state.view !== 'thread' || state.activeThreadId !== pack.threadId) return null;
+  const thread = (state.session?.threads ?? []).find((th) => th.id === pack.threadId);
+  const email = thread ? replyTargetEmail(thread) : null;
+  if (pack.emailId && email?.id && pack.emailId !== email.id) return null;
+  return pack;
+}
+
+const CYCLE_PREV_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18L9 12L15 6"/></svg>';
+const CYCLE_NEXT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18L15 12L9 6"/></svg>';
+
+// One suggestion at a time; ‹ › cycle (wrapping), Insert drops it in the reply.
+function renderSuggestedRepliesCard(pack) {
+  const total = pack.replies.length;
+  const index = ((pack.index ?? 0) % total + total) % total;
+  const row = document.createElement('div');
+  row.className = 'assistant__row assistant__row--ai';
+  const turn = document.createElement('div');
+  turn.className = 'assistant__turn';
+  const card = document.createElement('article');
+  card.className = 'assistant__draft assistant__suggestions';
+  card.setAttribute('aria-label', t('Suggested replies'));
+
+  const label = document.createElement('div');
+  label.className = 'body-xsmall assistant__draft-label';
+  label.textContent = t('Suggested replies');
+  card.appendChild(label);
+
+  const body = document.createElement('div');
+  body.className = 'assistant__suggestion-body body-small';
+  body.setAttribute('aria-live', 'polite');
+  body.textContent = String(pack.replies[index] ?? '').trim();
+  card.appendChild(body);
+
+  const actions = document.createElement('div');
+  actions.className = 'assistant__draft-actions';
+  const step = (delta) => {
+    pack.index = (index + delta + total) % total;
+    renderQuickResultPanel();
+    els.assistantQuickResult?.querySelector(`.assistant__cycle[data-step="${delta}"]`)?.focus();
+  };
+  const cycleBtn = (delta, icon, text) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'icon-button icon-button--ghost assistant__cycle';
+    btn.dataset.step = String(delta);
+    btn.innerHTML = icon;
+    btn.setAttribute('aria-label', text);
+    btn.title = text;
+    btn.disabled = total < 2;
+    btn.addEventListener('click', () => step(delta));
+    return btn;
+  };
+  const count = document.createElement('span');
+  count.className = 'assistant__cycle-count';
+  count.textContent = t('{current} of {total}').replace('{current}', String(index + 1)).replace('{total}', String(total));
+  const insert = document.createElement('button');
+  insert.type = 'button';
+  insert.className = 'button button-text-primary button-xsmall assistant__insert';
+  insert.textContent = t('Insert');
+  insert.setAttribute('aria-label', t('Insert into composer'));
+  insert.addEventListener('click', () => void applySuggestedReply(pack.replies[index]));
+  actions.append(cycleBtn(-1, CYCLE_PREV_ICON, t('Previous suggestion')), count, cycleBtn(1, CYCLE_NEXT_ICON, t('Next suggestion')), insert);
+  card.appendChild(actions);
+
+  turn.appendChild(card);
+  row.appendChild(turn);
+  return row;
 }
 
 function quickDraftBelongsToActiveThread(draft) {
@@ -1906,26 +2291,25 @@ function renderQuickResultPanel() {
   const draft = state.assistant.quickDraft;
   const ranking = String(state.assistant.triageRanking ?? '').trim();
   const showDraft = draft && quickDraftBelongsToActiveThread(draft);
-  if (!showDraft && !ranking) {
+  const suggestions = activeSuggestedReplies();
+  if (!showDraft && !ranking && !suggestions) {
     host.hidden = true;
     return;
   }
   host.hidden = false;
 
+  if (suggestions) host.appendChild(renderSuggestedRepliesCard(suggestions));
+
   if (ranking) {
     const row = document.createElement('div');
     row.className = 'assistant__row assistant__row--ai';
-    const avatar = document.createElement('span');
-    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-    avatar.setAttribute('aria-hidden', 'true');
-    row.appendChild(avatar);
     const turn = document.createElement('div');
     turn.className = 'assistant__turn';
     const card = document.createElement('div');
     card.className = 'assistant__triage';
     card.setAttribute('aria-label', t('Inbox priority'));
-    const label = document.createElement('p');
-    label.className = 'body-xsmall assistant__triage-label';
+    const label = document.createElement('h3');
+    label.className = 'assistant__triage-label';
     label.textContent = t('Inbox priority');
     card.appendChild(label);
     const body = document.createElement('div');
@@ -1940,58 +2324,12 @@ function renderQuickResultPanel() {
   if (showDraft) {
     const row = document.createElement('div');
     row.className = 'assistant__row assistant__row--ai';
-    const avatar = document.createElement('span');
-    avatar.className = 'icon icon-cosmo-black icon-primary icon-small assistant__avatar';
-    avatar.setAttribute('aria-hidden', 'true');
-    row.appendChild(avatar);
     const turn = document.createElement('div');
     turn.className = 'assistant__turn';
     row.appendChild(turn);
     host.appendChild(row);
-    appendDraftCard(row, draft);
+    appendDraftCard(row, draft, { actionsAtBottom: true });
   }
-}
-
-function renderSuggestedReplies(thread, email) {
-  const pack = state.assistant.suggestedReplies;
-  if (!pack?.replies?.length) return null;
-  if (pack.threadId !== thread.id) return null;
-  // Drop suggestions that targeted an older message once the thread moved on.
-  if (pack.emailId && email?.id && pack.emailId !== email.id) return null;
-
-  const wrap = document.createElement('div');
-  wrap.className = 'suggested-replies';
-  wrap.setAttribute('aria-label', t('Suggested replies'));
-
-  const label = document.createElement('p');
-  label.className = 'body-xsmall suggested-replies__label';
-  label.textContent = t('Suggested replies');
-  wrap.appendChild(label);
-
-  const list = document.createElement('div');
-  list.className = 'suggested-replies__list';
-
-  for (const body of pack.replies) {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    // Not a design-system .button — those are fixed-height single-line controls.
-    btn.className = 'suggested-replies__option body-small';
-    btn.textContent = String(body ?? '').trim();
-    btn.title = t('Insert into composer');
-    btn.addEventListener('click', () => void applySuggestedReply(body));
-    list.appendChild(btn);
-  }
-  wrap.appendChild(list);
-  return wrap;
-}
-
-/** Scroll the reading pane so end-of-thread UI (e.g. suggested replies) is visible. */
-function scrollReadingPaneToEnd() {
-  const pane = els.readingPane;
-  if (!pane || pane.hidden) return;
-  requestAnimationFrame(() => {
-    pane.scrollTo({ top: pane.scrollHeight, behavior: 'smooth' });
-  });
 }
 
 function focusedEmailMarkdown(thread) {
@@ -2012,6 +2350,8 @@ async function runQuickAction(action, detail = '') {
   if (state.assistant.quickActionBusy) return;
   if (!state.session?.sessionId) return;
   state.assistant.quickActionBusy = true;
+  startThinking('quick');
+  renderAssistant(state.assistant.chat?.messages ?? []);
   renderAssistantChips();
   syncAssistantBusyControls();
 
@@ -2026,7 +2366,7 @@ async function runQuickAction(action, detail = '') {
     learnerEmail: learnerEmail(),
     viewing: {
       threadId: sourceThreadId,
-      composingNew: state.composingNew && !state.composeMinimized,
+      composingNew: state.composingNew,
       mailbox: state.activeMailbox,
     },
     previousHash: null, // always send full mailbox for one-shot sessions
@@ -2062,14 +2402,11 @@ async function runQuickAction(action, detail = '') {
         threadId: sourceThreadId,
         emailId: focus?.id || null,
         replies: body.replies,
+        index: 0,
       };
       state.assistant.quickDraft = null;
       state.assistant.triageRanking = null;
-      if (state.view === 'thread' && state.activeThreadId === sourceThreadId) {
-        renderThread(sourceThreadId);
-        // Suggestions render at the end of the thread — bring them into view.
-        scrollReadingPaneToEnd();
-      }
+      renderQuickResultPanel();
     } else if (action === 'prioritize_inbox' && body.ranking) {
       state.assistant.triageRanking = body.ranking;
       state.assistant.quickDraft = null;
@@ -2100,6 +2437,12 @@ async function runQuickAction(action, detail = '') {
     console.error('[CosmoMail] quick action failed:', err);
   } finally {
     state.assistant.quickActionBusy = false;
+    if (state.assistant.thinkingKind === 'quick' && state.assistant.thinkingSince) {
+      state.assistant.quickThoughtMs = performance.now() - state.assistant.thinkingSince;
+      state.assistant.thinkingSince = null;
+      state.assistant.thinkingKind = null;
+    }
+    renderAssistant(state.assistant.chat?.messages ?? []);
     renderAssistantChips();
     syncAssistantBusyControls();
   }
@@ -2126,12 +2469,11 @@ async function applySuggestedReply(body) {
   }
   // Dismiss the suggestion picker once the learner picks one.
   state.assistant.suggestedReplies = null;
+  renderQuickResultPanel();
   if (!state.replying && state.view === 'thread' && state.activeThreadId) {
     startReply('reply');
   } else if (!composerIsOpen()) {
     startCompose({ blank: true });
-  } else if (state.view === 'thread' && state.activeThreadId) {
-    renderThread(state.activeThreadId);
   }
   setEditorMarkdown(body);
   const scope = draftScope() || { scope: 'new' };
@@ -2179,9 +2521,6 @@ async function applyHeaderSuggestion(headers, draftId) {
   if (fields.to.length || fields.cc.length) applyRecipientDraft(fields);
   if (fields.subject) {
     els.composeSubject.value = fields.subject;
-    if (els.composerTitle && state.composingNew) {
-      els.composerTitle.textContent = composeOverlayTitle();
-    }
   }
   const scope = draftScope() || { scope: 'new' };
   const draftFields = normalizeDraftFields({
@@ -2235,7 +2574,7 @@ function confirmReplaceDraft() {
       size: 'small',
       title: t('Replace current draft?'),
       content: `<p class="body-medium">${escapeHtml(
-        t("You're already writing an email. Replace it with Cosmo's draft?"),
+        t("You're already writing an email. Replace it with the AI Assistant's draft?"),
       )}</p>`,
       closeOnOverlayClick: false,
       footerButtons: [
@@ -2258,6 +2597,7 @@ function confirmReplaceDraft() {
       ],
       onClose: () => finish(false),
     });
+    modal.dialog.classList.add('replace-draft-dialog');
     modal.open();
   });
 }
@@ -2301,7 +2641,6 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
   }
 
   if (state.composingNew) {
-    state.composeMinimized = false;
     applyView();
   } else if (state.view === 'thread' && state.activeThreadId) {
     if (!state.replying) startReply('reply');
@@ -2323,9 +2662,6 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
   if (fields.to.length || fields.cc.length) applyRecipientDraft(fields);
   if (fields.subject) {
     els.composeSubject.value = fields.subject;
-    if (els.composerTitle && state.composingNew) {
-      els.composerTitle.textContent = composeOverlayTitle();
-    }
   }
   setEditorMarkdown(fields.body);
 
@@ -2365,10 +2701,12 @@ function persistAssistant() {
       seenToolCallIds: state.assistant.seenToolCallIds,
     });
     proposedEvents.push(...events);
+    const thoughtMs = state.assistant.thoughtMs[m.id];
     return {
       role: 'assistant',
       content,
       drafts,
+      ...(thoughtMs ? { thoughtMs: Math.round(thoughtMs) } : {}),
       timestamp: new Date().toISOString(),
     };
   });
@@ -2396,7 +2734,8 @@ function setAssistantEnabled(enabled) {
 }
 
 const SPLIT_STORAGE_KEY = 'cosmoMail.splitPercent';
-const SPLIT_DEFAULT_PERCENT = 72;
+// Figma: ~341px assistant column beside the mail column at a 1224px viewport.
+const SPLIT_DEFAULT_PERCENT = 66.5;
 
 function readStoredSplitPercent() {
   try {
@@ -2429,7 +2768,7 @@ function initMailSplit() {
     initialSplit: readStoredSplitPercent(),
     minLeft: 40,
     minRight: 18,
-    dividerLabel: t('Resize Cosmo panel'),
+    dividerLabel: t('Resize AI Assistant panel'),
     onChange: (percent) => {
       try {
         sessionStorage.setItem(SPLIT_STORAGE_KEY, String(Math.round(percent)));
@@ -2536,6 +2875,7 @@ async function sendAssistant() {
   if (!text) return;
   els.assistantInput.value = '';
   setAssistantEnabled(false);
+  startThinking('chat');
 
   const context = assistantMailboxContext();
   state.assistant.lastContextHash = context.hash;
@@ -2553,6 +2893,9 @@ async function sendAssistant() {
   } catch (err) {
     // The turn may not have reached the model; resend the full mailbox next time.
     state.assistant.lastContextHash = null;
+    state.assistant.thinkingSince = null;
+    state.assistant.thinkingKind = null;
+    updateAssistantThinking();
     console.error('[CosmoMail] assistant send failed:', err);
     setAssistantEnabled(true);
   }
@@ -2583,6 +2926,7 @@ async function boot() {
 
     applyScenarioChrome();
     initMailSplit();
+    initToolbarScrollShadow();
     initComposer();
     initMailtoCompose();
     initAttachments();
@@ -2594,7 +2938,7 @@ async function boot() {
     await initAssistant();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);
-    showBootError('Could not load CosmoMail. Is the server running?');
+    showBootError('Could not load Mail. Is the server running?');
   }
 }
 

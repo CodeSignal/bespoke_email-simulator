@@ -9,6 +9,9 @@ import {
   buildReplyHeaders,
   latestInboundEmail,
   threadListCorrespondent,
+  emailReadKey,
+  unreadEmailKeys,
+  threadIsUnread,
 } from '../lib/mailboxes.js';
 
 const learner = 'you@company.com';
@@ -161,5 +164,25 @@ describe('latestInboundEmail / threadListCorrespondent', () => {
       kind: 'to',
       address: outbound.to[0],
     });
+  });
+});
+
+describe('read state', () => {
+  const thread = { id: 't1', emails: [inbound, outbound, { from: { email: 'dana@acme.com' }, body: 'no id' }] };
+
+  it('keys emails by id, falling back to thread + index', () => {
+    expect(emailReadKey(thread, inbound, 0)).toBe('in-1');
+    expect(emailReadKey(thread, thread.emails[2], 2)).toBe('t1#2');
+  });
+
+  it('lists unread inbound emails only', () => {
+    expect(unreadEmailKeys(thread, [], learner)).toEqual(['in-1', 't1#2']);
+    expect(unreadEmailKeys(thread, ['in-1'], learner)).toEqual(['t1#2']);
+    expect(threadIsUnread(thread, new Set(['in-1', 't1#2']), learner)).toBe(false);
+  });
+
+  it('honors scenario-seeded read: true', () => {
+    const seeded = { id: 't2', emails: [{ ...inbound, read: true }] };
+    expect(threadIsUnread(seeded, [], learner)).toBe(false);
   });
 });

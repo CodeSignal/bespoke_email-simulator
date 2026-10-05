@@ -1,6 +1,6 @@
 {
   "id": "qa-summarize-atlas-status",
-  "title": "CosmoMail",
+  "title": "Mail",
   "brief": "Priya needs a crisp, leadership-ready summary of the Atlas migration before Thursday's review. Use Cosmo to read the thread and answer questions (status, blockers, budget, timeline risk), then reply to Priya with a scannable bullet summary.",
   "primarySkill": "prompting",
   "scenarioType": "reply",

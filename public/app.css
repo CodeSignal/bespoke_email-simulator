@@ -1,4 +1,9 @@
-/* CosmoMail — app styles. Built on the CodeSignal design system tokens. */
+/*
+ * Mail — app styles. Built on the CodeSignal design system tokens, plus the
+ * Figma token extensions in global.css. Measurements follow the Figma
+ * "Learn Interactive Practices" mail frames (Inbox, Single, Thread, Replying,
+ * Assistant Sidebar).
+ */
 
 * {
   box-sizing: border-box;
@@ -8,7 +13,7 @@ html,
 body {
   margin: 0;
   height: 100%;
-  background: var(--Colors-Backgrounds-Main-Default);
+  background: var(--Colors-Surface-App-Base);
   color: var(--Colors-Text-Body-Default);
   font-family: 'Work Sans', system-ui, sans-serif;
 }
@@ -28,12 +33,25 @@ body {
   display: none !important;
 }
 
-/* ── App shell: fixed rail + resizable mail/Cosmo split ── */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── App shell: fixed rail + resizable mail/assistant split ── */
 .mail-app {
   display: grid;
-  grid-template-columns: 220px minmax(0, 1fr);
+  grid-template-columns: 260px minmax(0, 1fr);
   height: 100vh;
   overflow: hidden;
+  background: var(--Colors-Surface-Container-Base);
 }
 
 /*
@@ -86,78 +104,161 @@ body {
   height: auto;
 }
 
-/* ── Mailbox rail (Gmail-style folder nav) ── */
+/* The Figma layout has no visible seam between mail and assistant (the
+   assistant floats as a card). Keep the resize affordance, show it on use. */
+#mailSplit .split-panel-divider::after {
+  background: transparent;
+}
+
+#mailSplit .split-panel-divider-handle {
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+#mailSplit .split-panel-divider:hover::after {
+  background: var(--Colors-Border-Subtle);
+}
+
+#mailSplit .split-panel-divider:hover .split-panel-divider-handle,
+#mailSplit .split-panel-divider:focus-visible .split-panel-divider-handle,
+#mailSplit .split-panel-divider.dragging .split-panel-divider-handle {
+  opacity: 1;
+}
+
+/* ── Icon button (Figma "Button Icon": 32px, radius 6) ── */
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--Button-Size);
+  height: var(--Button-Size);
+  padding: 0;
+  border: none;
+  border-radius: var(--Button-Radius);
+  background: var(--Colors-Control-Neutral-Subtle);
+  color: var(--Colors-Icon-Neutral-Default);
+  cursor: pointer;
+  overflow: hidden;
+  transition: background-color 0.15s ease, opacity 0.15s ease;
+}
+
+.icon-button svg,
+.icon-button img {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.icon-button:hover:not(:disabled),
+.mail-back:hover .icon-button {
+  background: var(--Colors-Border-Subtle);
+}
+
+.icon-button:focus-visible,
+.mail-back:focus-visible .icon-button {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 2px;
+}
+
+.icon-button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+
+.icon-button--primary {
+  background: var(--Colors-Primary-Default);
+  color: var(--Colors-Icon-Neutral-White, #ffffff);
+}
+
+.icon-button--primary:hover:not(:disabled) {
+  background: var(--Colors-Primary-Default);
+  filter: brightness(0.92);
+}
+
+/* Figma assistant header button: 26px, 1.5px Border/Medium outline */
+.icon-button--outline {
+  width: 26px;
+  height: 26px;
+  background: transparent;
+  border: 1.5px solid var(--Colors-Border-Medium);
+}
+
+.icon-button--outline:hover:not(:disabled) {
+  background: var(--Colors-Control-Neutral-Subtle);
+}
+
+/* ── Mailbox rail (260px; Figma "Sidebar" is 202px) ── */
 .rail {
   display: flex;
   flex-direction: column;
+  gap: var(--UI-Spacing-spacing-ml);
   min-height: 0;
-  background: var(--Colors-Backgrounds-Main-Light);
-  border-right: 1px solid var(--Colors-Stroke-Default);
+  overflow: hidden;
+  padding: var(--UI-Spacing-spacing-ms) var(--UI-Spacing-spacing-mxs);
+  background: transparent;
+  border-right: 1px solid var(--Colors-Border-Subtle);
 }
 
 .rail__header {
-  padding: var(--UI-Spacing-spacing-m);
-}
-
-.cmail-brand {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--UI-Spacing-spacing-xs);
+  gap: var(--UI-Spacing-spacing-s);
+  padding-left: var(--UI-Spacing-spacing-xs);
 }
 
-.cmail-brand__name {
-  color: var(--Colors-Text-Body-Strong);
-}
-
-.rail__compose {
-  padding: 0 var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
-}
-
-.rail__compose-btn {
-  width: 100%;
-  border-radius: var(--UI-Radius-radius-l);
-}
-
-.rail__compose-icon {
-  width: 16px;
-  height: 16px;
+.rail__logo {
+  display: block;
   flex: 0 0 auto;
+}
+
+.rail__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-weight: 500;
+  font-size: var(--Fonts-Body-Default-lg);
+  line-height: 1.35;
+  color: var(--Colors-Text-Black);
 }
 
 .rail__mailboxes {
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-xxs);
-  padding: 0 0 var(--UI-Spacing-spacing-s);
 }
 
 .rail__mailbox {
-  width: auto;
+  width: 100%;
+  margin: 0;
   font: inherit;
   text-align: left;
-  margin-right: var(--UI-Spacing-spacing-s);
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m);
-  border-radius: 0 var(--UI-Radius-radius-l) var(--UI-Radius-radius-l) 0;
-  border: none;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
   display: flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxxs);
+  border: none;
+  border-radius: var(--UI-Radius-radius-s);
+  background: transparent;
+  color: var(--Colors-Text-Body-Medium);
+  cursor: pointer;
 }
 
 .rail__mailbox:hover {
-  background: var(--Colors-Backgrounds-Main-Medium);
+  background: var(--Colors-Control-Neutral-Subtle);
+}
+
+.rail__mailbox:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: -2px;
 }
 
 .rail__mailbox.is-active {
-  background: var(--Colors-Backgrounds-Main-Medium);
+  background: var(--Colors-Control-Primary-Subtle);
   color: var(--Colors-Text-Body-Strong);
-}
-
-.rail__mailbox.is-active .rail__mailbox-label {
-  font-weight: 700;
 }
 
 .rail__mailbox-icon {
@@ -165,80 +266,162 @@ body {
   flex: 0 0 auto;
   width: 16px;
   height: 16px;
-  color: var(--Colors-Text-Body-Light);
+  color: var(--Colors-Icon-Neutral-Default);
 }
 
 .rail__mailbox.is-active .rail__mailbox-icon {
-  color: var(--Colors-Text-Body-Strong);
+  color: var(--Colors-Icon-Primary-Default);
 }
 
 .rail__mailbox-icon svg {
-  width: 16px;
-  height: 16px;
   display: block;
+}
+
+.rail__mailbox-label,
+.rail__mailbox-count {
+  font-size: var(--Fonts-Body-Default-xxs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
 }
 
 .rail__mailbox-label {
   flex: 1 1 auto;
   min-width: 0;
+  font-weight: 500;
+}
+
+.rail__mailbox-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
+  flex: 0 0 auto;
+}
+
+/* Figma "Badge Marker" (small): 6px dot with a 3px 15% ring */
+.rail__mailbox-marker {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--Colors-Primary-Default);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--Colors-Primary-Default) 15%, transparent);
 }
 
 .rail__mailbox-count {
-  flex: 0 0 auto;
+  font-weight: 400;
+  text-align: right;
   color: var(--Colors-Text-Body-Light);
 }
 
 .rail__mailbox.is-active .rail__mailbox-count {
+  font-weight: 500;
   color: var(--Colors-Text-Body-Strong);
-  font-weight: 700;
 }
 
-/* ── Main column ── */
+/* ── Main column (Figma "Content Viewer") ── */
 .mail-main {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
   position: relative;
-  background: var(--Colors-Backgrounds-Main-Default);
+  overflow: hidden;
+  background: transparent;
 }
 
 .mail-toolbar {
   display: flex;
   align-items: center;
-  gap: var(--UI-Spacing-spacing-s);
-  min-height: var(--UI-Input-md);
-  padding: 0 var(--UI-Spacing-spacing-ms);
-  border-bottom: 1px solid var(--Colors-Stroke-Default);
-  background: var(--Colors-Backgrounds-Main-Default);
+  gap: var(--UI-Spacing-spacing-xs);
+  height: 64px;
+  /* Hairline appears only while the content below is scrolled. */
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.15s ease;
+  padding: 0 var(--UI-Spacing-spacing-xl);
   flex: 0 0 auto;
 }
 
-.mail-toolbar__back {
-  padding: 0 var(--UI-Spacing-spacing-xs);
-  min-width: var(--UI-Input-sm);
+.mail-toolbar.is-scrolled {
+  border-bottom-color: var(--Colors-Border-Subtle);
 }
 
-.mail-toolbar__back svg {
-  width: 16px;
-  height: 16px;
-  display: block;
-}
-
-.mail-toolbar__title {
+.mail-back {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
   margin: 0;
-  color: var(--Colors-Text-Body-Strong);
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.mail-back:focus-visible {
+  outline: none;
+}
+
+.mail-back__label {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Light);
 }
 
-/* ── Conversation list (Gmail-style rows) ── */
+.mail-back:hover .mail-back__label {
+  color: var(--Colors-Text-Body-Medium);
+}
+
+.mail-toolbar__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--Fonts-Body-Default-lg);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.mail-toolbar__name {
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-size: var(--Fonts-Body-Default-lg);
+  line-height: 1.4;
+}
+
+.mail-toolbar__count {
+  font-family: 'Work Sans', var(--body-family), sans-serif;
+  font-weight: 400;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.mail-toolbar__compose {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.mail-toolbar__compose svg {
+  display: block;
+  flex: 0 0 auto;
+}
+
+/* ── Conversation list (Figma "Inbox List") ── */
 .mail-list {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
+  padding: 0 var(--UI-Spacing-spacing-xs);
 }
 
 .mail-list__rows {
@@ -248,67 +431,114 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-mxs);
+}
+
+/* Figma "Inbox Item" (470:11383): 8px side padding (the marker sits in it);
+   the first container stacks the row and its hairline 8px apart. */
+.mail-item {
+  flex: 0 0 auto;
+  padding: 0 var(--UI-Spacing-spacing-s);
+}
+
+.mail-item__container {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+/* Figma "Badge Marker" (small): 6px dot + 3px 15% ring, inside the row,
+   8px left of it and vertically centred on the content. */
+.mail-item__marker {
+  position: absolute;
+  left: calc(-1 * var(--UI-Spacing-spacing-s));
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--Colors-Primary-Default);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--Colors-Primary-Default) 15%, transparent);
+  transform: translateY(-50%);
+  pointer-events: none;
 }
 
 .mail-row {
+  position: relative;
   width: 100%;
+  margin: 0;
   font: inherit;
   text-align: left;
-  display: grid;
-  grid-template-columns: 32px minmax(112px, 200px) minmax(0, 1fr) auto;
+  display: flex;
   align-items: center;
-  gap: var(--UI-Spacing-spacing-m);
-  padding: var(--UI-Spacing-spacing-mxs) var(--UI-Spacing-spacing-ml);
+  gap: var(--UI-Spacing-spacing-mxxs);
+  padding: var(--UI-Spacing-spacing-mxxs) var(--UI-Spacing-spacing-ms) var(--UI-Spacing-spacing-mxxs) var(--UI-Spacing-spacing-mxxs);
   border: none;
-  border-bottom: 1px solid var(--Colors-Stroke-Light);
-  background: var(--Colors-Backgrounds-Main-Top);
+  border-radius: var(--UI-Radius-radius-ms);
+  background: transparent;
   color: inherit;
   cursor: pointer;
 }
 
 .mail-row:hover {
-  background: var(--Colors-Backgrounds-Main-Medium);
+  background: var(--Colors-Control-Neutral-Subtle);
+}
+
+.mail-row:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: -2px;
+}
+
+.mail-row__main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-xxs);
 }
 
 .mail-row__from,
-.mail-row__main,
+.mail-row__subject,
 .mail-row__date {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.mail-row__from,
+.mail-row__subject {
+  font-size: var(--Fonts-Body-Default-sm);
 }
 
 .mail-row__from {
+  font-weight: 500;
   color: var(--Colors-Text-Body-Strong);
-  font-weight: 600;
-}
-
-.mail-row__main {
-  display: flex;
-  align-items: baseline;
-  gap: var(--UI-Spacing-spacing-xs);
-  min-width: 0;
 }
 
 .mail-row__subject {
-  color: var(--Colors-Text-Body-Strong);
-  flex: 0 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mail-row__snippet {
-  color: var(--Colors-Text-Body-Light);
-  flex: 1 1 0;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  font-weight: 400;
+  color: var(--Colors-Text-Body-Default);
 }
 
 .mail-row__date {
-  color: var(--Colors-Text-Body-Light);
+  flex: 0 0 auto;
   text-align: right;
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 400;
+  color: var(--Colors-Text-Body-Medium);
+}
+
+/* Figma "hrule" (padding 0 12px around the line): inset so the line starts
+   and ends with the row's content rather than its rounded hover box. */
+.mail-list__rule {
+  flex: 0 0 auto;
+  width: auto;
+  height: 0;
+  margin: 0 var(--UI-Spacing-spacing-mxs);
+  border: none;
+  border-top: 1px solid var(--Colors-Border-Subtle);
 }
 
 .mail-list__empty {
@@ -328,69 +558,329 @@ body {
 }
 
 .mail-list__empty-title {
-  color: var(--Colors-Text-Body-Medium);
   margin: 0;
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-weight: 500;
+  font-size: var(--Fonts-Body-Default-lg);
+  line-height: 1.4;
+  color: var(--Colors-Text-Body-Medium);
 }
 
 .mail-list__empty-body {
   margin: 0;
   max-width: 28rem;
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
   text-wrap: pretty;
 }
 
+/* ── Reading pane (Figma "Single" / "Thread") ── */
 .reading-pane {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--UI-Spacing-spacing-ml);
   display: flex;
   flex-direction: column;
-  gap: var(--UI-Spacing-spacing-m);
+  gap: var(--UI-Spacing-spacing-mxxs);
+  padding: var(--UI-Spacing-spacing-mxs);
 }
 
-/* Email cards — built on the design-system .box component */
-.email.box {
+/* Single message: it fills the pane and its body scrolls. */
+.reading-pane--single > .email {
+  flex: 1 1 auto;
+  min-height: 220px;
+  padding: 0 var(--UI-Spacing-spacing-mxs);
+}
+
+/* Thread: header + bordered cards, each body scrolling inside the card. */
+.reading-pane--thread > * {
+  margin-left: var(--UI-Spacing-spacing-mxs);
+  margin-right: var(--UI-Spacing-spacing-mxs);
+}
+
+.reading-pane--thread > .composer {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Reply / Reply all after the conversation */
+.thread-actions {
+  flex: 0 0 auto;
+  display: flex;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-xs) 0 var(--UI-Spacing-spacing-s);
+}
+
+.reading-pane--single > .thread-actions {
+  padding-left: var(--UI-Spacing-spacing-mxs);
+}
+
+.thread-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-mxxs);
+  padding: var(--UI-Spacing-spacing-s);
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Control-Primary-Subtle);
+  color: var(--Colors-Icon-Primary-Default);
+}
+
+.thread-head svg {
   display: block;
-  padding: var(--UI-Spacing-spacing-ms);
+  flex: 0 0 auto;
+}
+
+.thread-head__subject {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: var(--Fonts-Body-Default-sm);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Strong);
+  overflow-wrap: anywhere;
+}
+
+.email {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-ms);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
   text-align: left;
 }
 
+.email--card {
+  flex: 0 0 auto;
+  max-height: 428px;
+  padding: var(--UI-Spacing-spacing-mxs);
+  border: 1.5px solid var(--Colors-Border-Subtle-Alt);
+  border-radius: var(--UI-Radius-radius-m);
+  background: var(--Colors-Surface-Container-Subtle-Alt);
+  transition: border-color 0.15s ease;
+}
+
+.email--card.is-selected {
+  border-color: var(--Colors-Border-Primary-Soft);
+}
+
 .email__meta {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: var(--UI-Spacing-spacing-s);
-  margin-bottom: var(--UI-Spacing-spacing-s);
-  padding-bottom: var(--UI-Spacing-spacing-s);
-  border-bottom: 1px solid var(--Colors-Stroke-Light);
+  display: flex;
+  align-items: flex-start;
+  gap: var(--UI-Spacing-spacing-mxxs);
+  flex: 0 0 auto;
 }
 
 .email__meta-text {
+  flex: 1 1 auto;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-xxs);
+}
+
+.email__row {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xxs);
+  min-width: 0;
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+.email__row--from {
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+.email__from {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.email__address,
+.email__date {
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 400;
+}
+
+.email__address {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--Colors-Text-Body-Light);
+}
+
+.email__date {
+  flex: 0 0 auto;
+  margin-left: auto;
+  text-align: right;
+  white-space: nowrap;
+  color: var(--Colors-Text-Body-Medium);
+}
+
+.email__label {
+  flex: 0 0 auto;
+  color: var(--Colors-Text-Body-Medium);
+}
+
+.email__subject {
+  min-width: 0;
+  color: var(--Colors-Text-Body-Default);
+}
+
+.email__recipients {
+  min-width: 0;
+  font-weight: 500;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.email__subject,
+.email__recipients {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Body region: hairline divider, scrolls inside the message. */
+.email__content {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  /* Figma: 16px between the text column and the 6px scrollbar; the head
+     divider (with its reply toolbar) sits above, 16px away via the gap. */
+  padding: 0 var(--UI-Spacing-spacing-ms) 0 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--Colors-Control-Neutral-Strong) transparent;
+}
+
+/* Head divider with the reply toolbar centred on the line (Figma 490:13178) */
+.email__divider {
+  position: relative;
+  flex: 0 0 auto;
+  height: 1px;
+  background: var(--Colors-Border-Subtle);
+}
+
+.email__actions {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+  padding: 0 var(--UI-Spacing-spacing-s);
+  border: 1.5px solid var(--Colors-Border-Subtle);
+  border-radius: var(--UI-Radius-radius-l);
+  background: var(--Colors-Surface-Container-Highest);
+  transform: translate(-50%, -50%);
+}
+
+.email__action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-radius: var(--Button-Radius);
+  background: transparent;
+  color: var(--Colors-Icon-Neutral-Default);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.email__action svg {
+  display: block;
+}
+
+/* Reply-all glyph sits in a 16px box like the Figma "fi_2704829" frame */
+.email__action-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+}
+
+.email__action:hover {
+  color: var(--Colors-Icon-Neutral-Strong);
+}
+
+.email__action:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 0;
+}
+
+/* Figma "Scrollbar Vertical": 6px thumb, radius 8, Control/Neutral/Strong */
+.email__content::-webkit-scrollbar,
+.reading-pane::-webkit-scrollbar,
+.mail-list__rows::-webkit-scrollbar,
+.assistant__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.email__content::-webkit-scrollbar-track,
+.reading-pane::-webkit-scrollbar-track,
+.mail-list__rows::-webkit-scrollbar-track,
+.assistant__content::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.email__content::-webkit-scrollbar-thumb,
+.reading-pane::-webkit-scrollbar-thumb,
+.mail-list__rows::-webkit-scrollbar-thumb,
+.assistant__content::-webkit-scrollbar-thumb {
+  background: var(--Colors-Control-Neutral-Strong);
+  border-radius: var(--UI-Radius-radius-s);
 }
 
 .person-avatar {
   display: block;
   flex: 0 0 auto;
-  border-radius: 50%;
+  border-radius: var(--UI-Radius-radius-s);
   object-fit: cover;
   object-position: center 15%;
   background: var(--Colors-Base-Neutral-150);
 }
 
-.person-avatar--xs {
-  width: 18px;
-  height: 18px;
-}
-
-.person-avatar--sm {
-  width: 32px;
-  height: 32px;
+/* Figma "Thumbnail": 48px, radius 12 */
+.person-avatar--lg {
+  width: var(--Avatar-Size);
+  height: var(--Avatar-Size);
+  border-radius: var(--Avatar-Border-Radius);
 }
 
 .person-avatar--md {
   width: 40px;
   height: 40px;
+  border-radius: var(--UI-Radius-radius-ms);
+}
+
+.person-avatar--sm {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--UI-Radius-radius-s);
+}
+
+/* Figma recipient thumbnail: 18px, radius 6 */
+.person-avatar--xs {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--UI-Radius-radius-xs);
 }
 
 .person-avatar--initials {
@@ -403,26 +893,33 @@ body {
   color: var(--Colors-Text-Body-Strong);
 }
 
-.email__from {
-  color: var(--Colors-Text-Body-Strong);
+/* Initials avatars (e.g. "You" without a photo) on dark: Grey/1200. */
+@media (prefers-color-scheme: dark) {
+  .person-avatar--initials {
+    background: var(--Colors-Base-Neutral-1200);
+  }
 }
 
-.email__to,
-.email__date {
-  color: var(--Colors-Text-Body-Light);
+.person-avatar--lg.person-avatar--initials {
+  font-size: var(--Fonts-Body-Default-sm);
+}
+
+.person-avatar--xs.person-avatar--initials {
+  font-size: 8px;
 }
 
 .email__body,
 .composer__editor {
   color: var(--Colors-Text-Body-Default);
-  font-size: var(--Fonts-Body-Default-md);
-  line-height: 1.6;
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   word-wrap: break-word;
 }
 
 .email__body p,
 .composer__editor p {
-  margin: 0 0 0.8em;
+  margin: 0 0 18px;
 }
 
 .email__body p:first-child,
@@ -439,15 +936,15 @@ body {
 .email__body ol,
 .composer__editor ul,
 .composer__editor ol {
-  margin: 0 0 0.8em;
-  padding-left: 1.4em;
+  margin: 0 0 18px;
+  padding-left: 1.5em;
 }
 
 .email__body blockquote,
 .composer__editor blockquote {
-  margin: 0 0 0.8em;
+  margin: 0 0 18px;
   padding: 0 0 0 var(--UI-Spacing-spacing-m);
-  border-left: 3px solid var(--Colors-Stroke-Default);
+  border-left: 3px solid var(--Colors-Border-Subtle);
   color: var(--Colors-Text-Body-Light);
 }
 
@@ -477,11 +974,18 @@ body {
 .composer__editor hr {
   margin: 1em 0;
   border: none;
-  border-top: 1px solid var(--Colors-Stroke-Light);
+  border-top: 1px solid var(--Colors-Border-Subtle);
 }
 
 .email__body a,
 .composer__editor a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-skip-ink: none;
+}
+
+.email__body a:hover,
+.composer__editor a:hover {
   color: var(--Colors-Primary-Default);
 }
 
@@ -490,23 +994,19 @@ body {
   cursor: pointer;
 }
 
-/* Outbound (learner) emails get a subtle primary accent that survives the
-   .box.non-interactive hover reset. */
-.email--outbound.box,
-.email--outbound.box:hover {
-  box-shadow:
-    inset 3px 0 0 0 var(--Colors-Stroke-Primary-Light),
-    0 3px 2px 0 var(--Colors-Shadow-Card);
-}
-
-/* ── Composer ── */
+/* ── Composer (Figma "Replying" 470:12849) ──
+   One floating panel for new messages and replies. */
 .composer {
-  border-top: 1px solid var(--Colors-Stroke-Default);
-  padding: var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-ml);
-  background: var(--Colors-Backgrounds-Main-Default);
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-ms);
+  border: 1px solid var(--Colors-Border-Subtle);
+  border-radius: var(--UI-Radius-radius-s);
+  /* Surface/Container/Subtle Alt, except in light mode where the token is
+     transparent and this panel floats over content: Surface/Container/Base. */
+  background: var(--Colors-Surface-Container-Base);
+  box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
 .composer__panel {
@@ -517,145 +1017,48 @@ body {
   flex: 1 1 auto;
 }
 
-.composer.is-overlay.box {
-  position: absolute;
-  right: var(--UI-Spacing-spacing-m);
-  bottom: 0;
-  z-index: 50;
-  width: min(30rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
-  height: min(30rem, calc(100% - 10rem));
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: 0;
-  gap: 0;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
+@media (prefers-color-scheme: dark) {
+  .composer {
+    background: var(--Colors-Surface-Container-Subtle-Alt);
+  }
 }
 
-.composer.is-overlay.box.card,
-.composer.is-overlay.box.card:hover,
-.composer.is-overlay.box.card:focus,
-.composer.is-overlay.box.non-interactive.card:hover,
-.composer.is-overlay.box.non-interactive.card:focus {
-  border: 2px solid var(--Colors-Stroke-Strong);
-  border-bottom: none;
-  background: var(--Colors-Box-Background);
-  box-shadow: 0 12px 38px 0 var(--Colors-Shadow-Float);
-}
-
-.composer.is-overlay.is-minimized {
-  height: auto;
-  width: min(20rem, calc(100% - 2 * var(--UI-Spacing-spacing-m)));
-}
-
-.composer.is-overlay .composer__panel {
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
-}
-
-.composer.is-overlay .composer__body,
-.composer.is-overlay .composer__editor,
-.composer.is-overlay .composer__body .tiptap {
-  flex: 1 1 auto;
-  min-height: 8rem;
-}
-
-.composer.is-minimized .composer__panel {
-  display: none;
-}
-
-.compose-modal-dialog.modal-dialog.size-xlarge {
-  width: min(72rem, calc(100vw - 2 * var(--UI-Spacing-spacing-xxxl)));
-  height: min(48rem, calc(100vh - 2 * var(--UI-Spacing-spacing-xxxl)));
-  max-height: calc(100vh - 2 * var(--UI-Spacing-spacing-xxxl));
-}
-
-.compose-modal-dialog .modal-content {
-  padding: 0;
-  align-items: stretch;
-  gap: 0;
-  overflow: hidden;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.composer.is-expanded {
-  display: flex;
-  flex-direction: column;
-  width: 100%;
-  height: 100%;
-  min-height: 0;
-  border: none;
-  padding: 0;
-  gap: 0;
-  background: var(--Colors-Modal-Background);
-}
-
-.composer.is-expanded .composer__chrome {
-  border-radius: var(--UI-Radius-radius-s) var(--UI-Radius-radius-s) 0 0;
-}
-
-.composer.is-expanded .composer__panel {
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-xl) var(--UI-Spacing-spacing-xl);
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.composer.is-expanded .composer__fields,
-.composer.is-expanded .composer__toolbar,
-.composer.is-expanded .composer__attachments {
-  flex: 0 0 auto;
-}
-
-.composer.is-expanded .composer__body,
-.composer.is-expanded .composer__editor,
-.composer.is-expanded .composer__body .tiptap {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
+/* Reply: at the end of the conversation, pinned to the pane bottom. */
 .composer.is-inline {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
   flex: 0 0 auto;
-  min-height: auto;
-  border: 2px solid var(--Colors-Stroke-Strong);
-  border-radius: var(--UI-Radius-radius-s);
-  padding: var(--UI-Spacing-spacing-ms);
-  background: var(--Colors-Box-Background);
-  box-shadow: 0 12px 38px 0 var(--Colors-Shadow-Float);
 }
 
-.composer.is-inline .composer__panel {
-  flex: 0 0 auto;
-  min-height: auto;
+/* New message: floats over the bottom of the main column (same 12px inset
+   as the reply panel inside the reading pane). */
+.composer.is-new {
+  position: absolute;
+  left: var(--UI-Spacing-spacing-mxs);
+  right: var(--UI-Spacing-spacing-mxs);
+  bottom: var(--UI-Spacing-spacing-mxs);
+  z-index: 50;
+  max-height: calc(100% - 64px - var(--UI-Spacing-spacing-mxs));
+  overflow-y: auto;
 }
 
-.composer.is-inline .composer__body {
-  overflow: visible;
-}
-
-.composer.is-inline .composer__body,
-.composer.is-inline .composer__editor,
-.composer.is-inline .composer__body .tiptap {
-  flex: 0 0 auto;
-  min-height: 8rem;
-}
-
-.composer__chrome {
+/* Head: icon · title · close */
+.composer__head {
   display: flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-s);
-  min-height: var(--UI-Input-xs);
-  padding: var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-m);
-  background: var(--Colors-Backgrounds-Main-Medium);
-  border-radius: inherit;
-  border-bottom-left-radius: 0;
-  border-bottom-right-radius: 0;
   flex: 0 0 auto;
 }
 
-.composer.is-minimized .composer__chrome {
-  cursor: pointer;
+.composer__head-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--Colors-Icon-Primary-Default);
+}
+
+.composer__head-icon svg {
+  display: block;
 }
 
 .composer__title {
@@ -665,122 +1068,199 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--Colors-Text-Body-Strong);
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-weight: 500;
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
+  color: var(--Colors-Text-Black);
 }
 
-.composer__chrome-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-xxs);
+/* Figma "Button Icon" 26px, no fill, 14px icon */
+.icon-button--ghost {
+  width: 26px;
+  height: 26px;
+  background: transparent;
 }
 
-.composer__chrome-btn {
-  min-width: var(--UI-Input-xs);
-  min-height: var(--UI-Input-xs);
+.icon-button--ghost:hover:not(:disabled) {
+  background: var(--Colors-Control-Neutral-Subtle);
 }
 
-.composer__chrome-btn svg {
-  width: 14px;
-  height: 14px;
-  display: block;
-}
-
+/* Header rows: 42px, 6px side padding; To / Cc carry a bottom hairline */
 .composer__fields {
   display: flex;
   flex-direction: column;
-  gap: var(--UI-Spacing-spacing-xxs);
 }
 
 .composer__field {
   display: flex;
-  align-items: flex-start;
-  gap: var(--UI-Spacing-spacing-s);
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xxs);
+  min-height: 42px;
+  padding: 0 var(--UI-Spacing-spacing-xs);
+}
+
+.composer__field--recipients {
+  border-bottom: 1px solid var(--Colors-Border-Subtle);
+  cursor: text;
+}
+
+.composer__field--subject {
+  border-radius: var(--UI-Radius-radius-s);
+  cursor: text;
 }
 
 .composer__label {
-  width: 48px;
   flex: 0 0 auto;
+  font-size: var(--Fonts-Body-Default-xxs);
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   color: var(--Colors-Text-Body-Light);
-  padding-top: var(--UI-Spacing-spacing-xs);
+}
+
+.composer__field--recipients .composer__label {
+  width: 27px;
+}
+
+.composer__label::after {
+  content: ':';
 }
 
 .composer__input {
   flex: 1 1 auto;
+  min-width: 0;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Default);
+  caret-color: var(--Colors-Primary-Default);
 }
 
+/* Typeahead row: entries, then the caret right after the last one */
 .recipient-picker {
   position: relative;
   flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--UI-Spacing-spacing-xxs);
-  min-height: var(--UI-Input-md);
-  padding: var(--UI-Spacing-spacing-xxs) var(--UI-Spacing-spacing-xs);
-  border: 1px solid var(--Colors-Input-Border-Default);
-  border-radius: var(--UI-Radius-radius-s);
-  background: var(--Colors-Input-Background-Default);
-}
-
-.recipient-picker:hover {
-  border-color: var(--Colors-Input-Border-Hover);
-}
-
-.recipient-picker.is-open,
-.recipient-picker.open,
-.recipient-picker:focus-within {
-  border-color: var(--Colors-Input-Border-Focus);
-  box-shadow: 0 0 0 4px var(--Colors-Input-Shadow-Focus);
+  gap: var(--UI-Spacing-spacing-xs);
+  min-height: 32px;
+  padding: 3px 0;
+  cursor: text;
 }
 
 .recipient-picker__chips {
-  display: flex;
-  flex-wrap: wrap;
+  display: contents;
+}
+
+/* Figma recipient "Entry": filled chip, 4px pad, radius 6 */
+.recipient-picker__chip {
+  display: inline-flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-xxs);
-}
-
-.recipient-picker__chip {
-  height: auto;
-  min-height: 0;
-  padding: 2px var(--UI-Spacing-spacing-xs);
-}
-
-.recipient-picker__add {
-  flex: 1 1 8rem;
-  min-width: 7rem;
-  margin: 0;
+  max-width: 100%;
+  min-width: 0;
   padding: var(--UI-Spacing-spacing-xxs);
+  border-radius: var(--UI-Radius-radius-xs);
+  background: var(--Colors-Control-Neutral-Subtle);
+  cursor: default;
+}
+
+.recipient-picker__chip-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+/* Remove control: hidden at rest (matches Figma), shown on hover / focus. */
+.recipient-picker__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0;
+  height: 18px;
+  margin: 0;
+  padding: 0;
   border: none;
+  border-radius: var(--UI-Radius-radius-xxs);
   background: transparent;
-  color: var(--Colors-Input-Text-Placeholder);
-  text-align: left;
+  color: var(--Colors-Icon-Neutral-Default);
   cursor: pointer;
+  overflow: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease;
 }
 
-.recipient-picker__add:focus {
-  outline: none;
+.recipient-picker__chip:hover .recipient-picker__remove,
+.recipient-picker__remove:focus-visible {
+  width: 18px;
+  opacity: 1;
 }
 
-.recipient-picker__add:focus-visible {
+.recipient-picker__remove:hover {
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.recipient-picker__remove:focus-visible {
   outline: 2px solid var(--Colors-Stroke-Primary);
-  outline-offset: 2px;
+  outline-offset: 0;
 }
 
-.recipient-picker__remove,
+.recipient-picker__input {
+  flex: 1 1 80px;
+  min-width: 80px;
+  height: 26px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Strong);
+  caret-color: var(--Colors-Primary-Default);
+}
+
+.recipient-picker__input::placeholder {
+  color: var(--Colors-Text-Body-Lighter);
+}
+
 .mail-toast__close {
   min-width: var(--UI-Input-min);
   min-height: var(--UI-Input-min);
 }
 
+/* Suggestions panel */
 .recipient-picker .dropdown-menu {
   width: auto;
+  min-width: 260px;
+  max-width: 100%;
+  top: calc(100% + var(--UI-Spacing-spacing-xxs));
   left: 0;
-  right: 0;
   max-height: 240px;
   overflow-y: auto;
   list-style: none;
   margin: 0;
+  z-index: 60;
+  background: var(--Colors-Surface-Container-Highest);
+  box-shadow: 0 8px 24px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
 .recipient-picker.dropdown-container.open .dropdown-menu {
@@ -792,6 +1272,21 @@ body {
   width: 100%;
   height: auto !important;
   min-height: var(--UI-Input-sm) !important;
+  cursor: pointer;
+}
+
+/* The design-system dropdown paints items with !important; let the panel's
+   Surface/Container/Highest show through and keep our hover / keyboard states. */
+.recipient-picker .dropdown-menu-item {
+  background: transparent !important;
+}
+
+.recipient-picker .dropdown-menu-item:hover:not(.selected) {
+  background: var(--Colors-Control-Neutral-Subtle) !important;
+}
+
+.recipient-picker .dropdown-menu-item.is-active {
+  background: var(--Colors-Control-Primary-Subtle) !important;
 }
 
 .recipient-picker__option-text {
@@ -805,36 +1300,53 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
+.recipient-picker__match {
+  background: transparent;
+  color: inherit;
+  font-weight: 600;
+}
+
+.recipient-picker__empty {
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  color: var(--Colors-Text-Body-Light);
+}
+
+/* Message box (Figma "Input Text"): 1.5px Border/Subtle, radius 8, 12px pad */
 .composer__body {
   display: flex;
   flex-direction: column;
-  min-height: 8rem;
+  min-height: 170px;
+  max-height: 40vh;
+  margin-top: 0;
   padding: 0;
   overflow: auto;
   cursor: text;
-  border: 1px solid var(--Colors-Input-Border-Default);
+  border: 1.5px solid var(--Colors-Border-Subtle);
   border-radius: var(--UI-Radius-radius-s);
-  background: var(--Colors-Input-Background-Default);
+  background: var(--Colors-Control-Input-Default);
+  transition: border-color 0.15s ease;
 }
 
 .composer__body:hover {
-  border-color: var(--Colors-Input-Border-Hover);
+  border-color: var(--Colors-Border-Medium);
 }
 
 .composer__body:focus-within {
-  border-color: var(--Colors-Input-Border-Focus);
-  box-shadow: 0 0 0 4px var(--Colors-Input-Shadow-Focus);
+  border-color: var(--Colors-Border-Primary-Soft);
 }
 
 .composer__editor,
 .composer__body .tiptap {
   flex: 1 1 auto;
   width: 100%;
-  min-height: 8rem;
-  padding: var(--UI-Spacing-spacing-m);
+  min-height: 0;
+  padding: var(--UI-Spacing-spacing-mxs);
   outline: none;
   white-space: pre-wrap;
   font-variant-ligatures: none;
+  line-height: 1.4;
 }
 
 .composer__editor:focus,
@@ -851,33 +1363,61 @@ body {
   float: left;
   height: 0;
   pointer-events: none;
-  color: var(--Colors-Input-Text-Placeholder);
+  color: var(--Colors-Text-Body-Light);
 }
 
 .composer__placeholder {
-  padding: var(--UI-Spacing-spacing-m);
-  color: var(--Colors-Input-Text-Placeholder);
+  padding: var(--UI-Spacing-spacing-mxs);
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.4;
+  color: var(--Colors-Text-Body-Light);
 }
 
-.thread-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--UI-Spacing-spacing-s);
-  padding-top: var(--UI-Spacing-spacing-s);
-}
-
+/* Buttons row (Figma): Send then Cancel, 16px apart, 15px under the box */
 .composer__toolbar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: var(--UI-Spacing-spacing-s);
+  gap: var(--UI-Spacing-spacing-ms);
+  margin-top: 7px;
 }
 
-.composer__toolbar-start {
-  display: flex;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-s);
-  margin-right: auto;
+.composer .button.composer__send {
+  height: var(--Button-Size);
+  min-height: var(--Button-Size);
+  padding: 0 var(--UI-Spacing-spacing-mxs);
+  border-radius: var(--Button-Radius);
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+}
+
+.composer__text-btn {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 500;
+  line-height: 1.45;
+  letter-spacing: -0.015em;
+  color: var(--Colors-Text-Body-Medium);
+  cursor: pointer;
+}
+
+.composer__text-btn:hover {
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.composer__text-btn:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 2px;
+  border-radius: var(--UI-Radius-radius-xxs);
+}
+
+.composer__attach {
+  margin-left: auto;
 }
 
 .composer__attachments {
@@ -907,96 +1447,130 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: var(--UI-Spacing-spacing-xs);
-  margin-top: var(--UI-Spacing-spacing-s);
+  margin-top: var(--UI-Spacing-spacing-ms);
   padding-top: var(--UI-Spacing-spacing-s);
-  border-top: 1px solid var(--Colors-Stroke-Light);
+  border-top: 1px solid var(--Colors-Border-Subtle);
 }
 
-/* ── Assistant panel ── */
+/* ── Assistant panel (Figma "Assistant Sidebar") ── */
 .assistant {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  background: var(--Colors-Backgrounds-Main-Light);
-  border-left: 1px solid var(--Colors-Stroke-Default);
+  padding: var(--UI-Spacing-spacing-mxs);
+  background: transparent;
 }
 
 .assistant[hidden] {
   display: none;
 }
 
+.assistant__card {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-ml);
+  padding: var(--UI-Spacing-spacing-ms);
+  border: 1px solid var(--Colors-Border-Subtle-Alt);
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Surface-Container-Subtle-Alt);
+  box-shadow: 0 2px 6px 0 var(--Colors-Emphasis-Shadow-Soft);
+}
+
 .assistant__header {
   display: flex;
   align-items: center;
-  gap: var(--UI-Spacing-spacing-xs);
-  padding: var(--UI-Spacing-spacing-m);
-  border-bottom: 1px solid var(--Colors-Stroke-Default);
+  gap: var(--UI-Spacing-spacing-s);
+  flex: 0 0 auto;
+}
+
+.assistant__logo {
+  display: block;
+  flex: 0 0 auto;
 }
 
 .assistant__title {
-  color: var(--Colors-Text-Body-Strong);
-}
-
-.assistant__thinking {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--UI-Spacing-spacing-xs);
-  margin-left: var(--UI-Spacing-spacing-xs);
-  color: var(--Colors-Text-Body-Light);
-}
-
-.assistant__thinking[hidden] {
-  display: none !important;
-}
-
-.assistant__spinner {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--Colors-Stroke-Default);
-  border-top-color: var(--Colors-Text-Body-Strong);
-  border-radius: 50%;
-  animation: assistant-spin 0.7s linear infinite;
-}
-
-.assistant__thinking-label {
-  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-weight: 500;
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
+  color: var(--Colors-Text-Black);
 }
 
 .assistant__clear {
-  margin-left: auto;
-  min-width: var(--UI-Input-xs);
-  min-height: var(--UI-Input-xs);
-  padding: 0;
-  color: var(--Colors-Text-Body-Light);
+  flex: 0 0 auto;
 }
 
-@keyframes assistant-spin {
-  to { transform: rotate(360deg); }
-}
-
-.assistant__clear:hover:not(:disabled) {
-  color: var(--Colors-Text-Body-Strong);
-}
-
-.assistant__messages {
+/* Messages, quick results and chips share one scroll region. */
+.assistant__content {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
-  padding: var(--UI-Spacing-spacing-m);
   display: flex;
   flex-direction: column;
-  gap: var(--UI-Spacing-spacing-m);
+  gap: var(--UI-Spacing-spacing-mxxs);
+  scrollbar-width: thin;
+  scrollbar-color: var(--Colors-Control-Neutral-Strong) transparent;
+}
+
+.assistant__messages {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-mxxs);
+  padding-top: var(--UI-Spacing-spacing-s);
 }
 
 .assistant__hint {
+  margin: 0;
+}
+
+.assistant__hint,
+.assistant__msg {
+  font-size: var(--Fonts-Body-Default-sm);
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Default);
+}
+
+/* Thinking row (thinking.riv) while a turn runs, then "Thought for Ns". */
+.assistant__status {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xs);
+  font-size: var(--Fonts-Body-Default-sm);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
   color: var(--Colors-Text-Body-Light);
 }
 
-/* Message row: avatar + bubble (mirrors the ChatCPT layout) */
+.assistant__status-anim {
+  display: block;
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+}
+
+.assistant__status-anim.is-fallback {
+  display: none;
+}
+
+.assistant__thought {
+  margin: 0;
+  font-size: var(--Fonts-Body-Default-xs);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Lighter);
+}
+
 .assistant__row {
   display: flex;
   align-items: flex-start;
-  gap: var(--UI-Spacing-spacing-xs);
   max-width: 100%;
 }
 
@@ -1006,11 +1580,6 @@ body {
 
 .assistant__row--ai {
   width: 100%;
-}
-
-.assistant__avatar {
-  margin-top: var(--UI-Spacing-spacing-min);
-  flex: 0 0 auto;
 }
 
 .assistant__turn {
@@ -1023,50 +1592,20 @@ body {
 }
 
 .assistant__msg {
-  line-height: 1.5;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.assistant__msg--user.box {
-  display: block;
-  text-align: left;
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
-  border-radius: var(--UI-Radius-radius-ml);
-  background: var(--Colors-Backgrounds-Main-Medium);
-  color: var(--Colors-Text-Body-Strong);
+.assistant__msg--user {
   max-width: 85%;
-}
-
-.assistant__msg--user.box:hover,
-.assistant__msg--user.box:focus {
-  background: var(--Colors-Backgrounds-Main-Medium);
-  border-color: transparent;
-  box-shadow: inherit;
-}
-
-/* AI message — built on the design-system .box component */
-.assistant__msg--ai.box {
-  display: block;
-  text-align: left;
   padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
   border-radius: var(--UI-Radius-radius-m);
-  max-width: 85%;
+  background: var(--Colors-Surface-Container-Subtle);
+  color: var(--Colors-Text-Body-Strong);
 }
 
-.assistant__composer {
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-m);
-  border-top: 1px solid var(--Colors-Stroke-Default);
-  display: flex;
-  flex-direction: column;
-  gap: var(--UI-Spacing-spacing-s);
-}
-
-.assistant__input {
-  resize: none;
-  width: 100%;
-}
-
-.assistant__composer .button {
-  align-self: flex-end;
+.assistant__msg--ai p {
+  margin: 0 0 var(--UI-Spacing-spacing-s);
 }
 
 .assistant__msg--ai p:first-child {
@@ -1077,14 +1616,19 @@ body {
   margin-bottom: 0;
 }
 
-/* Drafted emails render as a quote block, matching the design-system
-   `.box.input-group` look rather than a dark code block. */
+.assistant__msg--ai ul,
+.assistant__msg--ai ol {
+  margin: 0 0 var(--UI-Spacing-spacing-s);
+  padding-left: 1.4em;
+}
+
+/* Drafted emails render as a quote block rather than a dark code block. */
 .assistant__msg--ai pre {
   margin: var(--UI-Spacing-spacing-s) 0;
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-ml);
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
   border-radius: var(--UI-Radius-radius-s);
-  border-left: 5px solid var(--Colors-Primary-Default);
-  background: var(--Colors-Backgrounds-Box-Default);
+  border-left: 3px solid var(--Colors-Primary-Default);
+  background: var(--Colors-Surface-Container-Subtle);
   color: var(--Colors-Text-Body-Strong);
   font-family: inherit;
   white-space: pre-wrap;
@@ -1102,15 +1646,18 @@ body {
   margin: 0;
 }
 
-/* Draft sits beside the avatar, not inside the chat bubble — a second .box
-   in this narrow panel left almost no width for To/Subject. */
+/* Draft sits beside the commentary, not inside a nested box — keeps width
+   for To/Subject in this narrow panel. */
 .assistant__draft {
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-s);
-  padding: 0 0 0 var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
+  border: 1px solid var(--Colors-Border-Subtle);
   border-left: 3px solid var(--Colors-Primary-Default);
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Surface-Container-Subtle);
   color: var(--Colors-Text-Body-Strong);
 }
 
@@ -1122,6 +1669,7 @@ body {
 }
 
 .assistant__draft-label {
+  font-weight: 500;
   color: var(--Colors-Text-Body-Light);
 }
 
@@ -1182,17 +1730,160 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .assistant__spinner {
-    animation: none;
-    border-top-color: var(--Colors-Stroke-Default);
-    background: var(--Colors-Text-Body-Light);
-    opacity: 0.55;
-  }
-
   .assistant__typing-dot {
     animation: none;
     opacity: 0.7;
   }
+}
+
+/* Quick-action chips (Figma "Action Chip") */
+.assistant__chips {
+  flex: 0 0 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--UI-Spacing-spacing-s);
+  padding-bottom: var(--UI-Spacing-spacing-s);
+}
+
+.assistant__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+  max-width: 100%;
+  min-height: 38px;
+  margin: 0;
+  padding: var(--UI-Spacing-spacing-xs) var(--UI-Spacing-spacing-s);
+  border: none;
+  border-radius: var(--UI-Radius-radius-m);
+  background: var(--Colors-Control-Primary-Subtle);
+  font: inherit;
+  text-align: left;
+  color: var(--Colors-Text-Body-Default);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.assistant__chip:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--Colors-Icon-Primary-Default) 12%, transparent);
+}
+
+.assistant__chip:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 2px;
+}
+
+.assistant__chip:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+/* Figma "Content Icon": 24px box, radius 8, 18px icon centered (inset 12.5%) */
+.assistant__chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: var(--Icon-Box-Size);
+  height: var(--Icon-Box-Size);
+  border-radius: var(--Icon-Box-Border-Radius);
+  background: var(--Colors-Icon-Illustrative-Primary-Base);
+}
+
+.assistant__chip-icon img {
+  display: block;
+}
+
+.assistant__chip-label {
+  min-width: 0;
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 400;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+}
+
+/* Prompt box (Figma "Cosmo Textarea") */
+.assistant__composer {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  padding: var(--UI-Spacing-spacing-xxs);
+  border-radius: var(--UI-Radius-radius-ml);
+  background: var(--Colors-Control-Neutral-Subtle);
+  transition: box-shadow 0.15s ease;
+}
+
+.assistant__composer:focus-within {
+  box-shadow: inset 0 0 0 1.5px var(--Colors-Border-Primary-Soft);
+}
+
+.assistant__input {
+  display: block;
+  width: 100%;
+  min-height: 47px;
+  max-height: 160px;
+  margin: 0;
+  padding: var(--UI-Spacing-spacing-mxs) var(--UI-Spacing-spacing-ms);
+  border: none;
+  border-radius: var(--UI-Radius-radius-m);
+  outline: none;
+  background: transparent;
+  resize: none;
+  font: inherit;
+  font-size: var(--Fonts-Body-Default-md);
+  line-height: 1.45;
+  letter-spacing: -0.01em;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.assistant__input::placeholder {
+  color: var(--Colors-Text-Body-Lighter);
+}
+
+.assistant__input:disabled {
+  cursor: not-allowed;
+}
+
+.assistant__composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  height: 40px;
+  padding: 0 var(--UI-Spacing-spacing-mxs) 0 var(--UI-Spacing-spacing-s);
+}
+
+.assistant__send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  margin-right: -5px;
+  padding: 0;
+  border: none;
+  border-radius: var(--Button-Radius);
+  background: transparent;
+  color: var(--Colors-Primary-Default);
+  cursor: pointer;
+}
+
+.assistant__send svg {
+  display: block;
+}
+
+.assistant__send:hover:not(:disabled) {
+  background: var(--Colors-Control-Primary-Subtle);
+}
+
+.assistant__send:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 0;
+}
+
+/* Figma resting state: Icon/Switch/Off at 70% */
+.assistant__send:disabled {
+  cursor: default;
+  color: var(--Colors-Icon-Switch-Off);
+  opacity: 0.7;
 }
 
 .email__attachment--preview {
@@ -1204,7 +1895,18 @@ body {
 .email__attachment--preview:focus-visible {
   border-color: var(--Colors-Stroke-Strong, var(--Colors-Stroke-Default));
   outline: 2px solid var(--Colors-Stroke-Focus, rgba(92, 148, 255, 0.6));
-  outline-offset: 2px;
+  outline-offset: -2px;
+  box-shadow: none;
+}
+
+/* "Replace current draft?" confirm */
+.replace-draft-dialog .modal-header {
+  height: auto;
+}
+
+.replace-draft-dialog .modal-content {
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .attachment-preview-modal__body {
@@ -1218,26 +1920,64 @@ body {
   line-height: 1.45;
 }
 
-.assistant__chips {
-  flex: 0 0 auto;
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--UI-Spacing-spacing-xs);
-  padding: 0 var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-s);
-}
-
-.assistant__chip {
-  max-width: 100%;
-}
-
 .assistant__quick-result {
   flex: 0 0 auto;
-  padding: 0 var(--UI-Spacing-spacing-m) var(--UI-Spacing-spacing-s);
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-s);
-  max-height: 40%;
-  overflow-y: auto;
+}
+
+/* Quick results (triage ranking, rewrite/shorten drafts): filled card,
+   16px inside, 8px between the content and the actions row. */
+.assistant__quick-result .assistant__triage,
+.assistant__quick-result .assistant__draft {
+  gap: var(--UI-Spacing-spacing-s);
+  padding: var(--UI-Spacing-spacing-ms);
+  border: none;
+  border-radius: var(--UI-Radius-radius-s);
+  background: var(--Colors-Control-Neutral-Subtle);
+}
+
+.assistant__draft-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-s);
+}
+
+/* Suggested replies: one at a time, cycled from the actions row */
+.assistant__suggestion-body {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--Colors-Text-Body-Strong);
+}
+
+.assistant__cycle.icon-button {
+  width: 24px;
+  height: 24px;
+}
+
+.assistant__cycle-count {
+  min-width: 3.5em;
+  text-align: center;
+  font-size: var(--Fonts-Body-Default-xxs);
+  line-height: 1.35;
+  color: var(--Colors-Text-Body-Light);
+  font-variant-numeric: tabular-nums;
+}
+
+.assistant__suggestions .assistant__insert {
+  margin-left: auto;
+}
+
+/* Bold in assistant output is Work Sans Medium, not Bold. */
+.assistant__msg strong,
+.assistant__msg b,
+.assistant__draft strong,
+.assistant__draft b,
+.assistant__quick-result strong,
+.assistant__quick-result b {
+  font-family: 'Work Sans', var(--body-family), sans-serif;
+  font-weight: 500;
 }
 
 .assistant__quick-result[hidden],
@@ -1249,15 +1989,20 @@ body {
   display: flex;
   flex-direction: column;
   gap: var(--UI-Spacing-spacing-xs);
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m);
-  background: var(--Colors-Backgrounds-Box-Default);
-  border: 1px solid var(--Colors-Stroke-Default, var(--Colors-Stroke-Primary));
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-mxs);
+  background: var(--Colors-Surface-Container-Subtle);
+  border: 1px solid var(--Colors-Border-Subtle);
   border-radius: var(--UI-Radius-radius-s);
 }
 
+/* Headline for the inbox priority result */
 .assistant__triage-label {
-  color: var(--Colors-Text-Body-Light);
   margin: 0;
+  font-family: 'Founders Grotesk', var(--heading-family), sans-serif;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.35;
+  color: var(--Colors-Text-Body-Strong);
 }
 
 .assistant__triage-body {
@@ -1276,53 +2021,6 @@ body {
   margin-top: var(--UI-Spacing-spacing-xs);
 }
 
-.suggested-replies {
-  display: flex;
-  flex-direction: column;
-  gap: var(--UI-Spacing-spacing-xs);
-  margin: var(--UI-Spacing-spacing-s) 0 var(--UI-Spacing-spacing-m);
-  padding: 0 var(--UI-Spacing-spacing-m);
-}
-
-.suggested-replies__label {
-  color: var(--Colors-Text-Body-Light);
-  margin: 0;
-}
-
-.suggested-replies__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--UI-Spacing-spacing-xs);
-}
-
-.suggested-replies__option {
-  display: block;
-  width: 100%;
-  margin: 0;
-  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m);
-  text-align: left;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  line-height: 1.45;
-  color: var(--Colors-Text-Body-Strong);
-  background: var(--Colors-Backgrounds-Box-Default);
-  border: 1px solid var(--Colors-Stroke-Default, var(--Colors-Stroke-Primary));
-  border-radius: var(--UI-Radius-radius-s);
-  cursor: pointer;
-  font: inherit;
-  box-sizing: border-box;
-}
-
-.suggested-replies__option:hover,
-.suggested-replies__option:focus-visible {
-  border-color: var(--Colors-Primary-Default);
-  outline: none;
-}
-
-.suggested-replies__option:focus-visible {
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--Colors-Primary-Default) 35%, transparent);
-}
-
 .email--arrive {
   animation: email-arrive 1.2s ease;
 }
@@ -1336,16 +2034,41 @@ body {
   }
 }
 
+/* New-mail toasts: inside the main column, 8px below the 64px toolbar and
+   8px from its right edge; slide in from the right (co-design-al motion). */
 .mail-toasts {
   position: absolute;
-  left: var(--UI-Spacing-spacing-m);
-  bottom: var(--UI-Spacing-spacing-m);
+  top: calc(64px + var(--UI-Spacing-spacing-s));
+  right: var(--UI-Spacing-spacing-s);
   z-index: 1100;
   display: flex;
-  flex-direction: column-reverse;
+  flex-direction: column;
+  align-items: flex-end;
   gap: var(--UI-Spacing-spacing-s);
-  width: min(22rem, calc(100vw - 2 * var(--UI-Spacing-spacing-m)));
+  width: min(22rem, calc(100% - 2 * var(--UI-Spacing-spacing-s)));
   pointer-events: none;
+}
+
+.mail-toast {
+  animation: mail-toast-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes mail-toast-in {
+  from { opacity: 0.4; transform: translateX(150%) scale(0.4); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mail-toast { animation: none; }
+}
+
+.mail-toast.box,
+.mail-toast.box.card:hover,
+.mail-toast.box.card:focus {
+  /* Same raised surface as the composer and assistant card. */
+  background: var(--Colors-Surface-Container-Highest);
+  border-radius: var(--UI-Radius-radius-s);
+  box-shadow: 0 3px 12px 0 var(--Colors-Emphasis-Shadow-Soft);
 }
 
 .mail-toast.box {
@@ -1385,7 +2108,7 @@ body {
 }
 
 .mail-toast__kicker {
-  color: var(--Colors-Text-Body-Secondary);
+  color: var(--Colors-Text-Body-Light);
 }
 
 .mail-toast__from {
@@ -1396,7 +2119,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--Colors-Text-Body-Secondary);
+  color: var(--Colors-Text-Body-Light);
 }
 
 .mail-toast__close {

@@ -157,6 +157,14 @@ describe('session lifecycle', () => {
     expect(reload.body.assistantMessages[0].content).toBe('help me');
   });
 
+  it('POST /api/session/save merges read email ids', async () => {
+    await request(app).post('/api/session/save').send({ sessionId, readEmailIds: ['email-a'] });
+    await request(app).post('/api/session/save').send({ sessionId, readEmailIds: ['email-b', 'email-a', 42] });
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.readEmailIds).toEqual(['email-a', 'email-b']);
+  });
+
   it('POST /api/session/events appends provenance events', async () => {
     const append = await request(app)
       .post('/api/session/events')
