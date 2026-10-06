@@ -1751,6 +1751,9 @@ async function sendEmail() {
   const draft = currentDraft();
   if (!draft.body.trim() && !draft.subject.trim()) return;
 
+  clearTimeout(state.draftSaveTimer);
+  state.draftSaveTimer = null;
+
   els.sendBtn.disabled = true;
   els.sendBtn.textContent = 'Sending…';
   try {
