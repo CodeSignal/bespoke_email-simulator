@@ -648,14 +648,16 @@ function initRecipientPickers() {
       renderRecipientPickers();
     });
     // Clicking anywhere on the whole 42px row (label, padding, entries, empty
-    // space) puts the caret after the last entry.
+    // space) puts the caret after the last entry. A second click on the
+    // already-focused input does not fire `focus` again, so reopen the list.
     const row = picker?.closest('.composer__field') || picker;
     row?.addEventListener('mousedown', (event) => {
-      if (event.target === input || event.target.closest('.recipient-picker__remove, .recipient-picker__option, .recipient-picker__menu')) return;
-      event.preventDefault();
+      if (event.target.closest('.recipient-picker__remove, .recipient-picker__option, .recipient-picker__menu')) return;
+      const onInput = event.target === input;
+      if (!onInput) event.preventDefault();
       if (document.activeElement === input) openRecipientMenu(field);
       else input.focus();
-      input.setSelectionRange(input.value.length, input.value.length);
+      if (!onInput) input.setSelectionRange(input.value.length, input.value.length);
     });
   }
   // Capture phase so components that stop propagation (e.g. design-system
