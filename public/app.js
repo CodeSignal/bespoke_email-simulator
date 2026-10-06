@@ -1362,6 +1362,7 @@ async function saveDraftNow() {
 
 function scheduleDraftSave() {
   updateSendEnabled();
+  renderAssistantChips();
   clearTimeout(state.draftSaveTimer);
   state.draftSaveTimer = setTimeout(saveDraftNow, 600);
 }
@@ -2170,16 +2171,20 @@ function insertParseContext() {
 
 function visibleQuickActionChips() {
   if (state.config?.assistant?.enabled === false) return [];
-  const chips = resolveQuickActionChips({
+  const composerOpen = composerIsOpen();
+  const draft = composerOpen ? currentDraft() : null;
+  return resolveQuickActionChips({
     capabilities: state.config?.assistant?.capabilities,
     quickActions: state.config?.assistant?.quickActions,
-  });
-  const composerOpen = composerIsOpen();
-  const inThread = state.view === 'thread' && Boolean(state.activeThreadId);
-  return chips.filter((chip) => {
-    if (chip.needsThread && !inThread) return false;
-    if (chip.needsComposer && !composerOpen) return false;
-    return true;
+    context: {
+      view: state.view,
+      mailbox: state.activeMailbox,
+      composerOpen,
+      composingNew: Boolean(state.composingNew),
+      hasDraftBody: Boolean(draft?.body?.trim()),
+      hasRecipients: Boolean(draft && (draft.to.length || draft.cc.length)),
+      hasSubject: Boolean(draft?.subject?.trim()),
+    },
   });
 }
 

@@ -81,6 +81,83 @@ describe('resolveQuickActionChips', () => {
       }),
     ).toEqual([]);
   });
+
+  it('shows prioritize only on the inbox list, not in a thread or while composing', () => {
+    const caps = { capabilities: ['compose', 'triage'], quickActions: true };
+    expect(
+      resolveQuickActionChips({
+        ...caps,
+        context: { view: 'list', mailbox: 'inbox', composerOpen: false },
+      }).map((c) => c.id),
+    ).toEqual(['prioritize_inbox']);
+    expect(
+      resolveQuickActionChips({
+        ...caps,
+        context: { view: 'thread', mailbox: 'inbox', composerOpen: false },
+      }).map((c) => c.id),
+    ).toEqual(['suggested_replies']);
+    expect(
+      resolveQuickActionChips({
+        ...caps,
+        context: { view: 'list', mailbox: 'sent', composerOpen: false },
+      }).map((c) => c.id),
+    ).toEqual([]);
+    expect(
+      resolveQuickActionChips({
+        ...caps,
+        context: { view: 'list', mailbox: 'inbox', composerOpen: true, composingNew: true },
+      }).map((c) => c.id),
+    ).toEqual(['subject_recipients']);
+  });
+
+  it('shows rewrite chips only when the composer has a body', () => {
+    const caps = { capabilities: ['compose', 'triage'], quickActions: true };
+    expect(
+      resolveQuickActionChips({
+        ...caps,
+        context: {
+          view: 'list',
+          mailbox: 'inbox',
+          composerOpen: true,
+          composingNew: true,
+          hasDraftBody: false,
+          hasRecipients: false,
+          hasSubject: false,
+        },
+      }).map((c) => c.id),
+    ).toEqual(['subject_recipients']);
+    expect(
+      resolveQuickActionChips({
+        ...caps,
+        context: {
+          view: 'list',
+          mailbox: 'inbox',
+          composerOpen: true,
+          composingNew: true,
+          hasDraftBody: true,
+          hasRecipients: false,
+          hasSubject: false,
+        },
+      }).map((c) => c.id),
+    ).toEqual(['rewrite', 'shorten', 'tone', 'proofread', 'subject_recipients']);
+  });
+
+  it('hides subject & recipients once both are filled', () => {
+    const chips = resolveQuickActionChips({
+      capabilities: ['compose'],
+      quickActions: true,
+      context: {
+        view: 'list',
+        mailbox: 'inbox',
+        composerOpen: true,
+        composingNew: true,
+        hasDraftBody: true,
+        hasRecipients: true,
+        hasSubject: true,
+      },
+    });
+    expect(chips.map((c) => c.id)).toEqual(['rewrite', 'shorten', 'tone', 'proofread']);
+  });
 });
 
 describe('normalizeSuggestedReplies', () => {
