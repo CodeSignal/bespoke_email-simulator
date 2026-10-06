@@ -627,7 +627,7 @@ function publicResponder(character) {
 // thread (creating one for compose-new), clear the draft, and list who will
 // write back.
 app.post('/api/email/send', async (req, res) => {
-  const { sessionId, threadId, to, cc, subject, body, attachments } = req.body;
+  const { sessionId, threadId, draftId, to, cc, subject, body, attachments } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
   try {
     const { config } = await getScenario();
@@ -669,7 +669,7 @@ app.post('/api/email/send', async (req, res) => {
       // Drop only the draft that was sent; keep other scoped drafts.
       fresh.drafts = removeScopedDraft(
         fresh.drafts,
-        threadId ? { scope: 'reply', threadId } : { scope: 'new' },
+        threadId ? { scope: 'reply', threadId } : { scope: 'new', id: draftId },
       );
     });
     if (!record) return res.status(404).json({ error: 'Session not found' });

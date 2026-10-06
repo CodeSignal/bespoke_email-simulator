@@ -141,6 +141,30 @@ describe('session lifecycle', () => {
     ]);
   });
 
+  it('POST /api/email/send removes only the matching new-message draft', async () => {
+    await request(app).post('/api/session/save').send({
+      sessionId,
+      drafts: [
+        { scope: 'new', id: 'draft-keep', to: [], cc: [], subject: 'Keep me', body: 'other draft' },
+        { scope: 'new', id: 'draft-send', to: ['dana@acme-vendor.com'], cc: [], subject: 'Send me', body: 'this one' },
+      ],
+    });
+
+    const res = await request(app).post('/api/email/send').send({
+      sessionId,
+      to: ['dana@acme-vendor.com'],
+      subject: 'Send me',
+      body: 'this one',
+      draftId: 'draft-send',
+    });
+    expect(res.status).toBe(200);
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.drafts).toEqual([
+      expect.objectContaining({ id: 'draft-keep', subject: 'Keep me' }),
+    ]);
+  });
+
   it('POST /api/session/save persists drafts and assistant messages', async () => {
     const save = await request(app)
       .post('/api/session/save')
