@@ -173,6 +173,7 @@ const els = {
   toolbarComposeBtn: document.getElementById('toolbarComposeBtn'),
   toolbarComposeLabel: document.getElementById('toolbarComposeLabel'),
   readingPane: document.getElementById('readingPane'),
+  mailViewStatus: document.getElementById('mailViewStatus'),
   composer: document.getElementById('composer'),
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
@@ -490,7 +491,12 @@ function renderRecipientMenu(field) {
     input.setAttribute('aria-expanded', open ? 'true' : 'false');
     // Placeholder only while the row is empty; entries speak for themselves.
     input.placeholder = state.recipients[field].length ? '' : t('Type a name');
-    input.setAttribute('aria-label', remaining.length ? t('Add a recipient') : t('No more people to add'));
+    // One naming method. aria-label wins over aria-labelledby, so a shared
+    // "Add a recipient" label made To and Cc announce the same name.
+    const fieldLabel = field === 'cc' ? t('Cc') : t('To');
+    const hint = remaining.length ? t('Add a recipient') : t('No more people to add');
+    input.setAttribute('aria-label', `${fieldLabel}, ${hint}`);
+    input.removeAttribute('aria-labelledby');
   }
   if (!menu) return;
   menu.hidden = !open;
@@ -599,6 +605,9 @@ function onRecipientKeydown(field, event) {
     case 'Tab':
     case ',':
     case ';': {
+      // Shift+Tab leaves the field. Treating it as a commit calls preventDefault
+      // and focus stays in the combobox, so reverse tab never gets past To/Cc.
+      if (event.key === 'Tab' && event.shiftKey) return;
       // Commit the highlighted match when the user has typed something
       // (Enter also commits from an open, untyped list).
       const typed = Boolean(String(input?.value || '').trim());
@@ -642,11 +651,13 @@ function initRecipientPickers() {
     input.addEventListener('keydown', (event) => onRecipientKeydown(field, event));
     input.addEventListener('blur', () => {
       // Leaving the field drops the half-typed query (only directory people
-      // can be added) and closes the suggestions.
+      // can be added) and closes the suggestions. Rebuild the menu only:
+      // rebuilding chips destroys the remove button Shift+Tab is moving to,
+      // and focus falls back into this field.
       if (state.openRecipientField === field) state.openRecipientField = null;
       state.recipientQuery[field] = '';
       input.value = '';
-      renderRecipientPickers();
+      renderRecipientMenu(field);
     });
     // Clicking anywhere on the whole 42px row (label, padding, entries, empty
     // space) puts the caret after the last entry. A second click on the
@@ -1228,6 +1239,7 @@ function selectMailbox(mailbox) {
   state.view = 'list';
   state.replying = null;
   state.activeThreadId = null;
+  clearOpenedThreadStatus();
   renderShell();
 }
 
@@ -1238,6 +1250,39 @@ function selectThread(threadId) {
   state.selectedEmailId = null;
   state.replyToEmailId = null;
   renderShell();
+  announceOpenedThread(threadId);
+  focusThreadHeading();
+}
+
+// One short status when a thread opens. The reading pane is not a live region,
+// so replacing its messages does not re-announce the whole conversation.
+function announceOpenedThread(threadId) {
+  const status = els.mailViewStatus;
+  if (!status) return;
+  const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
+  const subject = thread?.subject || t('(no subject)');
+  const message = `${t('Opened')}: ${subject}`;
+  status.textContent = '';
+  // Back or another thread can win before the next frame. Don't let this
+  // callback put the old "Opened:" line back.
+  requestAnimationFrame(() => {
+    if (state.view !== 'thread' || state.activeThreadId !== threadId) return;
+    status.textContent = message;
+  });
+}
+
+function clearOpenedThreadStatus() {
+  if (els.mailViewStatus) els.mailViewStatus.textContent = '';
+}
+
+function focusThreadHeading() {
+  els.mailToolbarTitle?.focus({ preventScroll: true });
+}
+
+function focusMailRow(threadId) {
+  if (!threadId || !els.threadList) return;
+  const row = els.threadList.querySelector(`[data-thread-id="${escapeSelector(threadId)}"]`);
+  row?.focus({ preventScroll: true });
 }
 
 function startReply(mode, emailId = null) {
@@ -1381,10 +1426,13 @@ function initMailtoCompose() {
 }
 
 function backToList() {
+  const threadId = state.activeThreadId;
   state.view = 'list';
   state.replying = null;
   state.activeThreadId = null;
+  clearOpenedThreadStatus();
   renderShell();
+  focusMailRow(threadId);
 }
 
 function applyScenarioChrome() {

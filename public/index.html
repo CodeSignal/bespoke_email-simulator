@@ -64,7 +64,7 @@
           </span>
           <span class="mail-back__label" id="backBtnLabel">Back to inbox</span>
         </button>
-        <h1 class="mail-toolbar__title" id="mailToolbarTitle">
+        <h1 class="mail-toolbar__title" id="mailToolbarTitle" tabindex="-1">
           <span class="mail-toolbar__name" id="mailToolbarName">Inbox</span>
           <span class="mail-toolbar__count" id="mailToolbarCount"></span>
         </h1>
@@ -81,7 +81,8 @@
         <div class="mail-list__rows" id="threadList"></div>
       </section>
 
-      <section class="reading-pane" id="readingPane" aria-label="Conversation" aria-live="polite" hidden></section>
+      <div class="visually-hidden" id="mailViewStatus" role="status"></div>
+      <section class="reading-pane" id="readingPane" aria-label="Conversation" hidden></section>
 
       <!-- A <div>, not a <section>: when expanded, this is appended into the design-system
            Modal's .modal-content, whose CSS styles "section h2/h3/p/ol/ul" descendants as
@@ -106,7 +107,7 @@
               <span class="composer__label" id="composeToLabel">To</span>
               <div class="recipient-picker dropdown-container" id="composeToPicker" data-field="to">
                 <div class="recipient-picker__chips" id="composeToChips"></div>
-                <input type="text" class="recipient-picker__input" id="composeToInput" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="composeToMenu" aria-labelledby="composeToLabel" autocomplete="off" spellcheck="false" />
+                <input type="text" class="recipient-picker__input" id="composeToInput" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="composeToMenu" autocomplete="off" spellcheck="false" />
                 <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeToMenu" role="listbox" aria-labelledby="composeToLabel" hidden></ul>
               </div>
             </div>
@@ -114,7 +115,7 @@
               <span class="composer__label" id="composeCcLabel">Cc</span>
               <div class="recipient-picker dropdown-container" id="composeCcPicker" data-field="cc">
                 <div class="recipient-picker__chips" id="composeCcChips"></div>
-                <input type="text" class="recipient-picker__input" id="composeCcInput" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="composeCcMenu" aria-labelledby="composeCcLabel" autocomplete="off" spellcheck="false" />
+                <input type="text" class="recipient-picker__input" id="composeCcInput" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="composeCcMenu" autocomplete="off" spellcheck="false" />
                 <ul class="dropdown-menu dropdown-menu-list recipient-picker__menu" id="composeCcMenu" role="listbox" aria-labelledby="composeCcLabel" hidden></ul>
               </div>
             </div>
