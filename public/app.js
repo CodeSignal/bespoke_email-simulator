@@ -1263,7 +1263,10 @@ function announceOpenedThread(threadId) {
   const subject = thread?.subject || t('(no subject)');
   const message = `${t('Opened')}: ${subject}`;
   status.textContent = '';
+  // Back or another thread can win before the next frame. Don't let this
+  // callback put the old "Opened:" line back.
   requestAnimationFrame(() => {
+    if (state.view !== 'thread' || state.activeThreadId !== threadId) return;
     status.textContent = message;
   });
 }
