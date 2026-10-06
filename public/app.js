@@ -35,7 +35,7 @@ import {
   initialsFromName,
 } from '../lib/characters.js';
 import { buildMailboxContext } from '../lib/assistant.js';
-import { draftForScope, parseInsertedDraft, removeScopedDraft, sameDraftScope, upsertScopedDraft } from '../lib/drafts.js';
+import { draftForScope, draftHasPersistableContent, parseInsertedDraft, removeScopedDraft, sameDraftScope, upsertScopedDraft, visibleDrafts } from '../lib/drafts.js';
 import {
   appendSessionEvents,
   draftFieldsToMarkdown,
@@ -115,6 +115,7 @@ const state = {
   activeThreadId: null,
   view: 'list', // list | thread
   composingNew: false,
+  activeDraftId: null,
   replying: null, // null | 'reply' | 'replyAll'
   selectedEmailId: null, // highlighted message in a multi-message thread
   replyToEmailId: null, // email a per-message reply button targeted
@@ -701,8 +702,21 @@ function markThreadRead(thread) {
   }).catch((err) => console.error('[Mail] read state save failed:', err));
 }
 
+function savedDrafts() {
+  return visibleDrafts(state.session?.drafts).slice().sort((a, b) => {
+    const ta = Date.parse(a?.updated_at) || 0;
+    const tb = Date.parse(b?.updated_at) || 0;
+    return tb - ta;
+  });
+}
+
 function visibleThreads() {
+  if (state.activeMailbox === 'drafts') return [];
   return threadsInMailbox(state.session?.threads ?? [], state.activeMailbox, learnerEmail());
+}
+
+function mailboxItemCount() {
+  return state.activeMailbox === 'drafts' ? savedDrafts().length : visibleThreads().length;
 }
 
 function mailboxLabel(mailbox) {
@@ -713,6 +727,7 @@ function mailboxLabel(mailbox) {
 function backLabel(mailbox) {
   if (mailbox === 'sent') return t('Back to sent');
   if (mailbox === 'spam') return t('Back to spam');
+  if (mailbox === 'drafts') return t('Back to drafts');
   return t('Back to inbox');
 }
 
@@ -723,11 +738,15 @@ function emptyMailboxCopy(mailbox) {
   if (mailbox === 'spam') {
     return { title: t('Hooray, no spam here!'), body: t('Messages that look like spam will show up in this folder.') };
   }
+  if (mailbox === 'drafts') {
+    return { title: t('No drafts'), body: t('Messages you start and close without sending will show up here.') };
+  }
   return { title: t('Inbox Zero'), body: t("You're all caught up. No new mail.") };
 }
 
 const MAILBOX_ICONS = {
   inbox: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 8H3.92131C4.37811 8 4.79571 8.25809 5 8.66667C5.20429 9.07524 5.62189 9.33333 6.07869 9.33333H9.92131C10.3781 9.33333 10.7957 9.07524 11 8.66667C11.2043 8.25809 11.6219 8 12.0787 8H14.3333M5.97771 2.66667H10.0223C10.7402 2.66667 11.0992 2.66667 11.4161 2.77598C11.6963 2.87264 11.9516 3.0304 12.1634 3.23783C12.4029 3.4724 12.5634 3.79347 12.8845 4.43558L14.3288 7.32433C14.4548 7.57632 14.5178 7.70232 14.5623 7.83437C14.6017 7.95163 14.6302 8.07231 14.6473 8.19484C14.6667 8.33282 14.6667 8.47368 14.6667 8.75542V10.1333C14.6667 11.2534 14.6667 11.8135 14.4487 12.2413C14.2569 12.6176 13.951 12.9236 13.5746 13.1153C13.1468 13.3333 12.5868 13.3333 11.4667 13.3333H4.53333C3.41323 13.3333 2.85318 13.3333 2.42535 13.1153C2.04903 12.9236 1.74307 12.6176 1.55132 12.2413C1.33333 11.8135 1.33333 11.2534 1.33333 10.1333V8.75542C1.33333 8.47368 1.33333 8.33282 1.35265 8.19484C1.3698 8.07231 1.39829 7.95163 1.43775 7.83437C1.48217 7.70232 1.54517 7.57632 1.67117 7.32433L3.11554 4.43558C3.4366 3.79346 3.59713 3.4724 3.83663 3.23783C4.04842 3.0304 4.30368 2.87264 4.58393 2.77598C4.90084 2.66667 5.25979 2.66667 5.97771 2.66667Z"/></svg>',
+  drafts: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.33333 1.33333H4.53333C3.41323 1.33333 2.85318 1.33333 2.42535 1.55132C2.04903 1.74307 1.74307 2.04903 1.55132 2.42535C1.33333 2.85318 1.33333 3.41323 1.33333 4.53333V11.4667C1.33333 12.5868 1.33333 13.1468 1.55132 13.5746C1.74307 13.951 2.04903 14.2569 2.42535 14.4487C2.85318 14.6667 3.41323 14.6667 4.53333 14.6667H11.4667C12.5868 14.6667 13.1468 14.6667 13.5746 14.4487C13.951 14.2569 14.2569 13.951 14.4487 13.5746C14.6667 13.1468 14.6667 12.5868 14.6667 11.4667V6.66667M9.33333 1.33333L14.6667 6.66667M9.33333 1.33333V5.46667C9.33333 5.84036 9.33333 6.02721 9.40607 6.16996C9.47007 6.2955 9.57117 6.3966 9.69671 6.4606C9.83946 6.53333 10.0263 6.53333 10.4 6.53333H14.6667M5.33333 8.66667H8M5.33333 11.3333H10.6667"/></svg>',
   sent: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.00028 8.00002H3.33362M3.27718 8.19436L1.72057 12.8442C1.59828 13.2094 1.53713 13.3921 1.58101 13.5046C1.61912 13.6022 1.70096 13.6763 1.80195 13.7045C1.91824 13.7369 2.09388 13.6579 2.44517 13.4998L13.5862 8.48638C13.929 8.33209 14.1005 8.25494 14.1535 8.14776C14.1995 8.05465 14.1995 7.9454 14.1535 7.85229C14.1005 7.74511 13.929 7.66796 13.5862 7.51367L2.44129 2.49851C2.09106 2.3409 1.91595 2.2621 1.79977 2.29443C1.69888 2.3225 1.61704 2.39636 1.57881 2.49385C1.53478 2.60612 1.59527 2.78837 1.71625 3.15287L3.27761 7.85704C3.29839 7.91965 3.30878 7.95095 3.31288 7.98296C3.31652 8.01137 3.31649 8.04013 3.31277 8.06853C3.30859 8.10053 3.29812 8.13181 3.27718 8.19436Z"/></svg>',
   spam: '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.28667 3.28667L12.7133 12.7133M1.33333 5.68183V10.3182C1.33333 10.4812 1.33333 10.5628 1.35175 10.6395C1.36808 10.7075 1.39502 10.7725 1.43157 10.8322C1.4728 10.8995 1.53045 10.9571 1.64575 11.0724L4.92758 14.3542C5.04288 14.4695 5.10053 14.5272 5.16781 14.5684C5.22746 14.605 5.29249 14.6319 5.36051 14.6482C5.43724 14.6667 5.51877 14.6667 5.68183 14.6667H10.3182C10.4812 14.6667 10.5628 14.6667 10.6395 14.6482C10.7075 14.6319 10.7725 14.605 10.8322 14.5684C10.8995 14.5272 10.9571 14.4695 11.0724 14.3542L14.3542 11.0724C14.4695 10.9571 14.5272 10.8995 14.5684 10.8322C14.605 10.7725 14.6319 10.7075 14.6482 10.6395C14.6667 10.5628 14.6667 10.4812 14.6667 10.3182V5.68183C14.6667 5.51877 14.6667 5.43724 14.6482 5.36051C14.6319 5.29249 14.605 5.22746 14.5684 5.16781C14.5272 5.10053 14.4695 5.04288 14.3542 4.92758L11.0724 1.64575C10.9571 1.53045 10.8995 1.4728 10.8322 1.43157C10.7725 1.39502 10.7075 1.36808 10.6395 1.35175C10.5628 1.33333 10.4812 1.33333 10.3182 1.33333H5.68183C5.51877 1.33333 5.43724 1.33333 5.36051 1.35175C5.29249 1.36808 5.22746 1.39502 5.16781 1.43157C5.10053 1.4728 5.04288 1.53045 4.92758 1.64575L1.64575 4.92758C1.53045 5.04288 1.4728 5.10053 1.43157 5.16781C1.39502 5.22746 1.36808 5.29249 1.35175 5.36051C1.33333 5.43724 1.33333 5.51877 1.33333 5.68183Z"/></svg>',
 };
@@ -849,7 +868,7 @@ function applyView() {
       if (els.mailToolbarCount) els.mailToolbarCount.textContent = '';
     } else {
       if (els.mailToolbarName) els.mailToolbarName.textContent = mailboxLabel(state.activeMailbox);
-      if (els.mailToolbarCount) els.mailToolbarCount.textContent = `(${visibleThreads().length})`;
+      if (els.mailToolbarCount) els.mailToolbarCount.textContent = `(${mailboxItemCount()})`;
     }
   }
   if (els.toolbarComposeLabel) els.toolbarComposeLabel.textContent = t('Compose');
@@ -861,7 +880,7 @@ function applyView() {
 // ── Rendering ─────────────────────────────────────────────────
 function renderMailboxes() {
   if (!els.mailboxList) return;
-  const counts = mailboxCounts(state.session?.threads ?? [], learnerEmail());
+  const counts = mailboxCounts(state.session?.threads ?? [], learnerEmail(), savedDrafts());
   els.mailboxList.innerHTML = '';
   for (const box of MAILBOXES) {
     const btn = document.createElement('button');
@@ -896,7 +915,68 @@ function threadTime(thread) {
   return latest;
 }
 
+function draftListFrom(draft) {
+  const to = Array.isArray(draft?.to) ? draft.to : [];
+  if (!to.length) return t('No recipients');
+  const name = displayName(personForAddress(to[0])) || formatAddress(to[0]);
+  return name ? `${t('To')}: ${name}` : t('To');
+}
+
+function draftListPerson(draft) {
+  const to = Array.isArray(draft?.to) ? draft.to : [];
+  return to.length ? personForAddress(to[0]) : learnerPerson();
+}
+
+function renderDraftList() {
+  const drafts = savedDrafts();
+  els.threadList.innerHTML = '';
+  if (!drafts.length) {
+    const copy = emptyMailboxCopy('drafts');
+    const empty = document.createElement('div');
+    empty.className = 'mail-list__empty';
+    empty.innerHTML = `
+      <img class="mail-list__empty-icon" src="/icons/mail-logo.svg" width="22" height="22" alt="" />
+      <p class="mail-list__empty-title">${escapeHtml(copy.title)}</p>
+      <p class="mail-list__empty-body">${escapeHtml(copy.body)}</p>
+    `;
+    els.threadList.appendChild(empty);
+    return;
+  }
+  for (const draft of drafts) {
+    const snippet = String(draft.body || '')
+      .replace(/[#*_`>[\]()]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const item = document.createElement('div');
+    item.className = 'mail-item';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'mail-row';
+    if (snippet) btn.title = snippet;
+    btn.innerHTML = `
+      ${avatarMarkup(draftListPerson(draft), 'lg')}
+      <span class="mail-row__main">
+        <span class="mail-row__from">${escapeHtml(draftListFrom(draft))}</span>
+        <span class="mail-row__subject">${escapeHtml(draft.subject || t('(no subject)'))}</span>
+      </span>
+      <span class="mail-row__date">${escapeHtml(formatListDate(draft.updated_at))}</span>
+    `;
+    btn.addEventListener('click', () => openDraft(draft));
+    const container = document.createElement('div');
+    container.className = 'mail-item__container';
+    const rule = document.createElement('hr');
+    rule.className = 'mail-list__rule';
+    container.append(btn, rule);
+    item.appendChild(container);
+    els.threadList.appendChild(item);
+  }
+}
+
 function renderMailList() {
+  if (state.activeMailbox === 'drafts') {
+    renderDraftList();
+    return;
+  }
   // Stable sort: threads without dates keep their seeded order at the end.
   const threads = [...visibleThreads()].sort((a, b) => (threadTime(b) - threadTime(a)) || 0);
   els.threadList.innerHTML = '';
@@ -1177,7 +1257,7 @@ function cancelReply() {
   state.replying = null;
   if (threadId) {
     state.session.drafts = removeScopedDraft(state.session?.drafts, { scope: 'reply', threadId });
-    void persistDrafts();
+    void persistDrafts().then(refreshDraftsUi);
     // Discarded reply must not attribute Cosmo insert provenance to a later send.
     if (sameDraftScope(state.assistant.lastInserted, { scope: 'reply', threadId })) {
       state.assistant.lastInserted = null;
@@ -1187,8 +1267,8 @@ function cancelReply() {
   renderShell();
 }
 
-function startCompose({ blank = true } = {}) {
-  if (state.composingNew) {
+function startCompose({ blank = true, draft = null } = {}) {
+  if (state.composingNew && !draft) {
     applyView();
     els.composeToInput?.focus();
     return;
@@ -1197,11 +1277,24 @@ function startCompose({ blank = true } = {}) {
   state.composingNew = true;
   state.replying = null;
   if (state.view === 'compose') state.view = 'list';
-  if (blank) {
+  if (draft) {
+    state.activeDraftId = draft.id || newDraftId();
+    applyRecipientDraft(draft);
+    els.composeSubject.value = draft.subject || '';
+    setEditorMarkdown(draft.body || '');
+    clearAttachments();
+  } else if (blank) {
+    state.activeDraftId = newDraftId();
     applyRecipientDraft({ to: [], cc: [] });
     els.composeSubject.value = '';
     setEditorMarkdown('');
     clearAttachments();
+  } else {
+    const initial = computeInitialDraft();
+    state.activeDraftId = initial.id || newDraftId();
+    applyRecipientDraft(initial);
+    els.composeSubject.value = initial.subject || '';
+    setEditorMarkdown(initial.body || '');
   }
   scheduleDraftSave();
   if (wasReplying && state.view === 'thread') renderThread(state.activeThreadId);
@@ -1209,12 +1302,39 @@ function startCompose({ blank = true } = {}) {
   els.composeToInput?.focus();
 }
 
-function closeComposeOverlay() {
+async function closeComposeOverlay() {
   if (!state.composingNew) return;
   clearTimeout(state.draftSaveTimer);
-  void saveDraftNow();
+  await saveDraftNow();
   state.composingNew = false;
+  state.activeDraftId = null;
   applyView();
+  refreshDraftsUi();
+}
+
+function refreshDraftsUi() {
+  renderMailboxes();
+  if (state.view === 'list' && els.mailToolbarCount) {
+    els.mailToolbarCount.textContent = `(${mailboxItemCount()})`;
+  }
+  if (state.view === 'list') renderMailList();
+}
+
+async function openDraft(draft) {
+  if (!draft) return;
+  if (state.composingNew) await saveDraftNow();
+  const latest = (state.session?.drafts ?? []).find((item) => sameDraftScope(item, draft)) || draft;
+  if (latest.scope === 'reply' && latest.threadId) {
+    const thread = (state.session?.threads ?? []).find((th) => th.id === latest.threadId);
+    if (!thread) return;
+    state.composingNew = false;
+    state.activeDraftId = null;
+    state.activeMailbox = mailboxForThread(thread, learnerEmail());
+    state.activeThreadId = thread.id;
+    startReply('reply');
+    return;
+  }
+  startCompose({ blank: false, draft: latest });
 }
 
 // Close (×): hide the panel but keep what was written. New messages keep
@@ -1222,14 +1342,15 @@ function closeComposeOverlay() {
 function closeComposer() {
   closeRecipientMenus();
   if (state.composingNew) {
-    closeComposeOverlay();
+    void closeComposeOverlay();
     return;
   }
   if (!state.replying) return;
   clearTimeout(state.draftSaveTimer);
-  void saveDraftNow();
-  state.replying = null;
-  renderShell();
+  void saveDraftNow().then(() => {
+    state.replying = null;
+    renderShell();
+  });
 }
 
 // Cancel: a reply is discarded; a new message closes and keeps its draft.
@@ -1302,7 +1423,8 @@ function setEditorMarkdown(md) {
 // Starting contents for a new message: a saved new-message draft, otherwise the
 // scenario's initialDraft. Reply bodies are loaded per thread in applyThreadComposer.
 function computeInitialDraft() {
-  const saved = draftForScope(state.session?.drafts, { scope: 'new' });
+  const saved = savedDrafts().find((draft) => draft.scope !== 'reply')
+    || draftForScope(state.session?.drafts, { scope: 'new' });
   if (saved) return saved;
 
   const initial = state.config?.initialDraft;
@@ -1315,7 +1437,7 @@ function computeInitialDraft() {
 }
 
 function draftScope() {
-  if (state.composingNew) return { scope: 'new' };
+  if (state.composingNew) return { scope: 'new', id: state.activeDraftId };
   if (state.replying && state.activeThreadId) {
     return { scope: 'reply', threadId: state.activeThreadId };
   }
@@ -1326,6 +1448,7 @@ function currentDraft() {
   const scope = draftScope();
   return {
     scope: scope?.scope || 'new',
+    id: scope?.id || state.activeDraftId || null,
     threadId: scope?.threadId || null,
     to: [...state.recipients.to],
     cc: [...state.recipients.cc],
@@ -1356,8 +1479,18 @@ async function persistDrafts() {
 
 async function saveDraftNow() {
   if (!state.session?.sessionId || !draftScope()) return;
-  state.session.drafts = upsertScopedDraft(state.session.drafts, currentDraft());
+  const draft = currentDraft();
+  const scope = draftScope();
+  if (!draftHasPersistableContent(draft)) {
+    state.session.drafts = removeScopedDraft(state.session.drafts, scope);
+    await persistDrafts();
+    refreshDraftsUi();
+    return;
+  }
+  if (draft.scope === 'new' && !draft.id) draft.id = newDraftId();
+  state.session.drafts = upsertScopedDraft(state.session.drafts, draft);
   await persistDrafts();
+  refreshDraftsUi();
 }
 
 function scheduleDraftSave() {
@@ -1618,6 +1751,9 @@ async function sendEmail() {
   const draft = currentDraft();
   if (!draft.body.trim() && !draft.subject.trim()) return;
 
+  clearTimeout(state.draftSaveTimer);
+  state.draftSaveTimer = null;
+
   els.sendBtn.disabled = true;
   els.sendBtn.textContent = 'Sending…';
   try {
@@ -1632,6 +1768,7 @@ async function sendEmail() {
       body: JSON.stringify({
         sessionId: state.session.sessionId,
         threadId: composingNew ? null : state.activeThreadId,
+        draftId: composingNew ? sentScope.id : undefined,
         to: draft.to,
         cc: draft.cc,
         subject: draft.subject,
@@ -1662,7 +1799,8 @@ async function sendEmail() {
 
     replaceThread(thread);
     state.composingNew = false;
-        state.replying = null;
+    state.activeDraftId = null;
+    state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
     state.activeMailbox = mailboxForThread(thread, learnerEmail());
@@ -1792,6 +1930,7 @@ function assistantMailboxContext() {
   return buildMailboxContext({
     threads: state.session?.threads ?? [],
     learnerEmail: state.config?.learner?.email || 'you@example.com',
+    drafts: state.session?.drafts ?? [],
     viewing: {
       threadId: state.view === 'thread' ? state.activeThreadId : null,
       composingNew: state.composingNew,
@@ -2371,6 +2510,7 @@ async function runQuickAction(action, detail = '') {
   const context = buildMailboxContext({
     threads: state.session?.threads ?? [],
     learnerEmail: learnerEmail(),
+    drafts: state.session?.drafts ?? [],
     viewing: {
       threadId: sourceThreadId,
       composingNew: state.composingNew,
@@ -2512,6 +2652,7 @@ async function applySuggestedReply(body) {
     }),
     source: QUICK_ACTION_SOURCE,
     scope: scope.scope,
+    id: scope.id ?? null,
     threadId: scope.threadId ?? null,
   };
   void appendProvenanceEvents(events);
@@ -2548,6 +2689,7 @@ async function applyHeaderSuggestion(headers, draftId) {
     draft: draftFields,
     source: QUICK_ACTION_SOURCE,
     scope: scope.scope,
+    id: scope.id ?? null,
     threadId: scope.threadId ?? null,
   };
   scheduleDraftSave();
@@ -2685,6 +2827,7 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
     source,
     scope: scope.scope,
     threadId: scope.threadId ?? null,
+    id: scope.id ?? null,
   };
   void appendProvenanceEvents(events);
 

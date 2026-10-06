@@ -215,6 +215,20 @@ describe('serializeMailbox', () => {
   it('reports an empty mailbox', () => {
     expect(serializeMailbox([])).toBe('The mailbox is empty.');
   });
+
+  it('includes persistable drafts in a Drafts section', () => {
+    const text = serializeMailbox(threads, {
+      learnerEmail: LEARNER,
+      drafts: [
+        { scope: 'new', id: 'd1', to: ['dana@vendor.com'], subject: 'WIP', body: 'Still writing.', updated_at: '2026-07-10T15:00:00Z' },
+        { scope: 'new', id: 'd2', to: [], subject: '', body: '' },
+      ],
+    });
+    expect(text).toContain('#### Draft 1: WIP [Drafts] (new message)');
+    expect(text).toContain('To: dana@vendor.com');
+    expect(text).toContain('Still writing.');
+    expect(text).not.toContain('Draft 2');
+  });
 });
 
 describe('buildMailboxContext', () => {

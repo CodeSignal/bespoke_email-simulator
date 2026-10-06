@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { draftForScope, parseInsertedDraft, removeScopedDraft, upsertScopedDraft } from '../lib/drafts.js';
+import { draftForScope, draftHasPersistableContent, parseInsertedDraft, removeScopedDraft, upsertScopedDraft, visibleDrafts } from '../lib/drafts.js';
 
 describe('scoped drafts', () => {
   const replyA = { scope: 'reply', threadId: 'thread-a', body: 'reply a' };
@@ -19,6 +19,20 @@ describe('scoped drafts', () => {
     expect(draftForScope(drafts, { scope: 'reply', threadId: 'thread-b' }).body).toBe('reply b');
   });
 
+  it('keeps multiple new-message drafts distinct by id', () => {
+    let drafts = [];
+    drafts = upsertScopedDraft(drafts, { scope: 'new', id: 'draft-a', body: 'one' });
+    drafts = upsertScopedDraft(drafts, { scope: 'new', id: 'draft-b', body: 'two' });
+    drafts = upsertScopedDraft(drafts, { scope: 'new', id: 'draft-a', body: 'one edited' });
+
+    expect(drafts).toHaveLength(2);
+    expect(draftForScope(drafts, { scope: 'new', id: 'draft-a' }).body).toBe('one edited');
+    expect(draftForScope(drafts, { scope: 'new', id: 'draft-b' }).body).toBe('two');
+    expect(removeScopedDraft(drafts, { scope: 'new', id: 'draft-a' })).toEqual([
+      { scope: 'new', id: 'draft-b', body: 'two' },
+    ]);
+  });
+
   it('treats a legacy unscoped draft as a new message, not a reply', () => {
     const drafts = [{ body: 'inserted from inbox' }];
     expect(draftForScope(drafts, { scope: 'new' }).body).toBe('inserted from inbox');
@@ -34,6 +48,21 @@ describe('scoped drafts', () => {
     const drafts = [fresh, replyA];
     expect(removeScopedDraft(drafts, { scope: 'reply', threadId: 'thread-a' })).toEqual([fresh]);
     expect(removeScopedDraft(drafts, { scope: 'new' })).toEqual([replyA]);
+  });
+});
+
+describe('visible drafts', () => {
+  it('hides empty new messages and header-only replies', () => {
+    const emptyNew = { scope: 'new', id: 'a', to: [], cc: [], subject: '', body: '' };
+    const withSubject = { scope: 'new', id: 'b', to: [], cc: [], subject: 'WIP', body: '' };
+    const replyHeaders = { scope: 'reply', threadId: 't1', to: ['a@x.com'], subject: 'Re: Hi', body: '' };
+    const replyBody = { scope: 'reply', threadId: 't1', to: ['a@x.com'], subject: 'Re: Hi', body: 'Thanks' };
+
+    expect(draftHasPersistableContent(emptyNew)).toBe(false);
+    expect(draftHasPersistableContent(withSubject)).toBe(true);
+    expect(draftHasPersistableContent(replyHeaders)).toBe(false);
+    expect(draftHasPersistableContent(replyBody)).toBe(true);
+    expect(visibleDrafts([emptyNew, withSubject, replyHeaders, replyBody])).toEqual([withSubject, replyBody]);
   });
 });
 

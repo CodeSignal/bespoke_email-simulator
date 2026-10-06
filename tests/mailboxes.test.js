@@ -90,7 +90,13 @@ describe('mailboxCounts / mailboxForThread', () => {
   const threads = [inboxThread, repliedThread, sentThread, spamThread];
 
   it('counts each folder, with replied threads contributing to Inbox and Sent', () => {
-    expect(mailboxCounts(threads, learner)).toEqual({ inbox: 2, sent: 2, spam: 1 });
+    expect(mailboxCounts(threads, learner)).toEqual({ inbox: 2, drafts: 0, sent: 2, spam: 1 });
+    expect(mailboxCounts(threads, learner, [{ subject: 'WIP' }])).toEqual({
+      inbox: 2,
+      drafts: 1,
+      sent: 2,
+      spam: 1,
+    });
     expect(threadsInMailbox(threads, 'sent', learner).map((t) => t.id)).toEqual(['t-replied', 't-sent']);
   });
 
