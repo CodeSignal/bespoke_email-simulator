@@ -39,8 +39,9 @@ recipient).
 - Simulate realistic email workflows (compose, reply, reply-to-chain) in a
   controlled learning environment.
 - Optionally simulate **live threads** where the other party responds in-character.
-- Capture all interactions (drafts, sends, thread, AI chat, final submission) for
-  rubric-based assessment and tutoring.
+- Capture all interactions (drafts, sends, thread, AI chat, final submission) as
+  a transcript. Grading happens outside this project and is not an input to the
+  simulation.
 
 ### What's assessed (configurable per scenario)
 The scenario's `primarySkill` selects the emphasis:
@@ -240,14 +241,6 @@ of the same shape.
 }
 ```
 
-Grading notes live in a sidecar `rubric.json` (not in the scenario), e.g.:
-
-```json
-{
-  "notes": "Reward: acknowledges proposal, counters price with rationale, proposes 12-month term, professional tone."
-}
-```
-
 ### 6.2 Seed email shape (illustrative)
 
 This object lives in `seed.inbox`. For a large mailbox, the same JSON may live
@@ -290,8 +283,6 @@ in a separate file and `seed.inbox` can be a path to it.
 - Control generation (model, temperature, thinking, language) and attachments.
 - Configure the submission label/limit and UI/i18n overrides (reusing ChatCPT's
   string-override + i18n approach).
-- Provide optional grading notes in a sidecar `rubric.json` (never in the scenario
-  runtime or learner/Cosmo surface) for the external tutor/assessment.
 
 ---
 
@@ -392,11 +383,11 @@ draft revisions, the assistant chat transcript, and the final submission.
   - the **final submitted email(s)**,
   - the **full email thread** (seeded + learner sends + recipient replies),
   - the **assistant chat transcript** (including any search/Q&A the learner did),
-  - a combined **report** for the tutor/rubric.
+  - a combined **report** transcript.
   - Modes along the lines of `--mode full|submission|thread|assistant|report`,
-    plus `--latest`, `--output`, `--print-settings`, `--rubric`.
-- **Used by:** the external AI tutor and assessment rubrics (sidecar `rubric.json`
-  can inform grading; it is not part of the scenario the learner runs).
+    plus `--latest`, `--output`, `--print-settings`.
+- **Used by:** an external reviewer. This project does not load or store a
+  grading rubric.
 
 ---
 

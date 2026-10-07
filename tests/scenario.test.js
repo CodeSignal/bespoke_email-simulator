@@ -8,6 +8,7 @@ import {
   validateScenario,
   normalizeInbox,
   resolveInbox,
+  loadScenario,
 } from '../lib/scenario.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -57,6 +58,41 @@ describe('validateScenario', () => {
     expect(errors.some((e) => e.includes('id'))).toBe(true);
     expect(errors.some((e) => e.includes('primarySkill'))).toBe(true);
     expect(errors.some((e) => e.includes('scenarioType'))).toBe(true);
+  });
+
+  it('drops leftover grading fields so they cannot reach the runtime config', () => {
+    const cfg = withScenarioDefaults({
+      id: 'r',
+      rubricHints: 'Reward a clear ask.',
+      rubric: { notes: 'Reward a clear ask.' },
+    });
+    expect(cfg.rubricHints).toBeUndefined();
+    expect(cfg.rubric).toBeUndefined();
+  });
+
+  it('warns when a scenario file still contains grading fields and drops them', async () => {
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'cmail-rubric-'));
+    const scenarioPath = path.join(dir, 'scenario.json');
+    await writeFile(
+      scenarioPath,
+      JSON.stringify({
+        id: 'graded',
+        rubricHints: { notes: 'Reward a clear ask.' },
+        rubric: { notes: 'Reward a clear ask.' },
+      }),
+    );
+    try {
+      const { config, errors } = await loadScenario(scenarioPath, dir);
+      expect(config.rubricHints).toBeUndefined();
+      expect(config.rubric).toBeUndefined();
+      expect(JSON.stringify(config)).not.toContain('Reward a clear ask.');
+      expect(errors).toEqual([
+        'rubricHints is not part of the scenario and is ignored',
+        'rubric is not part of the scenario and is ignored',
+      ]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('drops a leftover simulatedRecipient block and keeps world', () => {
