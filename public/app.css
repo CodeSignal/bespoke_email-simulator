@@ -1340,6 +1340,14 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
+/* Body-Light misses 4.5:1 on the active option's translucent fill in dark mode.
+   Body-Medium is the next lighter text token and clears that fill. */
+@media (prefers-color-scheme: dark) {
+  .recipient-picker .dropdown-menu-item.is-active .recipient-picker__option-meta {
+    color: var(--Colors-Text-Body-Medium);
+  }
+}
+
 .recipient-picker__match {
   background: transparent;
   color: inherit;
