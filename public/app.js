@@ -152,6 +152,8 @@ const state = {
   characterSessions: {},
   attachments: [],
   mailSplit: null,
+  railDrawerOpen: false,
+  assistantDrawerOpen: false,
 };
 
 // ── DOM ───────────────────────────────────────────────────────
@@ -161,6 +163,13 @@ const els = {
   composeBtn: document.getElementById('composeBtn'),
   composeBtnLabel: document.getElementById('composeBtnLabel'),
   mailboxList: document.getElementById('mailboxList'),
+  railDrawerBtn: document.getElementById('railDrawerBtn'),
+  railDrawerBtnLabel: document.getElementById('railDrawerBtnLabel'),
+  railDrawerCloseBtn: document.getElementById('railDrawerCloseBtn'),
+  assistantDrawerBtn: document.getElementById('assistantDrawerBtn'),
+  assistantDrawerBtnLabel: document.getElementById('assistantDrawerBtnLabel'),
+  assistantDrawerCloseBtn: document.getElementById('assistantDrawerCloseBtn'),
+  shellBackdrop: document.getElementById('shellBackdrop'),
   mailSplit: document.getElementById('mailSplit'),
   mailMain: document.getElementById('mailMain'),
   mailList: document.getElementById('mailList'),
@@ -822,6 +831,308 @@ function placeComposer() {
   }
 }
 
+// WCAG 2.4.11: a focused control must not sit fully underneath the new-message
+// overlay or the sticky reply composer. Covered controls leave the tab order
+// until they are no longer fully covered.
+const COVERED_FOCUS_SELECTOR = [
+  'a[href]',
+  'button:not([disabled])',
+  'input:not([disabled]):not([type="hidden"])',
+  'select:not([disabled])',
+  'textarea:not([disabled])',
+  '[tabindex]',
+].join(', ');
+
+function coveringComposer() {
+  const composer = els.composer;
+  if (!composer || composer.hidden) return null;
+  if (!composer.classList.contains('is-new') && !composer.classList.contains('is-inline')) return null;
+  return composer;
+}
+
+function isFullyCovered(el, cover) {
+  const box = el.getBoundingClientRect();
+  const panel = cover.getBoundingClientRect();
+  if (box.width <= 0 || box.height <= 0 || panel.width <= 0 || panel.height <= 0) return false;
+  return box.top >= panel.top - 0.5
+    && box.left >= panel.left - 0.5
+    && box.bottom <= panel.bottom + 0.5
+    && box.right <= panel.right + 0.5;
+}
+
+function rememberCoveredTab(el) {
+  if (!el.hasAttribute('data-focus-covered')) {
+    el.setAttribute('data-covered-tabindex', el.hasAttribute('tabindex') ? el.getAttribute('tabindex') : '');
+    el.setAttribute('data-focus-covered', '');
+  }
+  if (el.getAttribute('tabindex') !== '-1') el.setAttribute('tabindex', '-1');
+}
+
+function restoreCoveredTab(el) {
+  if (!el.hasAttribute('data-focus-covered')) return;
+  const previous = el.getAttribute('data-covered-tabindex');
+  if (previous) el.setAttribute('tabindex', previous);
+  else el.removeAttribute('tabindex');
+  el.removeAttribute('data-covered-tabindex');
+  el.removeAttribute('data-focus-covered');
+}
+
+function focusControl(el) {
+  if (!el || typeof el.focus !== 'function') return;
+  try {
+    el.focus({ preventScroll: true });
+  } catch {
+    el.focus();
+  }
+}
+
+let syncingCoveredFocus = false;
+
+function syncCoveredFocus() {
+  if (syncingCoveredFocus || !els.mailMain) return;
+  syncingCoveredFocus = true;
+  try {
+    const composer = coveringComposer();
+    const marked = [...els.mailMain.querySelectorAll('[data-focus-covered]')];
+    if (!composer) {
+      for (const el of marked) restoreCoveredTab(el);
+      return;
+    }
+
+    const candidates = [...els.mailMain.querySelectorAll(COVERED_FOCUS_SELECTOR)].filter((el) => {
+      if (composer.contains(el)) return false;
+      if (el.closest('[hidden]')) return false;
+      return true;
+    });
+    const coveredNow = new Set();
+    for (const el of candidates) {
+      if (!isFullyCovered(el, composer)) continue;
+      rememberCoveredTab(el);
+      coveredNow.add(el);
+    }
+    for (const el of marked) {
+      if (!coveredNow.has(el)) restoreCoveredTab(el);
+    }
+
+    const active = document.activeElement;
+    if (!active || active === document.body || composer.contains(active) || !isFullyCovered(active, composer)) return;
+    const panelTop = composer.getBoundingClientRect().top;
+    const above = candidates.filter((el) => {
+      if (coveredNow.has(el)) return false;
+      const box = el.getBoundingClientRect();
+      return box.width > 0 && box.height > 0 && box.bottom <= panelTop + 0.5;
+    });
+    focusControl(above[above.length - 1] || els.composerCloseBtn || composer);
+  } finally {
+    syncingCoveredFocus = false;
+  }
+}
+
+// Below this width the fixed rail plus the assistant split leaves the mail
+// column too narrow to read (WCAG 1.4.10). Keep this in step with the
+// matching @media rule in app.css.
+const NARROW_SHELL_QUERY = '(max-width: 959px)';
+
+function isNarrowShell() {
+  return window.matchMedia(NARROW_SHELL_QUERY).matches;
+}
+
+function assistantFeatureOff() {
+  return state.config?.assistant?.enabled === false;
+}
+
+function assistantDrawerHost() {
+  const panel = els.assistantPanel;
+  if (!panel) return null;
+  return panel.closest('.split-panel-right') || panel;
+}
+
+function splitDivider() {
+  return els.mailSplit?.querySelector('.split-panel-divider') || null;
+}
+
+function setNarrowHidden(el, hidden) {
+  if (!el) return;
+  if (hidden) {
+    el.hidden = true;
+    el.setAttribute('data-narrow-hidden', '');
+    return;
+  }
+  if (!el.hasAttribute('data-narrow-hidden')) return;
+  el.hidden = false;
+  el.removeAttribute('data-narrow-hidden');
+}
+
+function setInert(el, inert) {
+  if (!el) return;
+  el.inert = Boolean(inert);
+}
+
+function showDrawerHost(el) {
+  if (!el) return;
+  el.hidden = false;
+  el.removeAttribute('data-narrow-hidden');
+  el.classList.add('is-drawer-open');
+}
+
+function hideDrawerHost(el) {
+  if (!el) return;
+  el.classList.remove('is-drawer-open');
+  setNarrowHidden(el, true);
+}
+
+let drawerReturnFocus = null;
+
+function focusDrawer(root) {
+  const closeBtn = root?.querySelector('.rail__drawer-close, .assistant__drawer-close');
+  focusControl(closeBtn || root);
+}
+
+function openRailDrawer() {
+  if (!isNarrowShell()) return;
+  drawerReturnFocus = document.activeElement;
+  state.railDrawerOpen = true;
+  state.assistantDrawerOpen = false;
+  applyNarrowShell();
+  focusDrawer(document.getElementById('threadRail'));
+}
+
+function openAssistantDrawer() {
+  if (!isNarrowShell() || assistantFeatureOff()) return;
+  drawerReturnFocus = document.activeElement;
+  state.assistantDrawerOpen = true;
+  state.railDrawerOpen = false;
+  applyNarrowShell();
+  focusDrawer(els.assistantPanel);
+}
+
+function closeShellDrawers() {
+  const wasRail = state.railDrawerOpen;
+  const wasAssistant = state.assistantDrawerOpen;
+  const returnTo = drawerReturnFocus;
+  state.railDrawerOpen = false;
+  state.assistantDrawerOpen = false;
+  drawerReturnFocus = null;
+  applyNarrowShell();
+  if (!wasRail && !wasAssistant) return;
+  const fallback = wasRail ? els.railDrawerBtn : els.assistantDrawerBtn;
+  const target = returnTo && returnTo.isConnected && !returnTo.closest('[hidden]') ? returnTo : fallback;
+  focusControl(target);
+}
+
+function applyNarrowShell() {
+  const narrow = isNarrowShell();
+  const app = document.getElementById('mailApp');
+  app?.classList.toggle('is-narrow', narrow);
+
+  const rail = document.getElementById('threadRail');
+  const assistantHost = assistantDrawerHost();
+  const assistantOff = assistantFeatureOff();
+  const divider = splitDivider();
+  const railOpen = narrow && Boolean(state.railDrawerOpen);
+  const assistantOpen = narrow && Boolean(state.assistantDrawerOpen) && !assistantOff;
+
+  if (!narrow) {
+    state.railDrawerOpen = false;
+    state.assistantDrawerOpen = false;
+  }
+
+  if (rail) {
+    if (railOpen) showDrawerHost(rail);
+    else if (narrow) hideDrawerHost(rail);
+    else {
+      rail.classList.remove('is-drawer-open');
+      setNarrowHidden(rail, false);
+      rail.hidden = false;
+    }
+    setInert(rail, assistantOpen);
+  }
+
+  if (assistantHost) {
+    if (assistantOff) {
+      assistantHost.classList.remove('is-drawer-open');
+      if (narrow) {
+        if (els.assistantPanel && !els.assistantPanel.hidden) setNarrowHidden(els.assistantPanel, true);
+        if (assistantHost !== els.assistantPanel && !assistantHost.hidden) setNarrowHidden(assistantHost, true);
+      } else {
+        setNarrowHidden(els.assistantPanel, false);
+        if (assistantHost !== els.assistantPanel) setNarrowHidden(assistantHost, false);
+      }
+    } else if (assistantOpen) {
+      showDrawerHost(assistantHost);
+      if (assistantHost !== els.assistantPanel) {
+        els.assistantPanel.hidden = false;
+        els.assistantPanel.removeAttribute('data-narrow-hidden');
+      }
+    } else if (narrow) {
+      hideDrawerHost(assistantHost);
+    } else {
+      assistantHost.classList.remove('is-drawer-open');
+      setNarrowHidden(assistantHost, false);
+      if (assistantHost !== els.assistantPanel) setNarrowHidden(els.assistantPanel, false);
+    }
+    setInert(assistantHost, railOpen);
+  }
+
+  if (divider) setNarrowHidden(divider, narrow);
+  setInert(els.mailMain, railOpen || assistantOpen);
+  if (els.shellBackdrop) els.shellBackdrop.hidden = !(railOpen || assistantOpen);
+
+  if (els.railDrawerBtn) {
+    els.railDrawerBtn.hidden = !narrow;
+    els.railDrawerBtn.setAttribute('aria-expanded', railOpen ? 'true' : 'false');
+  }
+  if (els.railDrawerBtnLabel) els.railDrawerBtnLabel.textContent = t('Folders');
+  if (els.assistantDrawerBtn) {
+    els.assistantDrawerBtn.hidden = !narrow || assistantOff;
+    els.assistantDrawerBtn.setAttribute('aria-expanded', assistantOpen ? 'true' : 'false');
+  }
+  if (els.assistantDrawerBtnLabel) els.assistantDrawerBtnLabel.textContent = t('AI Assistant');
+  if (els.railDrawerCloseBtn) {
+    els.railDrawerCloseBtn.hidden = !railOpen;
+    els.railDrawerCloseBtn.setAttribute('aria-label', t('Close'));
+  }
+  if (els.assistantDrawerCloseBtn) {
+    els.assistantDrawerCloseBtn.hidden = !assistantOpen;
+    els.assistantDrawerCloseBtn.setAttribute('aria-label', t('Close'));
+  }
+}
+
+function initShellDrawers() {
+  if (initShellDrawers.done) return;
+  initShellDrawers.done = true;
+  els.railDrawerBtn?.addEventListener('click', () => {
+    if (state.railDrawerOpen) closeShellDrawers();
+    else openRailDrawer();
+  });
+  els.railDrawerCloseBtn?.addEventListener('click', () => closeShellDrawers());
+  els.assistantDrawerBtn?.addEventListener('click', () => {
+    if (state.assistantDrawerOpen) closeShellDrawers();
+    else openAssistantDrawer();
+  });
+  els.assistantDrawerCloseBtn?.addEventListener('click', () => closeShellDrawers());
+  els.shellBackdrop?.addEventListener('click', () => closeShellDrawers());
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape') return;
+    if (!state.railDrawerOpen && !state.assistantDrawerOpen) return;
+    event.preventDefault();
+    closeShellDrawers();
+  });
+  window.addEventListener('resize', () => {
+    applyNarrowShell();
+    syncCoveredFocus();
+  });
+  window.matchMedia(NARROW_SHELL_QUERY).addEventListener?.('change', () => applyNarrowShell());
+}
+
+function initCoveredFocus() {
+  if (initCoveredFocus.done || typeof ResizeObserver === 'undefined') return;
+  initCoveredFocus.done = true;
+  const observer = new ResizeObserver(() => syncCoveredFocus());
+  if (els.composer) observer.observe(els.composer);
+  if (els.mailMain) observer.observe(els.mailMain);
+}
+
 // Toolbar hairline while the visible content is scrolled: the list, the
 // reading pane, or a single message's body.
 function updateToolbarScrolled() {
@@ -831,6 +1142,7 @@ function updateToolbarScrolled() {
     ? [els.readingPane, els.readingPane?.querySelector('.reading-pane--single > .email .email__content')]
     : [els.threadList];
   toolbar.classList.toggle('is-scrolled', scrollers.some((el) => el && !el.hidden && el.scrollTop > 0));
+  syncCoveredFocus();
 }
 
 function initToolbarScrollShadow() {
@@ -885,6 +1197,10 @@ function applyView() {
   if (els.toolbarComposeLabel) els.toolbarComposeLabel.textContent = t('Compose');
   renderAssistantChips();
   renderQuickResultPanel();
+  applyNarrowShell();
+  // Measure now (getBoundingClientRect flushes layout) and again after the
+  // frame, in case the composer grows once the editor paints.
+  syncCoveredFocus();
   requestAnimationFrame(updateToolbarScrolled);
 }
 
@@ -951,6 +1267,7 @@ function renderDraftList() {
       <p class="mail-list__empty-body">${escapeHtml(copy.body)}</p>
     `;
     els.threadList.appendChild(empty);
+    syncCoveredFocus();
     return;
   }
   for (const draft of drafts) {
@@ -981,6 +1298,7 @@ function renderDraftList() {
     item.appendChild(container);
     els.threadList.appendChild(item);
   }
+  syncCoveredFocus();
 }
 
 function renderMailList() {
@@ -1002,6 +1320,7 @@ function renderMailList() {
       <p class="mail-list__empty-body">${escapeHtml(copy.body)}</p>
     `;
     els.threadList.appendChild(empty);
+    syncCoveredFocus();
     return;
   }
 
@@ -1037,6 +1356,7 @@ function renderMailList() {
     item.appendChild(container);
     els.threadList.appendChild(item);
   }
+  syncCoveredFocus();
 }
 
 function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } = {}) {
@@ -1172,6 +1492,7 @@ function renderThread(threadId) {
   else els.readingPane.appendChild(renderThreadActions());
   renderAssistantChips();
   renderQuickResultPanel();
+  syncCoveredFocus();
 }
 
 // Reply / Reply all sit after the conversation (the toolbar holds Compose).
@@ -1235,12 +1556,15 @@ function applyThreadComposer(threadId, mode = state.replying || 'reply') {
 }
 
 function selectMailbox(mailbox) {
+  const closeDrawer = state.railDrawerOpen;
+  state.railDrawerOpen = false;
   state.activeMailbox = mailbox;
   state.view = 'list';
   state.replying = null;
   state.activeThreadId = null;
   clearOpenedThreadStatus();
   renderShell();
+  if (closeDrawer) focusControl(els.railDrawerBtn);
 }
 
 function selectThread(threadId) {
@@ -3124,6 +3448,9 @@ async function boot() {
 
     applyScenarioChrome();
     initMailSplit();
+    initShellDrawers();
+    initCoveredFocus();
+    applyNarrowShell();
     initToolbarScrollShadow();
     initComposer();
     initMailtoCompose();
@@ -3143,6 +3470,7 @@ async function boot() {
 // The browser bundle boots on load. Vitest imports this module after mounting
 // public/index.html, and drives the real UI from there.
 if (globalThis.process?.env?.VITEST !== 'true') boot();
+else initShellDrawers();
 
 /** Live mailbox behaviors for the accessibility regression tests. */
 export function mailAppTestHooks() {
@@ -3155,5 +3483,7 @@ export function mailAppTestHooks() {
     selectThread,
     backToList,
     selectMailbox,
+    syncCoveredFocus,
+    applyNarrowShell,
   };
 }
