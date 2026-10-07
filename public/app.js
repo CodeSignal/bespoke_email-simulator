@@ -3140,4 +3140,20 @@ async function boot() {
   }
 }
 
-boot();
+// The browser bundle boots on load. Vitest imports this module after mounting
+// public/index.html, and drives the real UI from there.
+if (globalThis.process?.env?.VITEST !== 'true') boot();
+
+/** Live mailbox behaviors for the accessibility regression tests. */
+export function mailAppTestHooks() {
+  return {
+    state,
+    initRecipientPickers,
+    renderRecipientPickers,
+    renderShell,
+    renderThread,
+    selectThread,
+    backToList,
+    selectMailbox,
+  };
+}
