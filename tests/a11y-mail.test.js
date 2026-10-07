@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
- * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, and
- * Shift+Tab in the recipient combobox).
+ * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, S7, S3,
+ * and Shift+Tab in the recipient combobox).
  *
  * public/app.js reads the document while the module loads, so this mounts
  * public/index.html first and imports the module after that. Vitest skips
@@ -87,7 +87,32 @@ function clickThread(threadId) {
   return row;
 }
 
+function setViewport(width, height) {
+  window.innerWidth = width;
+  window.innerHeight = height;
+  window.happyDOM?.setViewport?.({ width, height });
+}
+
+function rect(top, left, width, height) {
+  return {
+    x: left,
+    y: top,
+    top,
+    left,
+    right: left + width,
+    bottom: top + height,
+    width,
+    height,
+    toJSON() { return this; },
+  };
+}
+
+function mockRect(el, box) {
+  el.getBoundingClientRect = () => box;
+}
+
 async function resetMailbox() {
+  setViewport(1280, 800);
   clearTimeout(mail.state.draftSaveTimer);
   const { state } = mail;
   state.config = {
@@ -339,5 +364,223 @@ describe('recipient combobox Shift+Tab', () => {
 
     expect(enter.defaultPrevented).toBe(true);
     expect(mail.state.recipients.to).toEqual([SAM]);
+  });
+});
+
+describe('S7 composer does not cover focused controls', () => {
+  const panel = rect(200, 12, 400, 260);
+
+  function rows() {
+    return [...document.querySelectorAll('#threadList .mail-row')];
+  }
+
+  async function openNewMessage() {
+    showComposer();
+    await nextFrame();
+    const composer = document.getElementById('composer');
+    expect(composer.classList.contains('is-new')).toBe(true);
+    expect(composer.hidden).toBe(false);
+    mockRect(composer, panel);
+    return composer;
+  }
+
+  it('drops a fully covered mail row from the tab order and leaves a row above it', async () => {
+    const composer = await openNewMessage();
+    const [above, covered] = rows();
+    mockRect(above, rect(80, 20, 360, 36));
+    mockRect(covered, rect(240, 20, 360, 36));
+    mockRect(document.getElementById('composerCloseBtn'), rect(208, 360, 26, 26));
+
+    mail.syncCoveredFocus();
+
+    expect(covered.getAttribute('tabindex')).toBe('-1');
+    expect(covered.hasAttribute('data-focus-covered')).toBe(true);
+    expect(above.hasAttribute('tabindex')).toBe(false);
+    expect(document.getElementById('composerCloseBtn').getAttribute('tabindex')).not.toBe('-1');
+    expect(composer.contains(document.getElementById('composerCloseBtn'))).toBe(true);
+  });
+
+  it('keeps a row that only partly overlaps the panel in the tab order', async () => {
+    await openNewMessage();
+    const [above, partial] = rows();
+    mockRect(above, rect(80, 20, 360, 36));
+    mockRect(partial, rect(180, 20, 360, 40));
+
+    mail.syncCoveredFocus();
+
+    expect(partial.hasAttribute('tabindex')).toBe(false);
+    expect(above.hasAttribute('tabindex')).toBe(false);
+  });
+
+  it('moves focus off a covered row onto a row that stays above the panel', async () => {
+    await openNewMessage();
+    const [above, covered] = rows();
+    mockRect(above, rect(80, 20, 360, 36));
+    mockRect(covered, rect(240, 20, 360, 36));
+    covered.focus();
+
+    mail.syncCoveredFocus();
+
+    expect(document.activeElement).toBe(above);
+    expect(covered.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('restores a row once it is no longer fully underneath the panel', async () => {
+    await openNewMessage();
+    const covered = rows()[1];
+    mockRect(covered, rect(240, 20, 360, 36));
+    mail.syncCoveredFocus();
+    expect(covered.getAttribute('tabindex')).toBe('-1');
+
+    mockRect(covered, rect(80, 20, 360, 36));
+    mail.syncCoveredFocus();
+
+    expect(covered.hasAttribute('tabindex')).toBe(false);
+    expect(covered.hasAttribute('data-focus-covered')).toBe(false);
+  });
+
+  it('does not leave new rows out of the tab order after the overlay closes', async () => {
+    await openNewMessage();
+    mockRect(rows()[1], rect(240, 20, 360, 36));
+    mail.syncCoveredFocus();
+
+    mail.state.composingNew = false;
+    mail.renderShell();
+    await nextFrame();
+
+    expect(document.getElementById('composer').hidden).toBe(true);
+    for (const row of rows()) {
+      expect(row.getAttribute('tabindex')).not.toBe('-1');
+    }
+  });
+
+  it('uses the same tab-order rule for a sticky reply composer', async () => {
+    clickThread('thread-quote');
+    mail.state.replying = 'reply';
+    mail.state.composingNew = false;
+    mail.renderShell();
+    await nextFrame();
+
+    const composer = document.getElementById('composer');
+    expect(composer.classList.contains('is-inline')).toBe(true);
+    expect(composer.classList.contains('is-new')).toBe(false);
+    expect(composer.hidden).toBe(false);
+    mockRect(composer, panel);
+
+    const [visible, covered] = [...document.querySelectorAll('#readingPane .email__action')];
+    expect(visible).toBeTruthy();
+    expect(covered).toBeTruthy();
+    expect(composer.contains(visible)).toBe(false);
+    mockRect(visible, rect(80, 20, 32, 32));
+    mockRect(covered, rect(240, 60, 32, 32));
+
+    mail.syncCoveredFocus();
+
+    expect(covered.getAttribute('tabindex')).toBe('-1');
+    expect(visible.hasAttribute('tabindex')).toBe(false);
+    expect(document.getElementById('readingPane').contains(composer)).toBe(true);
+  });
+});
+
+describe('S3 narrow shell reflow', () => {
+  function shell() {
+    return {
+      app: document.getElementById('mailApp'),
+      rail: document.getElementById('threadRail'),
+      assistant: document.getElementById('assistantPanel'),
+      main: document.getElementById('mailMain'),
+      list: document.getElementById('mailList'),
+      pane: document.getElementById('readingPane'),
+      folders: document.getElementById('railDrawerBtn'),
+      assistantBtn: document.getElementById('assistantDrawerBtn'),
+    };
+  }
+
+  it('drawers the rail and keeps the list and reading pane in the main column at 320px', () => {
+    setViewport(320, 800);
+    mail.applyNarrowShell();
+    const ui = shell();
+
+    expect(ui.app.classList.contains('is-narrow')).toBe(true);
+    expect(ui.rail.hidden).toBe(true);
+    expect(ui.assistant.hidden).toBe(true);
+    expect(ui.folders.hidden).toBe(false);
+    expect(ui.folders.getAttribute('aria-expanded')).toBe('false');
+    expect(ui.assistantBtn.hidden).toBe(true);
+    expect(ui.main.contains(ui.list)).toBe(true);
+    expect(ui.main.contains(ui.pane)).toBe(true);
+    expect(ui.rail.contains(ui.list)).toBe(false);
+    expect(ui.assistant.contains(ui.list)).toBe(false);
+    expect(ui.list.hidden).toBe(false);
+    expect(ui.pane.hidden).toBe(true);
+
+    ui.folders.click();
+    expect(ui.rail.hidden).toBe(false);
+    expect(ui.rail.classList.contains('is-drawer-open')).toBe(true);
+    expect(ui.folders.getAttribute('aria-expanded')).toBe('true');
+    expect(ui.main.inert).toBe(true);
+
+    document.querySelector('#mailboxList [data-mailbox="sent"]').click();
+    expect(ui.rail.hidden).toBe(true);
+    expect(ui.folders.getAttribute('aria-expanded')).toBe('false');
+    expect(mail.state.view).toBe('list');
+    expect(ui.main.contains(ui.list)).toBe(true);
+    expect(ui.main.inert).toBe(false);
+  });
+
+  it('opens the assistant drawer when the assistant is enabled, and Escape closes it', () => {
+    mail.state.config.assistant.enabled = true;
+    setViewport(320, 800);
+    mail.applyNarrowShell();
+    const ui = shell();
+
+    expect(ui.assistantBtn.hidden).toBe(false);
+    ui.assistantBtn.click();
+
+    expect(ui.assistant.hidden).toBe(false);
+    expect(ui.assistant.classList.contains('is-drawer-open')).toBe(true);
+    expect(ui.assistantBtn.getAttribute('aria-expanded')).toBe('true');
+    expect(ui.rail.hidden).toBe(true);
+    expect(ui.main.contains(ui.list)).toBe(true);
+    expect(ui.main.contains(ui.pane)).toBe(true);
+
+    const escape = keydown(document.getElementById('assistantDrawerCloseBtn'), 'Escape');
+    expect(escape.defaultPrevented).toBe(true);
+    expect(ui.assistant.hidden).toBe(true);
+    expect(ui.assistantBtn.getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('keeps the list and the reading pane in one column while a thread is open', () => {
+    setViewport(320, 800);
+    mail.applyNarrowShell();
+    clickThread('thread-quote');
+    const ui = shell();
+
+    expect(ui.main.contains(ui.list)).toBe(true);
+    expect(ui.main.contains(ui.pane)).toBe(true);
+    expect(ui.list.hidden).toBe(true);
+    expect(ui.pane.hidden).toBe(false);
+    expect(ui.rail.contains(ui.pane)).toBe(false);
+    expect(ui.assistant.contains(ui.pane)).toBe(false);
+  });
+
+  it('leaves the desktop three-column shell in place at 1280px', () => {
+    setViewport(320, 800);
+    mail.applyNarrowShell();
+    document.getElementById('railDrawerBtn').click();
+
+    setViewport(1280, 900);
+    mail.applyNarrowShell();
+    const ui = shell();
+
+    expect(ui.app.classList.contains('is-narrow')).toBe(false);
+    expect(ui.rail.hidden).toBe(false);
+    expect(ui.rail.classList.contains('is-drawer-open')).toBe(false);
+    expect(ui.assistant.hidden).toBe(false);
+    expect(ui.folders.hidden).toBe(true);
+    expect(ui.assistantBtn.hidden).toBe(true);
+    expect(ui.main.inert).toBe(false);
+    expect(ui.main.contains(ui.list)).toBe(true);
+    expect(ui.main.contains(ui.pane)).toBe(true);
   });
 });

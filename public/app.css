@@ -2126,3 +2126,84 @@ body {
   flex: 0 0 auto;
   align-self: flex-start;
 }
+
+/* ── Narrow shell (WCAG 1.4.10) ──
+   At 320px the 260px rail and the assistant split leave the mail column too
+   narrow to read, and overflow:hidden clips it. Below 960px the rail and the
+   assistant become drawers. The list and the reading pane stay in #mailMain.
+   Desktop (960px and up) keeps the three-column layout. */
+.mail-toolbar__drawer {
+  display: none;
+}
+
+.shell-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: color-mix(in srgb, var(--Colors-Text-Black) 35%, transparent);
+}
+
+@media (max-width: 959px) {
+  .mail-app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .mail-toolbar {
+    padding-left: var(--UI-Spacing-spacing-s);
+    padding-right: var(--UI-Spacing-spacing-s);
+  }
+
+  .mail-toolbar__drawer:not([hidden]) {
+    display: inline-flex;
+  }
+
+  .mail-app > .rail:not(.is-drawer-open) {
+    display: none !important;
+  }
+
+  .mail-app > .rail.is-drawer-open {
+    position: fixed;
+    z-index: 70;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    width: min(20rem, 100%);
+    max-width: 100%;
+    background: var(--Colors-Surface-App-Base);
+    box-shadow: 8px 0 24px var(--Colors-Emphasis-Shadow-Soft);
+  }
+
+  #mailSplit > .assistant:not(.is-drawer-open),
+  #mailSplit .split-panel-right:not(.is-drawer-open),
+  #mailSplit .split-panel-divider {
+    display: none !important;
+  }
+
+  #mailSplit .split-panel-left {
+    flex: 1 1 auto !important;
+    flex-basis: auto !important;
+    width: auto !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+  }
+
+  #mailSplit > .assistant.is-drawer-open,
+  #mailSplit .split-panel-right.is-drawer-open {
+    display: flex !important;
+    flex-direction: column;
+    position: fixed !important;
+    z-index: 70;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: auto !important;
+    width: min(24rem, 100%) !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    flex: none !important;
+    overflow: hidden;
+    background: var(--Colors-Surface-App-Base);
+    box-shadow: -8px 0 24px var(--Colors-Emphasis-Shadow-Soft);
+  }
+}
