@@ -89,9 +89,21 @@ await esbuild.build({
   logLevel: 'warning',
 });
 
-copy(path.join(ROOT, 'public/index.html'), path.join(DIST, 'public/index.html'));
-copy(path.join(ROOT, 'public/app.css'), path.join(DIST, 'public/app.css'));
-copy(path.join(ROOT, 'public/avatars'), path.join(DIST, 'public/avatars'));
+// Everything Express serves from public/, except the unbundled source and a
+// local app.bundle.js (esbuild already wrote the minified one into dist/).
+const publicSrc = path.join(ROOT, 'public');
+copy(publicSrc, path.join(DIST, 'public'), (src) => {
+  const base = path.basename(src);
+  if (base === '.DS_Store') return false;
+  if (src === publicSrc) return true;
+  return base !== 'app.js' && base !== 'app.bundle.js';
+});
+// Packed releases have no node_modules. Dev serves this from the Rive package;
+// the release serves it from public/ via express.static.
+copy(
+  path.join(ROOT, 'node_modules/@rive-app/canvas/rive.wasm'),
+  path.join(DIST, 'public/vendor/rive.wasm'),
+);
 copy(path.join(ROOT, 'design-system'), path.join(DIST, 'design-system'), (src) => {
   const rel = path.relative(path.join(ROOT, 'design-system'), src);
   return !rel.split(path.sep).includes('.git');
@@ -126,7 +138,11 @@ fs.writeFileSync(
 for (const rel of [
   'public/app.bundle.js',
   'public/app.css',
+  'public/global.css',
   'public/index.html',
+  'public/animations/thinking.riv',
+  'public/icons/mail-logo.svg',
+  'public/vendor/rive.wasm',
   'server.js',
   'extract-conversations.js',
 ]) {
