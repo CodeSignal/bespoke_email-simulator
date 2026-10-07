@@ -330,7 +330,7 @@ Octavus presigned uploads.
 - [x] `extract-conversations.js` reading `sessions.json`, with modes:
       `full`, `submission`, `thread`, `assistant`, `report`; options `--latest`,
       `--output <file>`, `--print-settings`, `--help`. `npm run extract`/`report`.
-- [x] Output email bodies as Markdown; include sidecar `rubric.json` hints in the report header.
+- [x] Output email bodies as Markdown. The report is a transcript only and does not load grading notes.
 
 **Verify**
 - [x] Each mode prints/writes correct, readable output for a sample session.

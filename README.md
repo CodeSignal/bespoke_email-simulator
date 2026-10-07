@@ -7,8 +7,9 @@ copilot (Cosmo) can help draft, answer questions about the email history,
 summarize, and extract information. Live scenario characters can write back
 in-character so the learner practices a real email exchange.
 
-CMail never sends real email; it simulates the experience and captures everything
-for rubric-based assessment.
+CMail never sends real email; it simulates the experience and captures a
+transcript for review outside this project. Grading notes are not part of the
+scenario, the client, or the agents.
 
 ## How it works
 
@@ -173,19 +174,6 @@ Relative date tokens in seed strings (resolved once at load): `${today}`,
 `email.date`, bodies, subjects, and attachment `text`. Bare date fields like
 `"${today}"` become ISO datetimes (`…T12:00:00Z`); prose keeps `YYYY-MM-DD`.
 
-### Rubric sidecar (not part of the scenario)
-
-Grading notes do **not** belong in `scenario.json`. Put them in a sidecar file
-next to the scenario:
-
-| Scenario file | Rubric file |
-| --- | --- |
-| `scenario.json` | `rubric.json` |
-| `foo.scenario.json` | `foo.rubric.json` |
-
-`npm run report` includes the sidecar when present. Override with
-`--rubric <file>`. Cosmo and `/api/config` never see rubric content.
-
 ### Example scenarios
 
 Ready-to-run scenarios live in [`scenario-examples/`](scenario-examples/). Copy
@@ -208,7 +196,6 @@ one to `scenario.json` to try it:
 
 ```bash
 cp scenario-examples/04-simulated-recipient-support.scenario.json scenario.json && \
-  cp scenario-examples/04-simulated-recipient-support.rubric.json rubric.json && \
   npm run dev
 ```
 
@@ -238,8 +225,8 @@ node extract-conversations.js --mode report --stdout # preview the report withou
 `npm run report` is the one to hand to a grader. With `--print-settings` (the
 default for `npm run report`), it opens with a plain-language **World** blurb
 and a **Characters** list (name, role, email, and whether they're a live
-correspondent or directory-only) — no model config, IDs, or rubric hints,
-just enough context to follow the conversation. It then walks each session
+correspondent or directory-only) — no model config or IDs, just enough
+context to follow the conversation. It then walks each session
 (numbering them only if there's more than one — in practice there's just the
 one) and renders the email(s) and the current draft, plus — only when the
 scenario's `assistant.enabled` is `true` — a summary and full transcript of
