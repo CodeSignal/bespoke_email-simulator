@@ -30,6 +30,7 @@
   <link rel="stylesheet" href="/app.css" />
 </head>
 <body>
+  <a class="skip-link" id="skipToMail" href="#mailMain">Skip to mail</a>
 
   <div class="boot-error body-small" id="bootError" role="alert" hidden></div>
 
@@ -60,7 +61,7 @@
     <div class="mail-split" id="mailSplit">
 
     <!-- ── MAIN: list or conversation; new mail floats as a PiP overlay ── -->
-    <main class="mail-main" id="mailMain">
+    <main class="mail-main" id="mailMain" tabindex="-1">
       <header class="mail-toolbar" id="mailToolbar">
         <button type="button" class="icon-button mail-toolbar__drawer" id="railDrawerBtn" hidden aria-expanded="false" aria-controls="threadRail">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">

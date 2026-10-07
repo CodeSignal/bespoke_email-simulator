@@ -45,6 +45,46 @@ body {
   border: 0;
 }
 
+/* First tab stop. Clipped until keyboard focus, then a solid primary control. */
+.skip-link {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.skip-link:focus {
+  position: fixed;
+  top: var(--UI-Spacing-spacing-s);
+  left: var(--UI-Spacing-spacing-s);
+  z-index: 2000;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: var(--UI-Spacing-spacing-s) var(--UI-Spacing-spacing-m);
+  overflow: visible;
+  clip: auto;
+  clip-path: none;
+  white-space: normal;
+  background: var(--Colors-Base-Primary-700);
+  color: var(--Colors-Base-Neutral-00);
+  border-radius: var(--UI-Radius-radius-s);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  text-decoration: none;
+  outline: 2px solid var(--Colors-Base-Neutral-00);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px var(--Colors-Base-Primary-700);
+}
+
 /* ── App shell: fixed rail + resizable mail/assistant split ── */
 .mail-app {
   display: grid;

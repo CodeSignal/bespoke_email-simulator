@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, S7, S3,
- * and Shift+Tab in the recipient combobox).
+ * S2, S4, and Shift+Tab in the recipient combobox).
  *
  * public/app.js reads the document while the module loads, so this mounts
  * public/index.html first and imports the module after that. Vitest skips
@@ -10,7 +10,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeAccessibleName } from 'dom-accessibility-api';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -582,5 +582,184 @@ describe('S3 narrow shell reflow', () => {
     expect(ui.main.inert).toBe(false);
     expect(ui.main.contains(ui.list)).toBe(true);
     expect(ui.main.contains(ui.pane)).toBe(true);
+  });
+});
+
+describe('S2 toast auto-dismiss', () => {
+  const DISMISS_MS = 8000;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    document.getElementById('mailToasts')?.replaceChildren();
+  });
+
+  function showInboundToast() {
+    const thread = mail.state.session.threads.find((item) => item.id === 'thread-quote');
+    mail.showMailToast(thread, thread.emails[0]);
+    const toast = document.querySelector('#mailToasts .mail-toast:last-child');
+    expect(toast).toBeTruthy();
+    return toast;
+  }
+
+  function pointer(el, type) {
+    el.dispatchEvent(new PointerEvent(type, { bubbles: true, composed: true }));
+  }
+
+  function inboxRow() {
+    return document.querySelector('.mail-row[data-thread-id="thread-quote"]');
+  }
+
+  it('dismisses the toast after eight seconds and keeps the inbox row', () => {
+    const toast = showInboundToast();
+    expect(inboxRow()).toBeTruthy();
+
+    vi.advanceTimersByTime(DISMISS_MS - 1);
+    expect(toast.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
+
+    expect(toast.isConnected).toBe(false);
+    expect(document.querySelector('#mailToasts .mail-toast')).toBeNull();
+    expect(inboxRow()).toBeTruthy();
+  });
+
+  it('preserves elapsed time across hover pause and resume', () => {
+    const toast = showInboundToast();
+    vi.advanceTimersByTime(3000);
+    pointer(toast, 'pointerenter');
+    vi.advanceTimersByTime(20000);
+    expect(toast.isConnected).toBe(true);
+
+    pointer(toast, 'pointerleave');
+    vi.advanceTimersByTime(4999);
+    expect(toast.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(toast.isConnected).toBe(false);
+    expect(inboxRow()).toBeTruthy();
+  });
+
+  it('does not resume the timer while focus moves between controls inside the toast', () => {
+    const toast = showInboundToast();
+    const open = toast.querySelector('.mail-toast__open');
+    const close = toast.querySelector('.mail-toast__close');
+    vi.advanceTimersByTime(2000);
+    open.focus();
+    vi.advanceTimersByTime(10000);
+    expect(toast.isConnected).toBe(true);
+    expect(document.activeElement).toBe(open);
+
+    close.focus();
+    expect(document.activeElement).toBe(close);
+    expect(toast.contains(document.activeElement)).toBe(true);
+    vi.advanceTimersByTime(10000);
+    expect(toast.isConnected).toBe(true);
+  });
+
+  it('resumes the timer only after focus leaves the toast', () => {
+    const toast = showInboundToast();
+    const open = toast.querySelector('.mail-toast__open');
+    const close = toast.querySelector('.mail-toast__close');
+    vi.advanceTimersByTime(2500);
+    open.focus();
+    close.focus();
+    pointer(toast, 'pointerenter');
+    pointer(toast, 'pointerleave');
+    vi.advanceTimersByTime(20000);
+    expect(toast.isConnected).toBe(true);
+    expect(toast.contains(document.activeElement)).toBe(true);
+
+    document.getElementById('composeBtn').focus();
+    expect(toast.contains(document.activeElement)).toBe(false);
+    vi.advanceTimersByTime(5499);
+    expect(toast.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(toast.isConnected).toBe(false);
+  });
+
+  it('dismisses a paused toast without a stale timer removing the next one', () => {
+    const first = showInboundToast();
+    vi.advanceTimersByTime(1000);
+    pointer(first, 'pointerenter');
+    first.querySelector('.mail-toast__close').click();
+    expect(first.isConnected).toBe(false);
+    expect(inboxRow()).toBeTruthy();
+
+    const second = showInboundToast();
+    vi.advanceTimersByTime(DISMISS_MS - 1);
+    expect(second.isConnected).toBe(true);
+    vi.advanceTimersByTime(1);
+    expect(second.isConnected).toBe(false);
+    expect(inboxRow()).toBeTruthy();
+  });
+
+  it('opens the thread from a paused toast and leaves later toasts on their own timer', () => {
+    const toast = showInboundToast();
+    const open = toast.querySelector('.mail-toast__open');
+    open.focus();
+    vi.advanceTimersByTime(3000);
+    open.click();
+
+    expect(toast.isConnected).toBe(false);
+    expect(mail.state.view).toBe('thread');
+    expect(mail.state.activeThreadId).toBe('thread-quote');
+    expect(mail.state.session.threads.some((item) => item.id === 'thread-quote')).toBe(true);
+
+    const later = showInboundToast();
+    vi.advanceTimersByTime(DISMISS_MS - 1);
+    expect(later.isConnected).toBe(true);
+    vi.advanceTimersByTime(20000);
+    expect(later.isConnected).toBe(false);
+  });
+});
+
+describe('S4 skip to mail', () => {
+  function sequentialFocusable() {
+    return [...document.body.querySelectorAll('a[href], button, input, select, textarea, [tabindex]')]
+      .filter((el) => {
+        if (el.closest('[hidden]')) return false;
+        if (el.disabled) return false;
+        if (el.matches('input[type="hidden"]')) return false;
+        const tab = el.getAttribute('tabindex');
+        if (tab !== null && Number(tab) < 0) return false;
+        return true;
+      });
+  }
+
+  it('is the first focusable element and targets #mailMain', () => {
+    const skip = document.getElementById('skipToMail');
+    const main = document.getElementById('mailMain');
+    const focusable = sequentialFocusable();
+
+    expect(skip).toBeTruthy();
+    expect(skip.textContent.trim()).toBe('Skip to mail');
+    expect(skip.getAttribute('href')).toBe('#mailMain');
+    expect(focusable[0]).toBe(skip);
+    expect(focusable.includes(main)).toBe(false);
+  });
+
+  it('moves focus to #mailMain when activated', () => {
+    const skip = document.getElementById('skipToMail');
+    const main = document.getElementById('mailMain');
+    skip.focus();
+    expect(document.activeElement).toBe(skip);
+
+    skip.click();
+
+    expect(document.activeElement).toBe(main);
+    expect(main.getAttribute('tabindex')).toBe('-1');
+  });
+
+  it('keeps #mailMain out of the sequential tab order', () => {
+    const main = document.getElementById('mailMain');
+    const focusable = sequentialFocusable();
+
+    expect(main.getAttribute('tabindex')).toBe('-1');
+    expect(main.tabIndex).toBe(-1);
+    expect(focusable.includes(main)).toBe(false);
+    expect(focusable[0].getAttribute('href')).toBe('#mailMain');
+    expect(focusable[1]).not.toBe(main);
   });
 });

@@ -7,9 +7,9 @@ Remediation status after the [6 Oct 2026 re-audit](./2026-10-06-cosmomail-ux-aud
 | C1 | Critical | Visible focus on mail rows and mailbox rail | 2.4.7, 1.4.11 | Fixed | — |
 | C2 | Critical | Recipient picker keyboard / listbox pattern | 2.1.1, 4.1.2 | Fixed | — |
 | S1 | Serious | Remove `aria-live` from reading pane | 4.1.3 | Fixed | [#14](https://github.com/CodeSignal/bespoke_email-simulator/issues/14) |
-| S2 | Serious | Toast 8s auto-dismiss without pause | 2.2.1 | Open | [#15](https://github.com/CodeSignal/bespoke_email-simulator/issues/15) |
+| S2 | Serious | Toast 8s auto-dismiss without pause | 2.2.1 | Fixed | [#15](https://github.com/CodeSignal/bespoke_email-simulator/issues/15) |
 | S3 | Serious | Three-column layout fails reflow | 1.4.10 | Fixed | [#16](https://github.com/CodeSignal/bespoke_email-simulator/issues/16) |
-| S4 | Serious | No skip link | 2.4.1 | Open | [#17](https://github.com/CodeSignal/bespoke_email-simulator/issues/17) |
+| S4 | Serious | No skip link | 2.4.1 | Fixed | [#17](https://github.com/CodeSignal/bespoke_email-simulator/issues/17) |
 | S5 | Serious | Focus lost on list ↔ thread navigation | 2.4.3 | Fixed | [#18](https://github.com/CodeSignal/bespoke_email-simulator/issues/18) |
 | S6 | Serious | To and Cc share the accessible name “Add a recipient” | 1.3.1, 4.1.2 | Fixed | [#19](https://github.com/CodeSignal/bespoke_email-simulator/issues/19) |
 | S7 | Serious | Floating composer can cover focusable mail rows | 2.4.11 | Fixed | [#20](https://github.com/CodeSignal/bespoke_email-simulator/issues/20) |

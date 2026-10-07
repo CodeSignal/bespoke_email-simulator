@@ -159,6 +159,7 @@ const state = {
 // ── DOM ───────────────────────────────────────────────────────
 const els = {
   bootError: document.getElementById('bootError'),
+  skipToMail: document.getElementById('skipToMail'),
   appTitle: document.getElementById('appTitle'),
   composeBtn: document.getElementById('composeBtn'),
   composeBtnLabel: document.getElementById('composeBtnLabel'),
@@ -1759,10 +1760,22 @@ function backToList() {
   focusMailRow(threadId);
 }
 
+function initSkipToMail() {
+  const link = els.skipToMail;
+  const main = els.mailMain;
+  if (!link || !main) return;
+  if (!main.hasAttribute('tabindex')) main.setAttribute('tabindex', '-1');
+  link.addEventListener('click', (event) => {
+    event.preventDefault();
+    main.focus();
+  });
+}
+
 function applyScenarioChrome() {
   const title = state.config?.title || t('Mail');
   document.title = title;
   if (els.appTitle) els.appTitle.textContent = title;
+  if (els.skipToMail) els.skipToMail.textContent = t('Skip to mail');
   if (els.composeToLabel) els.composeToLabel.textContent = t('To');
   if (els.composeCcLabel) els.composeCcLabel.textContent = t('Cc');
   if (els.composeSubjectLabel) els.composeSubjectLabel.textContent = t('Subject');
@@ -2057,9 +2070,90 @@ function openInboundEmail(threadId, emailId) {
   scrollToEmail(emailId);
 }
 
+const MAIL_TOAST_DISMISS_MS = 8000;
+let mailToastTimerSerial = 0;
+
+function clearMailToastTimer(toast) {
+  if (toast._timer != null) clearTimeout(toast._timer);
+  toast._timer = null;
+  toast._timerToken = null;
+}
+
+function toastHasFocus(toast) {
+  const active = document.activeElement;
+  return !!(active && toast.contains(active));
+}
+
+function scheduleMailToastDismiss(toast) {
+  clearMailToastTimer(toast);
+  if (toast._dismissed || !toast.isConnected) return;
+  const token = ++mailToastTimerSerial;
+  toast._timerToken = token;
+  toast._startedAt = Date.now();
+  const delay = Math.max(0, toast._remaining);
+  toast._timer = setTimeout(() => {
+    if (toast._timerToken !== token) return;
+    toast._timer = null;
+    toast._timerToken = null;
+    if (toast._dismissed || toast._paused || !toast.isConnected) return;
+    dismissMailToast(toast);
+  }, delay);
+}
+
+function pauseMailToastTimer(toast) {
+  if (toast._dismissed || toast._paused) return;
+  const elapsed = Math.max(0, Date.now() - (toast._startedAt || Date.now()));
+  toast._remaining = Math.max(0, toast._remaining - elapsed);
+  toast._paused = true;
+  clearMailToastTimer(toast);
+}
+
+function resumeMailToastTimer(toast) {
+  if (toast._dismissed || !toast.isConnected || !toast._paused) return;
+  if (toast._pointerInside || toastHasFocus(toast)) return;
+  toast._paused = false;
+  scheduleMailToastDismiss(toast);
+}
+
+// Keep the remaining auto-dismiss time while the pointer or focus is inside.
+// Moving between controls stays paused; leaving both resumes the leftover time.
+function armMailToastTimer(toast) {
+  toast._remaining = MAIL_TOAST_DISMISS_MS;
+  toast._paused = false;
+  toast._pointerInside = false;
+  toast._dismissed = false;
+
+  toast.addEventListener('pointerenter', () => {
+    toast._pointerInside = true;
+    pauseMailToastTimer(toast);
+  });
+  toast.addEventListener('pointerleave', () => {
+    toast._pointerInside = false;
+    resumeMailToastTimer(toast);
+  });
+  toast.addEventListener('focusin', () => {
+    pauseMailToastTimer(toast);
+  });
+  toast.addEventListener('focusout', (event) => {
+    if (toast._dismissed) return;
+    const next = event.relatedTarget;
+    // relatedTarget is where focus is going. activeElement can still be inside
+    // the toast during focusout, so a focus check here would keep the timer paused.
+    if (next instanceof Node && toast.contains(next)) return;
+    if (toast._pointerInside) return;
+    if (!toast.isConnected || !toast._paused) return;
+    toast._paused = false;
+    scheduleMailToastDismiss(toast);
+  });
+
+  scheduleMailToastDismiss(toast);
+}
+
 function dismissMailToast(toast) {
-  if (!toast) return;
-  if (toast._timer) clearTimeout(toast._timer);
+  if (!toast || toast._dismissed) return;
+  toast._dismissed = true;
+  toast._paused = true;
+  clearMailToastTimer(toast);
   toast.remove();
 }
 
@@ -2100,7 +2194,7 @@ function showMailToast(thread, email) {
   while (els.mailToasts.children.length > 3) {
     dismissMailToast(els.mailToasts.firstElementChild);
   }
-  toast._timer = setTimeout(() => dismissMailToast(toast), 8000);
+  armMailToastTimer(toast);
 }
 
 function refreshMailAfterInbound(thread, email) {
@@ -3471,6 +3565,7 @@ async function boot() {
 // public/index.html, and drives the real UI from there.
 if (globalThis.process?.env?.VITEST !== 'true') boot();
 else initShellDrawers();
+initSkipToMail();
 
 /** Live mailbox behaviors for the accessibility regression tests. */
 export function mailAppTestHooks() {
@@ -3485,5 +3580,6 @@ export function mailAppTestHooks() {
     selectMailbox,
     syncCoveredFocus,
     applyNarrowShell,
+    showMailToast,
   };
 }
