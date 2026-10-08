@@ -13,14 +13,14 @@ Remediation status after the [6 Oct 2026 re-audit](./2026-10-06-cosmomail-ux-aud
 | S5 | Serious | Focus lost on list ↔ thread navigation | 2.4.3 | Fixed | [#18](https://github.com/CodeSignal/bespoke_email-simulator/issues/18) |
 | S6 | Serious | To and Cc share the accessible name “Add a recipient” | 1.3.1, 4.1.2 | Fixed | [#19](https://github.com/CodeSignal/bespoke_email-simulator/issues/19) |
 | S7 | Serious | Floating composer can cover focusable mail rows | 2.4.11 | Fixed | [#20](https://github.com/CodeSignal/bespoke_email-simulator/issues/20) |
-| M1 | Moderate | Button focus rings missing or empty; primary selector broken | 2.4.7 | Open | [#21](https://github.com/CodeSignal/bespoke_email-simulator/issues/21) |
+| M1 | Moderate | Button focus rings missing or empty; primary selector broken | 2.4.7 | Fixed | [#21](https://github.com/CodeSignal/bespoke_email-simulator/issues/21) |
 | M2 | Moderate | Reduced motion only partly honored | 2.3.3 | Partial | [#22](https://github.com/CodeSignal/bespoke_email-simulator/issues/22) |
 | M3 | Moderate | `--Colors-Text-Body-Secondary` undefined | 1.4.3 | Fixed | — |
 | M4 | Moderate | `html[lang]` not synced to i18n | 3.1.1 | Open | [#23](https://github.com/CodeSignal/bespoke_email-simulator/issues/23) |
 | M5 | Moderate | Expanded compose modal initial focus | 2.4.3 | Fixed | — |
 | M6 | Moderate | Send/attachment errors not announced | 4.1.3 | Open | [#24](https://github.com/CodeSignal/bespoke_email-simulator/issues/24) |
 | M7 | Moderate | Disabled button opacity 0.24 hard to see | Usability | Open | [#25](https://github.com/CodeSignal/bespoke_email-simulator/issues/25) |
-| M8 | Moderate | Dark mode: active recipient role text 3.86:1 | 1.4.3 | Open | [#26](https://github.com/CodeSignal/bespoke_email-simulator/issues/26) |
+| M8 | Moderate | Dark mode: active recipient role text 3.86:1 | 1.4.3 | Fixed | [#26](https://github.com/CodeSignal/bespoke_email-simulator/issues/26) |
 | M9 | Moderate | Recipient remove control hidden until hover or focus | 2.5.8 | Open | [#27](https://github.com/CodeSignal/bespoke_email-simulator/issues/27) |
 | M10 | Moderate | Split divider focus line overridden | 2.4.7 | Open | [#28](https://github.com/CodeSignal/bespoke_email-simulator/issues/28) |
 | M11 | Moderate | Assistant log rebuilt inside a live region | 4.1.3 | Open | [#29](https://github.com/CodeSignal/bespoke_email-simulator/issues/29) |
