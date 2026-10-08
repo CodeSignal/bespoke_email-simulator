@@ -184,7 +184,8 @@
           <div class="assistant__chips" id="assistantChips" hidden></div>
         </div>
         <div class="assistant__composer">
-          <textarea class="assistant__input" id="assistantInput" rows="1" placeholder="Ask me anything..." aria-label="Message the AI Assistant"></textarea>
+          <textarea class="assistant__input" id="assistantInput" rows="1" placeholder="Ask me anything..." aria-label="Message the AI Assistant" aria-describedby="assistantInputHint"></textarea>
+          <span class="visually-hidden" id="assistantInputHint">Enter sends. Shift+Enter inserts a newline.</span>
           <div class="assistant__composer-footer">
             <button type="button" class="assistant__send" id="assistantSendBtn" aria-label="Send" title="Send" disabled>
               <svg width="18" height="16" viewBox="0 0 18 16" fill="currentColor" aria-hidden="true">

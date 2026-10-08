@@ -102,7 +102,7 @@ marked.use({
       const canonical = constrainToCharacters([email], directoryCharacters())[0];
       if (!canonical) return text;
       // Stay in-app: mailto: is intercepted by browser/OS mail handlers and extensions.
-      return `<a href="#" class="js-compose-mailto" data-email="${escapeHtml(canonical)}">${text}</a>`;
+      return `<button type="button" class="js-compose-mailto" data-email="${escapeHtml(canonical)}">${text}</button>`;
     },
   },
 });
@@ -215,6 +215,7 @@ const els = {
   assistantContent: document.getElementById('assistantContent'),
   assistantMessages: document.getElementById('assistantMessages'),
   assistantInput: document.getElementById('assistantInput'),
+  assistantInputHint: document.getElementById('assistantInputHint'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
   assistantClearBtn: document.getElementById('assistantClearBtn'),
   assistantChips: document.getElementById('assistantChips'),
@@ -279,11 +280,6 @@ function formatListDate(iso) {
     return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   }
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-function threadSnippet(thread) {
-  const last = thread.emails?.[thread.emails.length - 1];
-  return emailSnippet(last);
 }
 
 function emailSnippet(email) {
@@ -1257,6 +1253,12 @@ function draftListPerson(draft) {
   return to.length ? personForAddress(to[0]) : learnerPerson();
 }
 
+function mailRowAccessibleName(parts, { unread = false } = {}) {
+  const name = parts.map((part) => String(part ?? '').trim()).filter(Boolean);
+  if (unread) name.push(t('New'));
+  return name.join('. ');
+}
+
 function renderDraftList() {
   const drafts = savedDrafts();
   els.threadList.innerHTML = '';
@@ -1274,30 +1276,27 @@ function renderDraftList() {
     return;
   }
   for (const draft of drafts) {
-    const snippet = String(draft.body || '')
-      .replace(/[#*_`>[\]()]/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
+    const from = draftListFrom(draft);
+    const subject = draft.subject || t('(no subject)');
+    const date = formatListDate(draft.updated_at);
     const item = document.createElement('div');
     item.className = 'mail-item';
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mail-row';
-    if (snippet) btn.title = snippet;
+    btn.setAttribute('aria-label', mailRowAccessibleName([from, subject, date]));
     btn.innerHTML = `
       ${avatarMarkup(draftListPerson(draft), 'lg')}
       <span class="mail-row__main">
-        <span class="mail-row__from">${escapeHtml(draftListFrom(draft))}</span>
-        <span class="mail-row__subject">${escapeHtml(draft.subject || t('(no subject)'))}</span>
+        <span class="mail-row__from">${escapeHtml(from)}</span>
+        <span class="mail-row__subject">${escapeHtml(subject)}</span>
       </span>
-      <span class="mail-row__date">${escapeHtml(formatListDate(draft.updated_at))}</span>
+      <span class="mail-row__date">${escapeHtml(date)}</span>
     `;
     btn.addEventListener('click', () => openDraft(draft));
     const container = document.createElement('div');
     container.className = 'mail-item__container';
-    const rule = document.createElement('hr');
-    rule.className = 'mail-list__rule';
-    container.append(btn, rule);
+    container.append(btn);
     item.appendChild(container);
     els.threadList.appendChild(item);
   }
@@ -1331,31 +1330,30 @@ function renderMailList() {
   // second container — the row, which carries the new-mail marker — and the hrule.
   for (const thread of threads) {
     const last = thread.emails?.[thread.emails.length - 1];
-    const snippet = threadSnippet(thread);
     const unread = isThreadUnread(thread);
+    const from = threadListFrom(thread, state.activeMailbox);
+    const subject = thread.subject || t('(no subject)');
+    const date = formatListDate(last?.date);
     const item = document.createElement('div');
     item.className = 'mail-item' + (unread ? ' is-unread' : '');
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mail-row';
     btn.dataset.threadId = thread.id;
-    if (snippet) btn.title = snippet;
+    btn.setAttribute('aria-label', mailRowAccessibleName([from, subject, date], { unread }));
     btn.innerHTML = `
       ${unread ? '<span class="mail-item__marker" aria-hidden="true"></span>' : ''}
       ${avatarMarkup(threadListPerson(thread, state.activeMailbox), 'lg')}
       <span class="mail-row__main">
-        <span class="mail-row__from">${escapeHtml(threadListFrom(thread, state.activeMailbox))}</span>
-        <span class="mail-row__subject">${escapeHtml(thread.subject || '(no subject)')}</span>
+        <span class="mail-row__from">${escapeHtml(from)}</span>
+        <span class="mail-row__subject">${escapeHtml(subject)}</span>
       </span>
-      <span class="mail-row__date">${escapeHtml(formatListDate(last?.date))}</span>
-      ${unread ? `<span class="visually-hidden">, ${escapeHtml(t('New'))}</span>` : ''}
+      <span class="mail-row__date">${escapeHtml(date)}</span>
     `;
     btn.addEventListener('click', () => selectThread(thread.id));
     const container = document.createElement('div');
     container.className = 'mail-item__container';
-    const rule = document.createElement('hr');
-    rule.className = 'mail-list__rule';
-    container.append(btn, rule);
+    container.append(btn);
     item.appendChild(container);
     els.threadList.appendChild(item);
   }
@@ -1759,10 +1757,14 @@ function composeNewTo(email) {
   state.editor?.commands.focus();
 }
 
+let mailtoComposeBound = false;
+
 function initMailtoCompose() {
+  if (mailtoComposeBound) return;
+  mailtoComposeBound = true;
   document.addEventListener('click', (event) => {
     const el = event.target instanceof Element ? event.target : event.target.parentElement;
-    const link = el?.closest('a.js-compose-mailto');
+    const link = el?.closest('.js-compose-mailto');
     if (!link) return;
     event.preventDefault();
     if (!link.closest('.email__body, .assistant__msg')) return;
@@ -1807,6 +1809,10 @@ function applyScenarioChrome() {
   if (els.assistantInput) {
     els.assistantInput.placeholder = t('Ask me anything...');
     els.assistantInput.setAttribute('aria-label', t('Message the AI Assistant'));
+    els.assistantInput.setAttribute('aria-describedby', 'assistantInputHint');
+  }
+  if (els.assistantInputHint) {
+    els.assistantInputHint.textContent = t('Enter sends. Shift+Enter inserts a newline.');
   }
   if (els.assistantClearBtn) {
     els.assistantClearBtn.setAttribute('aria-label', t('New conversation'));
@@ -2585,61 +2591,177 @@ function appendFenceInsertFallback(row, markdown) {
   row.querySelector('.assistant__msg')?.appendChild(btn);
 }
 
+function assistantTypingHtml() {
+  return `<span class="assistant__typing" aria-label="${escapeHtml(t('Thinking…'))}"><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span></span>`;
+}
+
+function assistantHintText() {
+  return state.config?.assistant?.initialMessage
+    || t('Ask the AI Assistant to help draft, summarize, or answer questions about this thread.');
+}
+
+function assistantNodeSpec(key, signature, create, update) {
+  return { key, signature, create, update };
+}
+
+function paintAssistantRow(row, { role, html, drafts, streaming, markdown }) {
+  const bubble = row.querySelector('.assistant__msg');
+  if (bubble && bubble.innerHTML !== html) bubble.innerHTML = html;
+  for (const card of row.querySelectorAll('.assistant__draft')) card.remove();
+  for (const button of row.querySelectorAll('.assistant__insert')) button.remove();
+  if (role !== 'user') {
+    for (const draft of drafts ?? []) appendDraftCard(row, draft, { streaming });
+    if (!streaming) appendFenceInsertFallback(row, markdown);
+  }
+}
+
+function assistantBubbleSpec(key, details) {
+  const signature = JSON.stringify({
+    role: details.role,
+    html: details.html,
+    streaming: Boolean(details.streaming),
+    markdown: details.streaming ? '' : (details.markdown ?? ''),
+    drafts: details.drafts ?? [],
+  });
+  return assistantNodeSpec(
+    key,
+    signature,
+    () => {
+      const row = makeBubble(details.role, details.html);
+      paintAssistantRow(row, details);
+      return row;
+    },
+    (row) => paintAssistantRow(row, details),
+  );
+}
+
+function thoughtSpec(key, ms) {
+  const text = t('Thought for {seconds}s').replace('{seconds}', String(Math.max(1, Math.round(ms / 1000))));
+  return assistantNodeSpec(
+    key,
+    text,
+    () => thoughtLine(ms),
+    (node) => { node.textContent = text; },
+  );
+}
+
+function hintSpec() {
+  const text = assistantHintText();
+  return assistantNodeSpec(
+    keyHint(),
+    text,
+    () => {
+      const hint = document.createElement('p');
+      hint.className = 'assistant__hint';
+      hint.id = 'assistantHint';
+      hint.textContent = text;
+      return hint;
+    },
+    (node) => { node.textContent = text; },
+  );
+}
+
+function keyHint() {
+  return 'hint';
+}
+
+// Keep earlier turn nodes. A streaming token may rewrite the in-progress
+// bubble, and a cleared conversation may drop the transcript.
+function reconcileAssistantLog(container, specs) {
+  const byKey = new Map();
+  for (const child of container.children) {
+    const key = child.dataset.assistantKey;
+    if (key && !byKey.has(key)) byKey.set(key, child);
+  }
+  const next = specs.map((spec) => {
+    const existing = byKey.get(spec.key);
+    if (existing) {
+      byKey.delete(spec.key);
+      if (existing.dataset.assistantSignature !== spec.signature) {
+        spec.update(existing);
+        existing.dataset.assistantSignature = spec.signature;
+      }
+      return existing;
+    }
+    const node = spec.create();
+    node.dataset.assistantKey = spec.key;
+    node.dataset.assistantSignature = spec.signature;
+    return node;
+  });
+  for (const stale of byKey.values()) stale.remove();
+  for (const child of [...container.children]) {
+    if (!next.includes(child)) child.remove();
+  }
+  for (let index = 0; index < next.length; index += 1) {
+    if (container.children[index] !== next[index]) {
+      container.insertBefore(next[index], container.children[index] ?? null);
+    }
+  }
+}
+
 function renderAssistant(liveMessages = []) {
   const container = els.assistantMessages;
-  container.innerHTML = '';
+  if (!container) return;
+  const persisted = state.assistant.persisted ?? [];
+  const live = liveMessages ?? [];
+  const specs = [];
 
-  const persisted = state.assistant.persisted;
-  const hasAny = persisted.length > 0 || liveMessages.length > 0;
-  if (!hasAny) {
-    const hint = document.createElement('p');
-    hint.className = 'assistant__hint';
-    hint.textContent = state.config?.assistant?.initialMessage
-      || t('Ask the AI Assistant to help draft, summarize, or answer questions about this thread.');
-    container.appendChild(hint);
-    updateAssistantClearBtn();
-    return;
-  }
+  if (!persisted.length && !live.length) {
+    specs.push(hintSpec());
+  } else {
+    persisted.forEach((message, index) => {
+      if (message.role === 'assistant' && message.thoughtMs) {
+        specs.push(thoughtSpec(`persisted:${index}:thought`, message.thoughtMs));
+      }
+      const html = message.role === 'user' ? escapeHtml(message.content) : renderMarkdown(message.content);
+      specs.push(assistantBubbleSpec(`persisted:${index}:${message.role}`, {
+        role: message.role,
+        html,
+        drafts: message.role === 'assistant' ? (message.drafts ?? []) : [],
+        streaming: false,
+        markdown: message.role === 'assistant' ? message.content : '',
+      }));
+    });
 
-  for (const m of persisted) {
-    if (m.role === 'assistant' && m.thoughtMs) container.appendChild(thoughtLine(m.thoughtMs));
-    const html = m.role === 'user' ? escapeHtml(m.content) : renderMarkdown(m.content);
-    const row = makeBubble(m.role, html);
-    if (m.role === 'assistant') {
-      for (const draft of m.drafts ?? []) appendDraftCard(row, draft);
-      appendFenceInsertFallback(row, m.content);
+    live.forEach((message, index) => {
+      if (message.role === 'user') {
+        const text = messageText(message) || message.content || '';
+        const key = message.id ? `live:${message.id}` : `live:${index}:user`;
+        specs.push(assistantBubbleSpec(key, {
+          role: 'user',
+          html: escapeHtml(text),
+          drafts: [],
+          streaming: false,
+          markdown: '',
+        }));
+        return;
+      }
+      if (message.role !== 'assistant') return;
+      const text = messageText(message);
+      const drafts = draftsFromLiveMessage(message);
+      const streaming = message.status === 'streaming';
+      noteThinkingProgress(message, Boolean(text || drafts.length));
+      // Until the reply has content, the thinking status stands in for it.
+      if (streaming && !text && !drafts.length) return;
+      const key = message.id ? `live:${message.id}` : `live:${index}:assistant`;
+      if (state.assistant.thoughtMs[message.id]) {
+        specs.push(thoughtSpec(`${key}:thought`, state.assistant.thoughtMs[message.id]));
+      }
+      specs.push(assistantBubbleSpec(key, {
+        role: 'assistant',
+        html: renderMarkdown(text) || (drafts.length || streaming ? '' : assistantTypingHtml()),
+        drafts,
+        streaming,
+        markdown: text,
+      }));
+    });
+
+    if (state.assistant.quickThoughtMs && !state.assistant.thinkingSince) {
+      specs.push(thoughtSpec('quick-thought', state.assistant.quickThoughtMs));
     }
-    container.appendChild(row);
   }
 
-  // Live (this page load) turns from OctavusChat.
-  for (const m of liveMessages) {
-    if (m.role === 'user') {
-      const text = messageText(m) || m.content || '';
-      container.appendChild(makeBubble('user', escapeHtml(text)));
-    } else if (m.role === 'assistant') {
-      const text = messageText(m);
-      const drafts = draftsFromLiveMessage(m);
-      const streaming = m.status === 'streaming';
-      noteThinkingProgress(m, Boolean(text || drafts.length));
-      // Until the reply has content, the thinking row stands in for it.
-      if (streaming && !text && !drafts.length) continue;
-      if (state.assistant.thoughtMs[m.id]) container.appendChild(thoughtLine(state.assistant.thoughtMs[m.id]));
-      const row = makeBubble(
-        'ai',
-        renderMarkdown(text) || (drafts.length || streaming
-          ? ''
-          : '<span class="assistant__typing" aria-label="Thinking"><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span></span>'),
-      );
-      for (const draft of drafts) appendDraftCard(row, draft, { streaming });
-      if (!streaming) appendFenceInsertFallback(row, text);
-      container.appendChild(row);
-    }
-  }
-
-  if (state.assistant.quickThoughtMs && !state.assistant.thinkingSince) {
-    container.appendChild(thoughtLine(state.assistant.quickThoughtMs));
-  }
+  reconcileAssistantLog(container, specs);
   updateAssistantThinking();
   const scroller = els.assistantContent || container;
   scroller.scrollTop = scroller.scrollHeight;
@@ -2730,18 +2852,20 @@ function updateAssistantThinking() {
   // A chat stream that has started answering is no longer "thinking".
   const thinking = busy && (state.assistant.quickActionBusy || Boolean(state.assistant.thinkingSince));
   const el = thinkingIndicator();
+  const log = els.assistantMessages;
   if (thinking) {
     el.querySelector('.assistant__status-label').textContent = state.assistant.quickActionBusy && state.assistant.chat?.status !== 'streaming'
       ? t('Working…')
       : t('Thinking…');
-    if (el.parentElement !== els.assistantMessages || el.nextSibling) els.assistantMessages.appendChild(el);
+    // The header has no status region. Keep this status beside the log so
+    // aria-busy on the log does not wrap it.
+    if (log?.parentElement && (el.parentElement !== log.parentElement || el.previousElementSibling !== log)) {
+      log.insertAdjacentElement('afterend', el);
+    }
   } else if (el.parentElement) {
     el.remove();
   }
-  // Limit aria-busy to the message log so the status live region in the header can announce.
-  if (els.assistantMessages) {
-    els.assistantMessages.setAttribute('aria-busy', busy ? 'true' : 'false');
-  }
+  if (log) log.setAttribute('aria-busy', busy ? 'true' : 'false');
 }
 
 /** Refresh thinking, clear, and Send when busy state flips (e.g. quick actions). */
@@ -2866,62 +2990,101 @@ function activeSuggestedReplies() {
 const CYCLE_PREV_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 18L9 12L15 6"/></svg>';
 const CYCLE_NEXT_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18L15 12L9 6"/></svg>';
 
-// One suggestion at a time; ‹ › cycle (wrapping), Insert drops it in the reply.
-function renderSuggestedRepliesCard(pack) {
+function suggestedReplyPosition(pack) {
   const total = pack.replies.length;
   const index = ((pack.index ?? 0) % total + total) % total;
-  const row = document.createElement('div');
-  row.className = 'assistant__row assistant__row--ai';
-  const turn = document.createElement('div');
-  turn.className = 'assistant__turn';
-  const card = document.createElement('article');
-  card.className = 'assistant__draft assistant__suggestions';
-  card.setAttribute('aria-label', t('Suggested replies'));
+  return { total, index };
+}
 
-  const label = document.createElement('div');
-  label.className = 'body-xsmall assistant__draft-label';
-  label.textContent = t('Suggested replies');
-  card.appendChild(label);
+function updateSuggestedReplyCard(pack) {
+  const row = document.getElementById('assistantSuggestions');
+  if (!row || !pack?.replies?.length) return;
+  const { total, index } = suggestedReplyPosition(pack);
+  const body = row.querySelector('.assistant__suggestion-body');
+  if (body) body.textContent = String(pack.replies[index] ?? '').trim();
+  const count = row.querySelector('.assistant__cycle-count');
+  if (count) {
+    count.textContent = t('{current} of {total}')
+      .replace('{current}', String(index + 1))
+      .replace('{total}', String(total));
+  }
+  for (const button of row.querySelectorAll('.assistant__cycle')) {
+    button.disabled = total < 2;
+  }
+}
 
-  const body = document.createElement('div');
-  body.className = 'assistant__suggestion-body body-small';
-  body.setAttribute('aria-live', 'polite');
-  body.textContent = String(pack.replies[index] ?? '').trim();
-  card.appendChild(body);
+function stepSuggestedReply(delta) {
+  const pack = activeSuggestedReplies();
+  if (!pack?.replies?.length) return;
+  const { total, index } = suggestedReplyPosition(pack);
+  pack.index = (index + delta + total) % total;
+  updateSuggestedReplyCard(pack);
+  document.getElementById('assistantSuggestions')
+    ?.querySelector(`.assistant__cycle[data-step="${delta}"]`)
+    ?.focus();
+}
 
-  const actions = document.createElement('div');
-  actions.className = 'assistant__draft-actions';
-  const step = (delta) => {
-    pack.index = (index + delta + total) % total;
-    renderQuickResultPanel();
-    els.assistantQuickResult?.querySelector(`.assistant__cycle[data-step="${delta}"]`)?.focus();
-  };
-  const cycleBtn = (delta, icon, text) => {
-    const btn = document.createElement('button');
-    btn.type = 'button';
-    btn.className = 'icon-button icon-button--ghost assistant__cycle';
-    btn.dataset.step = String(delta);
-    btn.innerHTML = icon;
-    btn.setAttribute('aria-label', text);
-    btn.title = text;
-    btn.disabled = total < 2;
-    btn.addEventListener('click', () => step(delta));
-    return btn;
-  };
-  const count = document.createElement('span');
-  count.className = 'assistant__cycle-count';
-  count.textContent = t('{current} of {total}').replace('{current}', String(index + 1)).replace('{total}', String(total));
-  const insert = document.createElement('button');
-  insert.type = 'button';
-  insert.className = 'button button-text-primary button-xsmall assistant__insert';
-  insert.textContent = t('Insert');
-  insert.setAttribute('aria-label', t('Insert into composer'));
-  insert.addEventListener('click', () => void applySuggestedReply(pack.replies[index]));
-  actions.append(cycleBtn(-1, CYCLE_PREV_ICON, t('Previous suggestion')), count, cycleBtn(1, CYCLE_NEXT_ICON, t('Next suggestion')), insert);
-  card.appendChild(actions);
+// One suggestion at a time; ‹ › cycle (wrapping), Insert drops it in the reply.
+// The card stays in place so cycling updates the same live node.
+function renderSuggestedRepliesCard(pack) {
+  let row = document.getElementById('assistantSuggestions');
+  if (!row) {
+    row = document.createElement('div');
+    row.id = 'assistantSuggestions';
+    row.className = 'assistant__row assistant__row--ai';
+    const turn = document.createElement('div');
+    turn.className = 'assistant__turn';
+    const card = document.createElement('article');
+    card.className = 'assistant__draft assistant__suggestions';
+    card.setAttribute('aria-label', t('Suggested replies'));
 
-  turn.appendChild(card);
-  row.appendChild(turn);
+    const label = document.createElement('div');
+    label.className = 'body-xsmall assistant__draft-label';
+    label.textContent = t('Suggested replies');
+    card.appendChild(label);
+
+    const body = document.createElement('div');
+    body.className = 'assistant__suggestion-body body-small';
+    body.setAttribute('aria-live', 'polite');
+    card.appendChild(body);
+
+    const actions = document.createElement('div');
+    actions.className = 'assistant__draft-actions';
+    const cycleBtn = (delta, icon, text) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'icon-button icon-button--ghost assistant__cycle';
+      btn.dataset.step = String(delta);
+      btn.innerHTML = icon;
+      btn.setAttribute('aria-label', text);
+      btn.title = text;
+      btn.addEventListener('click', () => stepSuggestedReply(delta));
+      return btn;
+    };
+    const count = document.createElement('span');
+    count.className = 'assistant__cycle-count';
+    const insert = document.createElement('button');
+    insert.type = 'button';
+    insert.className = 'button button-text-primary button-xsmall assistant__insert';
+    insert.textContent = t('Insert');
+    insert.setAttribute('aria-label', t('Insert into composer'));
+    insert.addEventListener('click', () => {
+      const current = activeSuggestedReplies();
+      if (!current?.replies?.length) return;
+      const { index } = suggestedReplyPosition(current);
+      void applySuggestedReply(current.replies[index]);
+    });
+    actions.append(
+      cycleBtn(-1, CYCLE_PREV_ICON, t('Previous suggestion')),
+      count,
+      cycleBtn(1, CYCLE_NEXT_ICON, t('Next suggestion')),
+      insert,
+    );
+    card.appendChild(actions);
+    turn.appendChild(card);
+    row.appendChild(turn);
+  }
+  updateSuggestedReplyCard(pack);
   return row;
 }
 
@@ -2933,18 +3096,26 @@ function quickDraftBelongsToActiveThread(draft) {
 function renderQuickResultPanel() {
   const host = els.assistantQuickResult;
   if (!host) return;
-  host.innerHTML = '';
   const draft = state.assistant.quickDraft;
   const ranking = String(state.assistant.triageRanking ?? '').trim();
   const showDraft = draft && quickDraftBelongsToActiveThread(draft);
   const suggestions = activeSuggestedReplies();
   if (!showDraft && !ranking && !suggestions) {
+    host.replaceChildren();
     host.hidden = true;
     return;
   }
   host.hidden = false;
+  for (const child of [...host.children]) {
+    if (child.id !== 'assistantSuggestions') child.remove();
+  }
 
-  if (suggestions) host.appendChild(renderSuggestedRepliesCard(suggestions));
+  if (suggestions) {
+    const card = renderSuggestedRepliesCard(suggestions);
+    if (card.parentElement !== host) host.insertBefore(card, host.firstChild);
+  } else {
+    document.getElementById('assistantSuggestions')?.remove();
+  }
 
   if (ranking) {
     const row = document.createElement('div');
@@ -3502,6 +3673,17 @@ async function initAssistant() {
     updateAssistantThinking();
   });
 
+  bindAssistantComposer();
+  setAssistantEnabled(true);
+  renderAssistantChips();
+  renderQuickResultPanel();
+}
+
+let assistantComposerBound = false;
+
+function bindAssistantComposer() {
+  if (assistantComposerBound || !els.assistantInput || !els.assistantSendBtn) return;
+  assistantComposerBound = true;
   els.assistantInput.addEventListener('input', () => {
     els.assistantSendBtn.disabled = !els.assistantInput.value.trim()
       || assistantIsBusy();
@@ -3513,9 +3695,6 @@ async function initAssistant() {
     }
   });
   els.assistantSendBtn.addEventListener('click', sendAssistant);
-  setAssistantEnabled(true);
-  renderAssistantChips();
-  renderQuickResultPanel();
 }
 
 async function sendAssistant() {
@@ -3623,5 +3802,10 @@ export function mailAppTestHooks() {
     insertProposedDraft,
     thinkingIndicator,
     resetThinkingIndicator,
+    renderAssistant,
+    renderQuickResultPanel,
+    updateAssistantThinking,
+    bindAssistantComposer,
+    initMailtoCompose,
   };
 }
