@@ -492,7 +492,9 @@ body {
 .mail-item__container {
   display: flex;
   flex-direction: column;
-  gap: var(--UI-Spacing-spacing-s);
+  /* Space under the row, then a border instead of an hr between messages. */
+  padding-bottom: var(--UI-Spacing-spacing-s);
+  border-bottom: 1px solid var(--Colors-Border-Subtle);
 }
 
 /* Figma "Badge Marker" (small): 6px dot + 3px 15% ring, inside the row,
@@ -575,17 +577,6 @@ body {
   font-size: var(--Fonts-Body-Default-xs);
   font-weight: 400;
   color: var(--Colors-Text-Body-Medium);
-}
-
-/* Figma "hrule" (padding 0 12px around the line): inset so the line starts
-   and ends with the row's content rather than its rounded hover box. */
-.mail-list__rule {
-  flex: 0 0 auto;
-  width: auto;
-  height: 0;
-  margin: 0 var(--UI-Spacing-spacing-mxs);
-  border: none;
-  border-top: 1px solid var(--Colors-Border-Subtle);
 }
 
 .mail-list__empty {
@@ -1036,9 +1027,29 @@ body {
   color: var(--Colors-Primary-Default);
 }
 
-.email__body a.js-compose-mailto,
-.assistant__msg a.js-compose-mailto {
+.email__body .js-compose-mailto,
+.assistant__msg .js-compose-mailto {
+  display: inline;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-skip-ink: none;
   cursor: pointer;
+}
+
+.email__body .js-compose-mailto:hover,
+.assistant__msg .js-compose-mailto:hover {
+  color: var(--Colors-Primary-Default);
+}
+
+.email__body .js-compose-mailto:focus-visible,
+.assistant__msg .js-compose-mailto:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 2px;
 }
 
 /* ── Composer (Figma "Replying" 470:12849) ──
