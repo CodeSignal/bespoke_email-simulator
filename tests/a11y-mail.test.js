@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /**
  * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, S7, S3,
- * S2, S4, and Shift+Tab in the recipient combobox).
+ * S2, S4, M4, M6, M9, M2, and Shift+Tab in the recipient combobox).
  *
  * public/app.js reads the document while the module loads, so this mounts
  * public/index.html first and imports the module after that. Vitest skips
@@ -12,6 +12,23 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { computeAccessibleName } from 'dom-accessibility-api';
+import { resolveDocumentLanguage } from '../lib/helpers.js';
+
+const { riveOptions } = vi.hoisted(() => ({ riveOptions: [] }));
+
+vi.mock('@rive-app/canvas', () => ({
+  RuntimeLoader: {
+    setWasmUrl() {},
+  },
+  Rive: class {
+    constructor(options) {
+      riveOptions.push(options);
+      this.viewModelInstance = null;
+    }
+
+    resizeDrawingSurfaceToCanvas() {}
+  },
+}));
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const strings = JSON.parse(readFileSync(join(root, 'i18n/en.json'), 'utf8')).strings;
@@ -35,6 +52,9 @@ function installPage() {
 }
 
 installPage();
+const appStyle = document.createElement('style');
+appStyle.textContent = readFileSync(join(root, 'public/app.css'), 'utf8');
+document.head.appendChild(appStyle);
 const { mailAppTestHooks } = await import('../public/app.js');
 const mail = mailAppTestHooks();
 mail.initRecipientPickers();
@@ -135,6 +155,9 @@ async function resetMailbox() {
   state.recipientActiveIndex = 0;
   state.attachments = [];
   statusEl().textContent = '';
+  const composerStatus = document.getElementById('composerStatus');
+  if (composerStatus) composerStatus.textContent = '';
+  document.documentElement.lang = 'en';
   mail.renderShell();
   // Drop an "Opened:" callback queued by the previous test.
   await nextFrame();
@@ -761,5 +784,282 @@ describe('S4 skip to mail', () => {
     expect(focusable.includes(main)).toBe(false);
     expect(focusable[0].getAttribute('href')).toBe('#mailMain');
     expect(focusable[1]).not.toBe(main);
+  });
+});
+
+describe('M4 document language', () => {
+  const en = JSON.parse(readFileSync(join(root, 'i18n/en.json'), 'utf8'));
+  const spanish = {
+    languageNames: ['es', 'spanish', 'español'],
+    strings: { Mail: 'Correo' },
+  };
+
+  it('follows the resolved scenario language, including a non-English catalog', () => {
+    document.documentElement.lang = 'fr';
+    mail.state.config.documentLanguage = resolveDocumentLanguage('English', [en]);
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('en');
+
+    mail.state.config.documentLanguage = resolveDocumentLanguage('Spanish', [en, spanish]);
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('es');
+  });
+
+  it('accepts a catalog tag that uses a BCP 47 singleton subtag', () => {
+    const extension = {
+      languageNames: ['es-u-ca-gregory', 'spanish'],
+      strings: { Mail: 'Correo' },
+    };
+    const privateUse = {
+      languageNames: ['es-x-custom', 'spanish'],
+      strings: {},
+    };
+    const malformed = {
+      languageNames: ['es-u', 'es-u-c', 'english', 'spanish'],
+      strings: {},
+    };
+
+    document.documentElement.lang = 'en';
+    const tag = resolveDocumentLanguage('Spanish', [en, extension]);
+    expect(tag).toBe('es-u-ca-gregory');
+    mail.state.config.documentLanguage = tag;
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('es-u-ca-gregory');
+
+    expect(resolveDocumentLanguage('Spanish', [privateUse])).toBe('es-x-custom');
+    expect(resolveDocumentLanguage('Spanish', [malformed])).toBe('');
+  });
+
+  it('does not clear lang when the catalog does not identify a language', () => {
+    document.documentElement.lang = 'en';
+    const unnamed = { languageNames: ['spanish'], strings: { Mail: 'Correo' } };
+    expect(resolveDocumentLanguage('Spanish', [unnamed])).toBe('');
+    expect(resolveDocumentLanguage('Spanish', [])).toBe('');
+    expect(resolveDocumentLanguage('', [en])).toBe('');
+
+    mail.state.config.documentLanguage = resolveDocumentLanguage('Spanish', [unnamed]);
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('en');
+
+    mail.state.config.documentLanguage = 'spanish';
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('en');
+
+    delete mail.state.config.documentLanguage;
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('en');
+  });
+});
+
+describe('M6 composer status', () => {
+  const sent = 'Mensaje enviado';
+  const failed = 'No se pudo enviar';
+  const rejected = 'Tipo de archivo no permitido';
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  function composerStatusEl() {
+    return document.getElementById('composerStatus');
+  }
+
+  function useStatusStrings() {
+    mail.state.config.strings = {
+      ...strings,
+      'Message sent': sent,
+      'Send failed': failed,
+      'File type not allowed': rejected,
+      'Sending…': 'Enviando…',
+    };
+  }
+
+  function expectComposerAnnouncement(text) {
+    const status = composerStatusEl();
+    const pane = document.getElementById('readingPane');
+    const log = document.getElementById('assistantMessages');
+    expect(status).toBeTruthy();
+    expect(status.getAttribute('role')).toBe('status');
+    expect(status.textContent).toBe(text);
+    expect(pane.contains(status)).toBe(false);
+    expect(log.contains(status)).toBe(false);
+    expect(pane.hasAttribute('aria-live')).toBe(false);
+    expect(status).not.toBe(statusEl());
+    expect(statusEl().textContent).toBe(`${strings.Opened}: Vendor quote`);
+  }
+
+  async function openQuote() {
+    clickThread('thread-quote');
+    await nextFrame();
+    expect(statusEl().textContent).toBe(`${strings.Opened}: Vendor quote`);
+  }
+
+  async function prepareSend() {
+    await openQuote();
+    useStatusStrings();
+    mail.state.session.sessionId = 'session-1';
+    mail.state.recipients.to = [DANA];
+    document.getElementById('composeSubject').value = 'Quote reply';
+    document.getElementById('sendBtn').disabled = false;
+  }
+
+  it('announces a successful send outside the reading pane and the assistant log', async () => {
+    await prepareSend();
+    vi.stubGlobal('fetch', vi.fn(async (url) => {
+      if (String(url).includes('/api/email/send')) {
+        return {
+          ok: true,
+          json: async () => ({
+            email: { id: 'email-sent' },
+            thread: mail.state.session.threads[0],
+            responders: [],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    }));
+
+    await mail.sendEmail();
+    await nextFrame();
+
+    expectComposerAnnouncement(sent);
+  });
+
+  it('announces a failed send and keeps the opened thread announcement', async () => {
+    await prepareSend();
+    vi.stubGlobal('fetch', vi.fn(async () => ({
+      ok: false,
+      status: 500,
+      json: async () => ({}),
+    })));
+
+    await mail.sendEmail();
+    await nextFrame();
+
+    expectComposerAnnouncement(failed);
+    expect(document.getElementById('sendBtn').textContent).toBe(strings.Send);
+  });
+
+  it('announces a rejected attachment without replacing the opened thread status', async () => {
+    await openQuote();
+    useStatusStrings();
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {};
+
+    await mail.handleComposerFiles([new File(['notes'], 'notes.exe', { type: 'application/octet-stream' })]);
+    await nextFrame();
+
+    expectComposerAnnouncement(rejected);
+  });
+});
+
+describe('M9 recipient remove target', () => {
+  it('shows a remove control of at least 24 by 24 without hover', () => {
+    showComposer();
+    mail.state.recipients.to = [DANA];
+    mail.renderRecipientPickers();
+
+    const remove = document.querySelector('#composeToChips .recipient-picker__remove');
+    const style = getComputedStyle(remove);
+    expect(remove.matches(':hover')).toBe(false);
+    expect(Number.parseFloat(style.opacity)).toBeGreaterThan(0);
+    expect(Number.parseFloat(style.width)).toBeGreaterThanOrEqual(24);
+    expect(Number.parseFloat(style.height)).toBeGreaterThanOrEqual(24);
+    expect(computeAccessibleName(remove)).toBe(`${strings.Remove} Dana Reyes`);
+  });
+});
+
+describe('M2 reduced motion', () => {
+  let realMatchMedia;
+
+  beforeEach(() => {
+    realMatchMedia = window.matchMedia.bind(window);
+    riveOptions.length = 0;
+    mail.resetThinkingIndicator();
+  });
+
+  afterEach(() => {
+    window.matchMedia = realMatchMedia;
+    mail.resetThinkingIndicator();
+    vi.restoreAllMocks();
+  });
+
+  function preferReducedMotion(reduce) {
+    window.matchMedia = (query) => {
+      const media = String(query);
+      if (media.includes('prefers-reduced-motion')) {
+        return {
+          matches: reduce,
+          media,
+          onchange: null,
+          addEventListener() {},
+          removeEventListener() {},
+          addListener() {},
+          removeListener() {},
+          dispatchEvent() { return false; },
+        };
+      }
+      return realMatchMedia(media);
+    };
+  }
+
+  async function scrollBehaviors(run) {
+    const seen = [];
+    const spy = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation((options) => {
+      seen.push(options);
+    });
+    try {
+      await run();
+    } finally {
+      spy.mockRestore();
+    }
+    return seen.filter((options) => options && Object.hasOwn(options, 'behavior'));
+  }
+
+  async function appScrolls() {
+    mail.selectThread('thread-quote');
+    await nextFrame();
+    const reply = await scrollBehaviors(() => {
+      mail.startReply('reply');
+    });
+    const arrive = await scrollBehaviors(async () => {
+      mail.scrollToEmail('email-quote');
+      await nextFrame();
+    });
+    mail.state.view = 'list';
+    mail.state.replying = null;
+    mail.state.composingNew = false;
+    mail.state.activeThreadId = null;
+    const inserted = await scrollBehaviors(() => mail.insertProposedDraft({
+      to: [DANA],
+      cc: [],
+      subject: 'Quote',
+      body: 'Please send the revised quote.',
+    }));
+    return [...reply, ...arrive, ...inserted];
+  }
+
+  it('uses instant scroll and does not autoplay thinking when motion is reduced', async () => {
+    preferReducedMotion(true);
+    const scrolls = await appScrolls();
+    expect(scrolls.length).toBeGreaterThan(0);
+    expect(scrolls.every((options) => options.behavior === 'auto')).toBe(true);
+
+    mail.resetThinkingIndicator();
+    riveOptions.length = 0;
+    mail.thinkingIndicator();
+    expect(riveOptions.at(-1)?.autoplay).toBe(false);
+  });
+
+  it('keeps smooth scroll and thinking autoplay without reduced motion', async () => {
+    preferReducedMotion(false);
+    const scrolls = await appScrolls();
+    expect(scrolls.length).toBeGreaterThan(0);
+    expect(scrolls.every((options) => options.behavior === 'smooth')).toBe(true);
+
+    mail.resetThinkingIndicator();
+    riveOptions.length = 0;
+    mail.thinkingIndicator();
+    expect(riveOptions.at(-1)?.autoplay).toBe(true);
   });
 });

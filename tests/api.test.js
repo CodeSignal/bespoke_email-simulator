@@ -41,6 +41,7 @@ describe('config & scenario routes', () => {
     expect(res.body.rubricHints).toBeUndefined();
     expect(res.body.rubric).toBeUndefined();
     expect(res.body.strings).toBeTypeOf('object');
+    expect(res.body.documentLanguage).toBe('en');
     expect(res.body.characters).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

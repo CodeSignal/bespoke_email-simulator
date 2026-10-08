@@ -1,7 +1,7 @@
-// M1 (button focus) and M8 (recipient meta contrast).
-// Loads the design-system button CSS and color tokens into happy-dom and
-// reads the computed result. Colors come from those tokens, not from the
-// audit's old hex values.
+// M1 (button focus), M8 (recipient meta contrast), M10 (split divider focus),
+// and the M2 arrival animation. Loads the design-system CSS and color tokens
+// into happy-dom and reads the computed result. Colors come from those tokens,
+// not from the audit's old hex values.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,14 +13,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const STYLES = [
   'design-system/colors/colors.css',
   'design-system/components/button/button.css',
+  'design-system/components/split-panel/split-panel.css',
   'public/global.css',
   'public/app.css',
 ];
 
-function withScheme(scheme, run) {
+function withDevice(device, run) {
   const window = new Window({
     url: 'http://localhost:3000/',
-    settings: { device: { prefersColorScheme: scheme } },
+    settings: { device },
   });
   const { document } = window;
   const style = document.createElement('style');
@@ -31,6 +32,17 @@ function withScheme(scheme, run) {
   } finally {
     window.happyDOM.close();
   }
+}
+
+function withScheme(scheme, run) {
+  return withDevice({ prefersColorScheme: scheme }, run);
+}
+
+function withMotion(reduce, run) {
+  return withDevice({
+    prefersColorScheme: 'light',
+    prefersReducedMotion: reduce ? 'reduce' : 'no-preference',
+  }, run);
 }
 
 function styleRules(document) {
@@ -320,5 +332,94 @@ describe('M8 recipient meta contrast', () => {
     const ratios = metaContrast('light');
     expect(ratios.active).toBeGreaterThanOrEqual(4.5);
     expect(ratios.inactive).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+function specificity(selector) {
+  const ids = selector.match(/#[\w-]+/g)?.length ?? 0;
+  const pseudos = selector.match(/::[\w-]+|:[\w-]+(?:\([^)]*\))?/g)?.length ?? 0;
+  const classes = selector.match(/\.[\w-]+/g)?.length ?? 0;
+  const types = selector
+    .replace(/#[\w-]+/g, ' ')
+    .replace(/::[\w-]+|:[\w-]+(?:\([^)]*\))?/g, ' ')
+    .replace(/\.[\w-]+/g, ' ')
+    .match(/[a-zA-Z][\w-]*/g)?.length ?? 0;
+  return [ids, classes + pseudos, types];
+}
+
+function moreSpecific(left, right) {
+  for (let i = 0; i < 3; i += 1) {
+    if (left[i] !== right[i]) return left[i] > right[i];
+  }
+  return false;
+}
+
+function declaredBackground(document, selector) {
+  const matches = styleRules(document).filter((rule) => selectorList(rule.selectorText).includes(selector));
+  const rule = matches.at(-1);
+  if (!rule) return '';
+  return rule.style.background || rule.style.backgroundColor || '';
+}
+
+function resolvedBackground(window, value) {
+  const probe = window.document.createElement('div');
+  window.document.body.appendChild(probe);
+  probe.style.background = value;
+  return window.getComputedStyle(probe).backgroundColor;
+}
+
+describe('M10 split divider focus', () => {
+  const focusLine = '#mailSplit .split-panel-divider:focus-visible::after';
+  const hoverLine = '#mailSplit .split-panel-divider:hover::after';
+  const restLine = '#mailSplit .split-panel-divider::after';
+  const focusHandle = '#mailSplit .split-panel-divider:focus-visible .split-panel-divider-handle';
+  const restHandle = '.split-panel-divider-handle';
+
+  it('matches the hover line and keeps the dark-mode handle at 3:1 on the seam', () => {
+    withScheme('dark', (window) => {
+      const { document } = window;
+      const hover = declaredBackground(document, hoverLine);
+      const focus = declaredBackground(document, focusLine);
+      const handle = declaredBackground(document, focusHandle);
+
+      expect(hover).toBeTruthy();
+      expect(hover).not.toBe('transparent');
+      expect(focus).toBe(hover);
+      expect(moreSpecific(specificity(focusLine), specificity(restLine))).toBe(true);
+      expect(moreSpecific(specificity(focusHandle), specificity(restHandle))).toBe(true);
+
+      const seamHost = document.createElement('div');
+      seamHost.className = 'mail-app';
+      document.body.appendChild(seamHost);
+      const seam = window.getComputedStyle(seamHost).backgroundColor;
+      const lineColor = resolvedBackground(window, focus);
+      const handleColor = resolvedBackground(window, handle);
+
+      expect(parseColor(lineColor).a).toBeGreaterThan(0);
+      expect(lineColor).toBe(resolvedBackground(window, hover));
+      expect(contrast(painted(handleColor, seam), parseColor(seam))).toBeGreaterThanOrEqual(3);
+    });
+  });
+});
+
+describe('M2 arrival animation', () => {
+  function arrival(reduce) {
+    return withMotion(reduce, (window) => {
+      const el = window.document.createElement('article');
+      el.className = 'email email--arrive';
+      window.document.body.appendChild(el);
+      const style = window.getComputedStyle(el);
+      return `${style.animationName} ${style.animation}`.trim();
+    });
+  }
+
+  it('does not run when reduced motion is requested', () => {
+    const value = arrival(true);
+    expect(value).not.toContain('email-arrive');
+    expect(value).toMatch(/none/);
+  });
+
+  it('still runs when reduced motion is not requested', () => {
+    expect(arrival(false)).toContain('email-arrive');
   });
 });
