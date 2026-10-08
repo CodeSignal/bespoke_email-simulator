@@ -139,12 +139,76 @@ function focusIndicator(style) {
   return null;
 }
 
-function button(document, variant) {
+function button(document, variant, { focusClass = true } = {}) {
   const el = document.createElement('button');
-  el.className = `button button-${variant} focus`;
+  el.className = `button button-${variant}${focusClass ? ' focus' : ''}`;
   el.textContent = variant;
   document.body.appendChild(el);
   return el;
+}
+
+function ruleBlocks(css) {
+  const source = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const blocks = [];
+  let cursor = 0;
+  while (cursor < source.length) {
+    const open = source.indexOf('{', cursor);
+    if (open === -1) break;
+    const prelude = source.slice(cursor, open).trim();
+    let depth = 1;
+    let end = open + 1;
+    while (end < source.length && depth > 0) {
+      if (source[end] === '{') depth += 1;
+      else if (source[end] === '}') depth -= 1;
+      end += 1;
+    }
+    if (prelude.startsWith('@')) {
+      cursor = open + 1;
+      continue;
+    }
+    if (prelude) blocks.push({ prelude, body: source.slice(open + 1, end - 1) });
+    cursor = end;
+  }
+  return blocks;
+}
+
+function blocksFor(css, selector) {
+  return ruleBlocks(css).filter((rule) => selectorList(rule.prelude).includes(selector));
+}
+
+// happy-dom matches :focus and :focus-visible, but getComputedStyle skips those
+// pseudos. The declaration text is what those selectors actually set.
+function declarationIndicator(body) {
+  const outline = body.match(/(?:^|[;{}])\s*outline\s*:\s*([^;]+)/);
+  if (outline) {
+    const value = outline[1].trim();
+    const width = value.match(/(\d*\.?\d+)px/);
+    const color = value
+      .replace(/(\d*\.?\d+)px/g, '')
+      .replace(/\b(solid|dashed|dotted|double|groove|ridge|inset|outset|none)\b/g, '')
+      .trim();
+    if (width && Number(width[1]) >= 2 && !/\bnone\b/.test(value) && color && color !== 'transparent') {
+      return { kind: 'outline', size: Number(width[1]), color };
+    }
+  }
+  const shadow = body.match(/(?:^|[;{}])\s*box-shadow\s*:\s*([^;]+)/);
+  if (!shadow) return null;
+  const value = shadow[1].trim();
+  const color = value.match(/rgba?\([^)]+\)|#[0-9a-f]{3,8}|var\([^)]+\)/i)?.[0] ?? '';
+  const lengths = [...value.replace(color, '').matchAll(/-?\d*\.?\d+/g)].map((match) => Number.parseFloat(match[0]));
+  const spread = lengths.length >= 4 ? lengths[3] : 0;
+  if (spread >= 2 && color && color !== 'transparent') return { kind: 'box-shadow', size: spread, color };
+  return null;
+}
+
+function expectPseudoIndicator(css, variant, pseudos) {
+  for (const pseudo of pseudos) {
+    const selector = `.button-${variant}${pseudo}`;
+    const indicators = blocksFor(css, selector).map((rule) => declarationIndicator(rule.body)).filter(Boolean);
+    expect(indicators, selector).not.toEqual([]);
+    expect(indicators[0].size, selector).toBeGreaterThanOrEqual(2);
+    expect(indicators[0].color, selector).not.toBe('transparent');
+  }
 }
 
 function recipientOptions(document) {
@@ -211,24 +275,35 @@ describe('M1 button focus', () => {
     });
   });
 
-  it('gives primary, secondary, tertiary, and text buttons a visible .focus indicator', () => {
+  it('gives primary, secondary, tertiary, and text buttons a visible focus indicator', () => {
     withScheme('light', (window) => {
+      const css = window.document.querySelector('style').textContent;
       for (const variant of ['primary', 'secondary', 'tertiary', 'text']) {
         const indicator = focusIndicator(window.getComputedStyle(button(window.document, variant)));
         expect(indicator, `.button-${variant}.focus`).not.toBeNull();
         expect(indicator.size).toBeGreaterThanOrEqual(2);
         expect(opaque(indicator.color)).toBe(true);
+        expectPseudoIndicator(css, variant, [':focus', ':focus-visible']);
       }
+
+      const focused = button(window.document, 'primary', { focusClass: false });
+      focused.focus();
+      expect(focused.classList.contains('focus')).toBe(false);
+      expect(focused.matches(':focus')).toBe(true);
+      expect(focused.matches(':focus-visible')).toBe(true);
+      expectPseudoIndicator(css, 'primary', [':focus', ':focus-visible']);
     });
   });
 
   it('keeps a visible focus indicator on danger and success', () => {
     withScheme('light', (window) => {
+      const css = window.document.querySelector('style').textContent;
       for (const variant of ['danger', 'success']) {
         const indicator = focusIndicator(window.getComputedStyle(button(window.document, variant)));
         expect(indicator, `.button-${variant}.focus`).not.toBeNull();
         expect(indicator.size).toBeGreaterThanOrEqual(2);
         expect(opaque(indicator.color)).toBe(true);
+        expectPseudoIndicator(css, variant, [':focus']);
       }
     });
   });
