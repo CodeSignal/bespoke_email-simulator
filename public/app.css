@@ -155,7 +155,8 @@ body {
   transition: opacity 0.15s ease;
 }
 
-#mailSplit .split-panel-divider:hover::after {
+#mailSplit .split-panel-divider:hover::after,
+#mailSplit .split-panel-divider:focus-visible::after {
   background: var(--Colors-Border-Subtle);
 }
 
@@ -163,6 +164,12 @@ body {
 #mailSplit .split-panel-divider:focus-visible .split-panel-divider-handle,
 #mailSplit .split-panel-divider.dragging .split-panel-divider-handle {
   opacity: 1;
+}
+
+/* Focus uses the same line as hover. Icon-Strong clears 3:1 on the dark seam;
+   the design-system handle is black and does not. */
+#mailSplit .split-panel-divider:focus-visible .split-panel-divider-handle {
+  background: var(--Colors-Icon-Strong);
 }
 
 /* ── Icon button (Figma "Button Icon": 32px, radius 6) ── */
@@ -1227,13 +1234,14 @@ body {
   color: var(--Colors-Text-Body-Strong);
 }
 
-/* Remove control: hidden at rest (matches Figma), shown on hover / focus. */
+/* Always visible at 24×24 so a pointer that cannot hover can still remove a chip. */
 .recipient-picker__remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 0;
-  height: 18px;
+  flex: 0 0 24px;
+  width: 24px;
+  height: 24px;
   margin: 0;
   padding: 0;
   border: none;
@@ -1241,14 +1249,6 @@ body {
   background: transparent;
   color: var(--Colors-Icon-Neutral-Default);
   cursor: pointer;
-  overflow: hidden;
-  opacity: 0;
-  transition: opacity 0.15s ease;
-}
-
-.recipient-picker__chip:hover .recipient-picker__remove,
-.recipient-picker__remove:focus-visible {
-  width: 18px;
   opacity: 1;
 }
 
@@ -2079,6 +2079,12 @@ body {
   }
   to {
     box-shadow: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .email--arrive {
+    animation: none;
   }
 }
 

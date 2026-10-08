@@ -49,6 +49,7 @@ import {
   PROPOSE_DRAFT_TOOL,
 } from '../lib/provenance.js';
 import { resolveQuickActionChips, QUICK_ACTION_SOURCE } from '../lib/quick-actions.js';
+import { isDocumentLanguageTag } from '../lib/document-language.js';
 import { marked } from 'marked';
 import { markedHighlight } from 'marked-highlight';
 import hljs from 'highlight.js/lib/core';
@@ -184,6 +185,7 @@ const els = {
   toolbarComposeLabel: document.getElementById('toolbarComposeLabel'),
   readingPane: document.getElementById('readingPane'),
   mailViewStatus: document.getElementById('mailViewStatus'),
+  composerStatus: document.getElementById('composerStatus'),
   composer: document.getElementById('composer'),
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
@@ -1600,6 +1602,26 @@ function clearOpenedThreadStatus() {
   if (els.mailViewStatus) els.mailViewStatus.textContent = '';
 }
 
+// Composer outcomes go here, not into #mailViewStatus, so an "Opened" thread
+// announcement stays put. The reading pane is not a live region.
+function announceComposerStatus(message) {
+  const status = els.composerStatus;
+  const text = String(message ?? '');
+  if (!status || !text) return;
+  status.textContent = '';
+  requestAnimationFrame(() => {
+    status.textContent = text;
+  });
+}
+
+function prefersReducedMotion() {
+  return window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches === true;
+}
+
+function viewScrollBehavior() {
+  return prefersReducedMotion() ? 'auto' : 'smooth';
+}
+
 function focusThreadHeading() {
   els.mailToolbarTitle?.focus({ preventScroll: true });
 }
@@ -1618,7 +1640,7 @@ function startReply(mode, emailId = null) {
   if (emailId) state.selectedEmailId = emailId;
   applyThreadComposer(state.activeThreadId, mode);
   renderShell();
-  els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  els.composer?.scrollIntoView({ behavior: viewScrollBehavior(), block: 'end' });
   state.editor?.commands.focus();
 }
 
@@ -1774,6 +1796,9 @@ function initSkipToMail() {
 function applyScenarioChrome() {
   const title = state.config?.title || t('Mail');
   document.title = title;
+  // Keep the document's existing lang when the catalog has no language tag.
+  const language = String(state.config?.documentLanguage ?? '').trim();
+  if (isDocumentLanguageTag(language)) document.documentElement.lang = language;
   if (els.appTitle) els.appTitle.textContent = title;
   if (els.skipToMail) els.skipToMail.textContent = t('Skip to mail');
   if (els.composeToLabel) els.composeToLabel.textContent = t('To');
@@ -1979,6 +2004,7 @@ async function handleComposerFiles(files) {
   for (const file of files) {
     if (!isAllowedFile(file)) {
       console.warn('[CosmoMail] rejected disallowed file type:', file.name);
+      announceComposerStatus(t('File type not allowed'));
       continue;
     }
     accepted.push(file);
@@ -2052,7 +2078,7 @@ function scrollToEmail(emailId) {
   requestAnimationFrame(() => {
     const el = els.readingPane.querySelector(`[data-email-id="${escapeSelector(emailId)}"]`);
     if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    el.scrollIntoView({ behavior: viewScrollBehavior(), block: 'nearest' });
     el.classList.remove('email--arrive');
     void el.offsetWidth;
     el.classList.add('email--arrive');
@@ -2221,7 +2247,7 @@ async function sendEmail() {
   state.draftSaveTimer = null;
 
   els.sendBtn.disabled = true;
-  els.sendBtn.textContent = 'Sending…';
+  els.sendBtn.textContent = t('Sending…');
   try {
     const sentScope = draftScope() || { scope: 'new' };
     const composingNew = sentScope.scope === 'new';
@@ -2276,10 +2302,12 @@ async function sendEmail() {
     setEditorMarkdown('');
     clearAttachments();
     renderShell();
+    announceComposerStatus(t('Message sent'));
 
     void collectCharacterReplies(responders, email, thread.id);
   } catch (err) {
     console.error('[CosmoMail] send failed:', err);
+    announceComposerStatus(t('Send failed'));
   } finally {
     els.sendBtn.textContent = t('Send');
     updateSendEnabled();
@@ -2638,7 +2666,7 @@ function thinkingIndicator() {
     thinkingRive = new Rive({
       src: '/animations/thinking.riv',
       canvas,
-      autoplay: true,
+      autoplay: !prefersReducedMotion(),
       autoBind: true,
       stateMachine: 'State Machine 1',
       onLoad: () => {
@@ -2659,6 +2687,12 @@ function thinkingIndicator() {
     canvas.classList.add('is-fallback');
   }
   return thinkingEl;
+}
+
+function resetThinkingIndicator() {
+  thinkingEl?.remove();
+  thinkingEl = null;
+  thinkingRive = null;
 }
 
 function thoughtLine(ms) {
@@ -3123,7 +3157,7 @@ async function applySuggestedReply(body) {
   };
   void appendProvenanceEvents(events);
   scheduleDraftSave();
-  els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  els.composer?.scrollIntoView({ behavior: viewScrollBehavior(), block: 'end' });
 }
 
 async function applyHeaderSuggestion(headers, draftId) {
@@ -3303,7 +3337,7 @@ async function insertProposedDraft(draftLike, { source = PROPOSE_DRAFT_TOOL, raw
   }
 
   scheduleDraftSave();
-  els.composer?.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  els.composer?.scrollIntoView({ behavior: viewScrollBehavior(), block: 'end' });
 }
 
 function persistAssistant() {
@@ -3581,5 +3615,13 @@ export function mailAppTestHooks() {
     syncCoveredFocus,
     applyNarrowShell,
     showMailToast,
+    applyScenarioChrome,
+    sendEmail,
+    handleComposerFiles,
+    scrollToEmail,
+    startReply,
+    insertProposedDraft,
+    thinkingIndicator,
+    resetThinkingIndicator,
   };
 }

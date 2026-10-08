@@ -36,7 +36,7 @@ import {
   normalizeTriageRanking,
   resolveQuickActionChips,
 } from './lib/quick-actions.js';
-import { resolveStrings } from './lib/i18n.js';
+import { resolveClientLocale } from './lib/i18n.js';
 import {
   newSessionRecord,
   readSessionsFile,
@@ -178,9 +178,13 @@ app.get('/api/config', async (_req, res) => {
   try {
     const { config, errors } = await getScenario();
     if (errors.length) console.warn('[scenario] validation warnings:', errors);
-    const strings = await resolveStrings(config.generation.language, config.ui.strings, I18N_DIR);
+    const { strings, documentLanguage } = await resolveClientLocale(
+      config.generation.language,
+      config.ui.strings,
+      I18N_DIR,
+    );
     const { seed, rubricHints: _rubricHints, rubric: _rubric, ...clientConfig } = config;
-    res.json({ ...clientConfig, strings, warnings: errors });
+    res.json({ ...clientConfig, strings, documentLanguage, warnings: errors });
   } catch (err) {
     console.error('[config] Error:', err);
     res.status(500).json({ error: 'Failed to load scenario config' });
