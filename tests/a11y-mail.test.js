@@ -1201,6 +1201,17 @@ describe('M11 assistant live regions', () => {
     expect(document.getElementById('composerStatus').textContent).toBe('');
   });
 
+  it('localizes the typing indicator label', () => {
+    mail.state.config.strings = { ...strings, 'Thinking…': 'Pensando…' };
+    mail.renderAssistant([
+      { id: 'empty-ai', role: 'assistant', status: 'ready', content: '' },
+    ]);
+    const typing = document.querySelector('#assistantMessages .assistant__typing');
+    expect(typing).toBeTruthy();
+    expect(typing.querySelectorAll('.assistant__typing-dot').length).toBe(3);
+    expect(typing.getAttribute('aria-label')).toBe('Pensando…');
+  });
+
   it('places the thinking status outside the message log', () => {
     mail.state.assistant.quickActionBusy = true;
     mail.state.assistant.thinkingSince = 10;
@@ -1301,6 +1312,14 @@ describe('N8 mail row names', () => {
     expect(computeAccessibleName(row)).toBe(`${from}. ${subject}. ${date}. ${strings.New}`);
     expect(row.hasAttribute('title')).toBe(false);
     expect(computeAccessibleName(row)).not.toContain(QUOTE_BODY);
+  });
+
+  it('localizes a missing inbox subject in the row name', () => {
+    mail.state.config.strings = { ...strings, '(no subject)': '(sin asunto)' };
+    mail.renderShell();
+    const row = document.querySelector('.mail-row[data-thread-id="thread-blank"]');
+    expect(row.querySelector('.mail-row__subject').textContent).toBe('(sin asunto)');
+    expect(computeAccessibleName(row)).toContain('(sin asunto)');
   });
 
   it('uses the same pieces for a draft row', () => {

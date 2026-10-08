@@ -1332,7 +1332,7 @@ function renderMailList() {
     const last = thread.emails?.[thread.emails.length - 1];
     const unread = isThreadUnread(thread);
     const from = threadListFrom(thread, state.activeMailbox);
-    const subject = thread.subject || '(no subject)';
+    const subject = thread.subject || t('(no subject)');
     const date = formatListDate(last?.date);
     const item = document.createElement('div');
     item.className = 'mail-item' + (unread ? ' is-unread' : '');
@@ -2591,7 +2591,9 @@ function appendFenceInsertFallback(row, markdown) {
   row.querySelector('.assistant__msg')?.appendChild(btn);
 }
 
-const ASSISTANT_TYPING_HTML = '<span class="assistant__typing" aria-label="Thinking"><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span></span>';
+function assistantTypingHtml() {
+  return `<span class="assistant__typing" aria-label="${escapeHtml(t('Thinking…'))}"><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span><span class="assistant__typing-dot"></span></span>`;
+}
 
 function assistantHintText() {
   return state.config?.assistant?.initialMessage
@@ -2747,7 +2749,7 @@ function renderAssistant(liveMessages = []) {
       }
       specs.push(assistantBubbleSpec(key, {
         role: 'assistant',
-        html: renderMarkdown(text) || (drafts.length || streaming ? '' : ASSISTANT_TYPING_HTML),
+        html: renderMarkdown(text) || (drafts.length || streaming ? '' : assistantTypingHtml()),
         drafts,
         streaming,
         markdown: text,
