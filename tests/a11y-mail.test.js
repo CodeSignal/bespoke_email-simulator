@@ -805,6 +805,31 @@ describe('M4 document language', () => {
     expect(document.documentElement.lang).toBe('es');
   });
 
+  it('accepts a catalog tag that uses a BCP 47 singleton subtag', () => {
+    const extension = {
+      languageNames: ['es-u-ca-gregory', 'spanish'],
+      strings: { Mail: 'Correo' },
+    };
+    const privateUse = {
+      languageNames: ['es-x-custom', 'spanish'],
+      strings: {},
+    };
+    const malformed = {
+      languageNames: ['es-u', 'es-u-c', 'english', 'spanish'],
+      strings: {},
+    };
+
+    document.documentElement.lang = 'en';
+    const tag = resolveDocumentLanguage('Spanish', [en, extension]);
+    expect(tag).toBe('es-u-ca-gregory');
+    mail.state.config.documentLanguage = tag;
+    mail.applyScenarioChrome();
+    expect(document.documentElement.lang).toBe('es-u-ca-gregory');
+
+    expect(resolveDocumentLanguage('Spanish', [privateUse])).toBe('es-x-custom');
+    expect(resolveDocumentLanguage('Spanish', [malformed])).toBe('');
+  });
+
   it('does not clear lang when the catalog does not identify a language', () => {
     document.documentElement.lang = 'en';
     const unnamed = { languageNames: ['spanish'], strings: { Mail: 'Correo' } };
