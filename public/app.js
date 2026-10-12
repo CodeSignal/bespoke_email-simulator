@@ -1818,28 +1818,53 @@ async function deleteDraft(draft) {
     clearTimeout(state.draftSaveTimer);
     state.draftSaveTimer = null;
   }
-  state.session.drafts = removeScopedDraft(state.session.drafts, draft);
-  if (sameDraftScope(state.assistant.lastInserted, draft)) {
-    state.assistant.lastInserted = null;
-  }
-  if (open) {
-    closeRecipientMenus();
-    if (state.composingNew) {
-      state.composingNew = false;
-      state.activeDraftId = null;
-    } else if (state.replying) {
-      state.replying = null;
+  await enqueueDraftWrite(async () => {
+    const previousDrafts = state.session.drafts;
+    const hadInserted = sameDraftScope(state.assistant.lastInserted, draft);
+    const previousInserted = hadInserted ? state.assistant.lastInserted : null;
+    const restoreCompose = open && state.composingNew
+      ? { activeDraftId: state.activeDraftId, attachments: state.attachments.slice() }
+      : null;
+    const restoreReply = open && state.replying ? state.replying : null;
+
+    if (open) {
+      closeRecipientMenus();
+      if (state.composingNew) {
+        state.composingNew = false;
+        state.activeDraftId = null;
+        clearAttachments();
+      } else if (state.replying) {
+        state.replying = null;
+      }
     }
-  }
-  await persistDrafts();
-  refreshDraftsUi();
-  if (open) {
-    applyView();
-    restoreComposeFocus();
-  } else {
-    focusAfterDeletedDraft();
-  }
-  announceComposerStatus(t('Draft deleted'));
+
+    state.session.drafts = removeScopedDraft(state.session.drafts, draft);
+    if (hadInserted) state.assistant.lastInserted = null;
+
+    const ok = await persistDraftsNow();
+    if (!ok) {
+      state.session.drafts = previousDrafts;
+      if (hadInserted) state.assistant.lastInserted = previousInserted;
+      if (restoreCompose) {
+        state.composingNew = true;
+        state.activeDraftId = restoreCompose.activeDraftId;
+        state.attachments = restoreCompose.attachments;
+        renderAttachmentPreview();
+      } else if (restoreReply) {
+        state.replying = restoreReply;
+      }
+      return;
+    }
+
+    refreshDraftsUi();
+    if (open) {
+      applyView();
+      restoreComposeFocus();
+    } else {
+      focusAfterDeletedDraft();
+    }
+    announceComposerStatus(t('Draft deleted'));
+  });
 }
 
 async function openDraft(draft) {
@@ -2032,33 +2057,53 @@ function updateSendEnabled() {
   els.sendBtn.disabled = !hasContent || draft.to.length === 0;
 }
 
-async function persistDrafts() {
-  if (!state.session?.sessionId) return;
+// One writer at a time so an in-flight save cannot overwrite a later delete.
+let draftWriteQueue = Promise.resolve();
+
+function enqueueDraftWrite(work) {
+  const run = draftWriteQueue.then(work, work);
+  draftWriteQueue = run.then(() => {}, () => {});
+  return run;
+}
+
+function resetDraftWriteQueue() {
+  draftWriteQueue = Promise.resolve();
+}
+
+async function persistDraftsNow() {
+  if (!state.session?.sessionId) return true;
   try {
-    await fetch('/api/session/save', {
+    const res = await fetch('/api/session/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: state.session.sessionId, drafts: state.session.drafts ?? [] }),
     });
+    if (!res.ok) throw new Error(`draft save failed (${res.status})`);
+    return true;
   } catch (err) {
     console.error('[CosmoMail] draft save failed:', err);
+    return false;
   }
 }
 
+async function persistDrafts() {
+  return enqueueDraftWrite(() => persistDraftsNow());
+}
+
 async function saveDraftNow() {
-  if (!state.session?.sessionId || !draftScope()) return;
-  const draft = currentDraft();
-  const scope = draftScope();
-  if (!draftHasPersistableContent(draft)) {
-    state.session.drafts = removeScopedDraft(state.session.drafts, scope);
-    await persistDrafts();
+  return enqueueDraftWrite(async () => {
+    if (!state.session?.sessionId || !draftScope()) return;
+    const draft = currentDraft();
+    const scope = draftScope();
+    if (!draftHasPersistableContent(draft)) {
+      state.session.drafts = removeScopedDraft(state.session.drafts, scope);
+    } else {
+      if (draft.scope === 'new' && !draft.id) draft.id = newDraftId();
+      state.session.drafts = upsertScopedDraft(state.session.drafts, draft);
+    }
+    await persistDraftsNow();
     refreshDraftsUi();
-    return;
-  }
-  if (draft.scope === 'new' && !draft.id) draft.id = newDraftId();
-  state.session.drafts = upsertScopedDraft(state.session.drafts, draft);
-  await persistDrafts();
-  refreshDraftsUi();
+  });
 }
 
 function scheduleDraftSave() {
@@ -3967,6 +4012,8 @@ export function mailAppTestHooks() {
     closeComposer,
     cancelComposer,
     deleteDraft,
+    saveDraftNow,
+    resetDraftWriteQueue,
     insertProposedDraft,
     thinkingIndicator,
     resetThinkingIndicator,
