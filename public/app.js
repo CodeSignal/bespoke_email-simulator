@@ -260,12 +260,18 @@ function formatAddressList(list) {
   return list.map(formatAddress).join(', ');
 }
 
+function dateLocale() {
+  const language = String(state.config?.documentLanguage ?? '').trim();
+  return isDocumentLanguageTag(language) ? language : undefined;
+}
+
 function formatDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
-  const day = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
-  const time = d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const locale = dateLocale();
+  const day = d.toLocaleDateString(locale, { year: 'numeric', month: 'short', day: 'numeric' });
+  const time = d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
   return `${day} ${time}`;
 }
 
@@ -273,14 +279,15 @@ function formatListDate(iso) {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return String(iso);
+  const locale = dateLocale();
   const now = new Date();
   if (d.toDateString() === now.toDateString()) {
-    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    return d.toLocaleTimeString(locale, { hour: 'numeric', minute: '2-digit' });
   }
   if (d.getFullYear() === now.getFullYear()) {
-    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+    return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
   }
-  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function emailSnippet(email) {
@@ -1385,7 +1392,7 @@ function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } =
   const attachmentsHtml = attachments.length
     ? `<div class="email__attachments">${attachments
         .map((a, index) => {
-          const name = escapeHtml(a.name || 'attachment');
+          const name = escapeHtml(a.name || t('Attachment'));
           const hasText = typeof a.text === 'string' && a.text.length > 0;
           if (hasText) {
             return `<button type="button" class="tag outline email__attachment email__attachment--preview" data-attachment-index="${index}" aria-label="${escapeHtml(t('Preview attachment'))}: ${name}">${name}</button>`;
@@ -1443,6 +1450,7 @@ function openAttachmentPreview(attachment) {
     title: name,
     content: `<pre class="attachment-preview-modal__body body-small">${escapeHtml(text)}</pre>`,
     closeOnOverlayClick: true,
+    closeButtonLabel: t('Close'),
     footerButtons: [
       {
         label: t('Close'),
@@ -1877,8 +1885,26 @@ function applyScenarioChrome() {
     els.assistantClearBtn.setAttribute('aria-label', t('New conversation'));
     els.assistantClearBtn.title = t('New conversation');
   }
+  if (els.assistantSendBtn) {
+    els.assistantSendBtn.setAttribute('aria-label', t('Send'));
+    els.assistantSendBtn.title = t('Send');
+  }
+  if (els.sendBtn) els.sendBtn.textContent = t('Send');
+  if (els.discardBtn) els.discardBtn.textContent = t('Cancel');
+  if (els.attachBtn) els.attachBtn.textContent = t('Attach');
+  const assistantTitle = els.assistantPanel?.querySelector('.assistant__title');
+  if (assistantTitle) assistantTitle.textContent = t('AI Assistant');
+  els.assistantPanel?.setAttribute('aria-label', t('AI Assistant'));
+  document.getElementById('threadRail')?.setAttribute('aria-label', t('Mailbox'));
+  if (els.mailboxList) els.mailboxList.setAttribute('aria-label', t('Folders'));
+  if (els.mailList) els.mailList.setAttribute('aria-label', t('Mail'));
+  if (els.readingPane) els.readingPane.setAttribute('aria-label', t('Conversation'));
   if (els.assistantHint && state.config?.assistant?.initialMessage) {
     els.assistantHint.textContent = state.config.assistant.initialMessage;
+  } else if (els.assistantHint) {
+    els.assistantHint.textContent = t(
+      'Ask the AI Assistant to help draft, summarize, or answer questions about this thread.',
+    );
   }
 }
 
@@ -2042,13 +2068,13 @@ function renderAttachmentPreview() {
   items.forEach((item, idx) => {
     const chip = document.createElement('span');
     chip.className = 'tag outline composer__attachment';
-    const label = item.status === 'uploading' ? `${item.file.name} (uploading…)`
-      : item.status === 'error' ? `${item.file.name} (failed)` : item.file.name;
+    const label = item.status === 'uploading' ? `${item.file.name} ${t('(uploading…)')}`
+      : item.status === 'error' ? `${item.file.name} ${t('(failed)')}` : item.file.name;
     chip.innerHTML = `<span class="composer__attachment-name">${escapeHtml(label)}</span>`;
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'composer__attachment-remove';
-    remove.setAttribute('aria-label', `Remove ${item.file.name}`);
+    remove.setAttribute('aria-label', `${t('Remove')} ${item.file.name}`);
     remove.innerHTML = '<span class="icon icon-trash icon-small" aria-hidden="true"></span>';
     remove.addEventListener('click', () => {
       state.attachments.splice(idx, 1);
@@ -3465,6 +3491,7 @@ function confirmReplaceDraft() {
         t("You're already writing an email. Replace it with the AI Assistant's draft?"),
       )}</p>`,
       closeOnOverlayClick: false,
+      closeButtonLabel: t('Close'),
       footerButtons: [
         {
           label: t('Cancel'),
@@ -3708,7 +3735,7 @@ async function initAssistant() {
     state.assistant.octavusSessionId = octavusSessionId;
   } catch (err) {
     console.error('[CosmoMail] assistant unavailable:', err);
-    els.assistantInput.placeholder = 'Assistant unavailable (agent not configured).';
+    els.assistantInput.placeholder = t('Assistant unavailable (agent not configured).');
     setAssistantEnabled(false);
     return;
   }
@@ -3838,7 +3865,7 @@ async function boot() {
     await initAssistant();
   } catch (err) {
     console.error('[CosmoMail] boot error:', err);
-    showBootError('Could not load Mail. Is the server running?');
+    showBootError(t('Could not load Mail. Is the server running?'));
   }
 }
 
@@ -3863,6 +3890,8 @@ export function mailAppTestHooks() {
     applyNarrowShell,
     showMailToast,
     applyScenarioChrome,
+    formatDate,
+    formatListDate,
     sendEmail,
     handleComposerFiles,
     scrollToEmail,

@@ -1709,6 +1709,56 @@ describe('N4 in-app mailto control', () => {
   });
 });
 
+describe('date stamps', () => {
+  const iso = '2026-10-12T16:51:00.000Z';
+  const earlierThisYear = '2026-01-05T16:51:00.000Z';
+
+  it('formats thread and list dates in the scenario language', () => {
+    mail.state.config.documentLanguage = 'es';
+    const expected = [
+      new Date(iso).toLocaleDateString('es', { year: 'numeric', month: 'short', day: 'numeric' }),
+      new Date(iso).toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }),
+    ].join(' ');
+    expect(mail.formatDate(iso)).toBe(expected);
+    expect(mail.formatDate(iso)).not.toMatch(/Oct 12, 2026/);
+    const list = mail.formatListDate(earlierThisYear);
+    expect(list.toLowerCase()).toMatch(/ene/);
+    expect(list).not.toMatch(/Jan/);
+  });
+
+  it('falls back to the browser locale when the catalog has no language tag', () => {
+    delete mail.state.config.documentLanguage;
+    expect(mail.formatDate(iso)).toBe(
+      [
+        new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+        new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+      ].join(' '),
+    );
+  });
+});
+
+describe('composer send chrome', () => {
+  it('localizes Send on the composer button and the assistant send control', () => {
+    mail.state.config.strings = {
+      ...strings,
+      Send: 'Enviar',
+      Mailbox: 'Buzón',
+      Folders: 'Carpetas',
+      Mail: 'Correo',
+      Conversation: 'Conversación',
+    };
+    mail.applyScenarioChrome();
+    expect(document.getElementById('sendBtn').textContent).toBe('Enviar');
+    const assistantSend = document.getElementById('assistantSendBtn');
+    expect(assistantSend.getAttribute('aria-label')).toBe('Enviar');
+    expect(assistantSend.title).toBe('Enviar');
+    expect(document.getElementById('threadRail').getAttribute('aria-label')).toBe('Buzón');
+    expect(document.getElementById('mailboxList').getAttribute('aria-label')).toBe('Carpetas');
+    expect(document.getElementById('mailList').getAttribute('aria-label')).toBe('Correo');
+    expect(document.getElementById('readingPane').getAttribute('aria-label')).toBe('Conversación');
+  });
+});
+
 describe('M12 assistant placeholder name', () => {
   it('keeps the accessible name while the visible placeholder is a hint', () => {
     mail.applyScenarioChrome();

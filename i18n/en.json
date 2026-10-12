@@ -87,6 +87,25 @@
     "Next suggestion": "Next suggestion",
     "Suggested replies": "Suggested replies",
     "Insert": "Insert",
-    "Insert into composer": "Insert into composer"
+    "Insert into composer": "Insert into composer",
+    "Suggest replies": "Suggest replies",
+    "Rewrite": "Rewrite",
+    "Shorten": "Shorten",
+    "Professional tone": "Professional tone",
+    "Proofread": "Proofread",
+    "Suggest subject & recipients": "Suggest subject & recipients",
+    "Prioritize my inbox": "Prioritize my inbox",
+    "Draft": "Draft",
+    "Drafting email…": "Drafting email…",
+    "Inbox priority": "Inbox priority",
+    "Replace": "Replace",
+    "Replace current draft?": "Replace current draft?",
+    "Attach": "Attach",
+    "(failed)": "(failed)",
+    "(uploading…)": "(uploading…)",
+    "Assistant unavailable (agent not configured).": "Assistant unavailable (agent not configured).",
+    "Could not load Mail. Is the server running?": "Could not load Mail. Is the server running?",
+    "Mailbox": "Mailbox",
+    "Conversation": "Conversation"
   }
 }
