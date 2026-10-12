@@ -1901,7 +1901,10 @@ body {
 }
 
 .assistant__input::placeholder {
-  color: var(--Colors-Text-Body-Lighter);
+  /* Body-Lighter misses 4.5:1 on this composited control fill. Body-Light is
+     the next text token in the pinned design system and clears both schemes. */
+  color: var(--Colors-Text-Body-Light);
+  opacity: 1;
 }
 
 .assistant__input:disabled {

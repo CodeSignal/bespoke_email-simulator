@@ -2,7 +2,8 @@
 /**
  * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, S7, S3,
  * S2, S4, M4, M6, M9, M2, M7, M11, N2, N4, N8, N9, and Shift+Tab in the
- * recipient combobox) and the 2026-10-12 fixes (S8, S9, S10, S11).
+ * recipient combobox), the 2026-10-12 focus/reflow/scroll fixes (S8, S9,
+ * S10, S11), and the remaining 12 Oct findings (M12, M13, N10).
  *
  * public/app.js reads the document while the module loads, so this mounts
  * public/index.html first and imports the module after that. Vitest skips
@@ -165,6 +166,11 @@ async function resetMailbox() {
   statusEl().textContent = '';
   const composerStatus = document.getElementById('composerStatus');
   if (composerStatus) composerStatus.textContent = '';
+  const preview = document.getElementById('attachmentPreview');
+  if (preview) {
+    preview.innerHTML = '';
+    preview.hidden = true;
+  }
   document.documentElement.lang = 'en';
   mail.renderShell();
   // Drop an "Opened:" callback queued by the previous test.
@@ -210,6 +216,9 @@ describe('English catalog', () => {
       'No more people to add': 'No more people to add',
       Opened: 'Opened',
       '(no subject)': '(no subject)',
+      'Upload failed': 'Upload failed',
+      'File type not allowed': 'File type not allowed',
+      'Message the AI Assistant': 'Message the AI Assistant',
     });
   });
 });
@@ -1240,6 +1249,129 @@ describe('M6 composer status', () => {
   });
 });
 
+describe('M13 failed upload', () => {
+  const failed = 'Fallo al subir';
+  const rejected = 'Tipo de archivo no permitido';
+
+  function expectComposerAnnouncement(text) {
+    const status = document.getElementById('composerStatus');
+    const pane = document.getElementById('readingPane');
+    const log = document.getElementById('assistantMessages');
+    expect(status.textContent).toBe(text);
+    expect(pane.contains(status)).toBe(false);
+    expect(log.contains(status)).toBe(false);
+    expect(pane.hasAttribute('aria-live')).toBe(false);
+    expect(status).not.toBe(statusEl());
+    expect(statusEl().textContent).toBe(`${strings.Opened}: Vendor quote`);
+  }
+
+  async function openQuote() {
+    clickThread('thread-quote');
+    await nextFrame();
+    expect(statusEl().textContent).toBe(`${strings.Opened}: Vendor quote`);
+  }
+
+  it('announces a rejected upload on #composerStatus and marks the chip failed', async () => {
+    await openQuote();
+    mail.state.config.strings = {
+      ...strings,
+      'Upload failed': failed,
+      'File type not allowed': rejected,
+    };
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {
+      uploadFiles: vi.fn(async () => {
+        throw new Error('upload rejected');
+      }),
+    };
+
+    const file = new File(['notes'], 'notes.pdf', { type: 'application/pdf' });
+    await mail.handleComposerFiles([file]);
+    await nextFrame();
+
+    const chip = document.querySelector('.composer__attachment');
+    expect(chip).toBeTruthy();
+    expect(chip.textContent).toContain('notes.pdf');
+    expect(chip.textContent).toContain('(failed)');
+    expectComposerAnnouncement(failed);
+    expect(mail.state.assistant.chat.uploadFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it('still announces a disallowed type only on #composerStatus', async () => {
+    await openQuote();
+    mail.state.config.strings = {
+      ...strings,
+      'Upload failed': failed,
+      'File type not allowed': rejected,
+    };
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {
+      uploadFiles: vi.fn(async () => {
+        throw new Error('should not upload');
+      }),
+    };
+
+    await mail.handleComposerFiles([new File(['notes'], 'notes.exe', { type: 'application/octet-stream' })]);
+    await nextFrame();
+
+    expect(mail.state.attachments).toEqual([]);
+    expect(document.querySelector('.composer__attachment')).toBeNull();
+    expect(mail.state.assistant.chat.uploadFiles).not.toHaveBeenCalled();
+    expectComposerAnnouncement(rejected);
+  });
+
+  it('keeps the type warning when a mixed selection also fails to upload', async () => {
+    await openQuote();
+    mail.state.config.strings = {
+      ...strings,
+      'Upload failed': failed,
+      'File type not allowed': rejected,
+    };
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {
+      uploadFiles: vi.fn(async () => {
+        throw new Error('upload rejected');
+      }),
+    };
+
+    await mail.handleComposerFiles([
+      new File(['notes'], 'notes.exe', { type: 'application/octet-stream' }),
+      new File(['notes'], 'notes.pdf', { type: 'application/pdf' }),
+    ]);
+    await nextFrame();
+
+    const chip = document.querySelector('.composer__attachment');
+    expect(chip.textContent).toContain('notes.pdf');
+    expect(chip.textContent).toContain('(failed)');
+    expect(mail.state.assistant.chat.uploadFiles).toHaveBeenCalledTimes(1);
+    expectComposerAnnouncement(`${rejected}. ${failed}`);
+  });
+
+  it('still announces only the type warning when the allowed file uploads', async () => {
+    await openQuote();
+    mail.state.config.strings = {
+      ...strings,
+      'Upload failed': failed,
+      'File type not allowed': rejected,
+    };
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {
+      uploadFiles: vi.fn(async (files) => files.map((file) => ({ name: file.name }))),
+    };
+
+    await mail.handleComposerFiles([
+      new File(['notes'], 'notes.exe', { type: 'application/octet-stream' }),
+      new File(['notes'], 'notes.pdf', { type: 'application/pdf' }),
+    ]);
+    await nextFrame();
+
+    const chip = document.querySelector('.composer__attachment');
+    expect(chip.textContent).toContain('notes.pdf');
+    expect(chip.textContent).not.toContain('(failed)');
+    expectComposerAnnouncement(rejected);
+  });
+});
+
 describe('M9 recipient remove target', () => {
   it('shows a remove control of at least 24 by 24 without hover', () => {
     showComposer();
@@ -1574,6 +1706,49 @@ describe('N4 in-app mailto control', () => {
     expect(location.hash).toBe(hash);
     expect(mail.state.composingNew).toBe(true);
     expect(mail.state.recipients.to).toContain(DANA);
+  });
+});
+
+describe('M12 assistant placeholder name', () => {
+  it('keeps the accessible name while the visible placeholder is a hint', () => {
+    mail.applyScenarioChrome();
+    const input = document.getElementById('assistantInput');
+    expect(input.placeholder).toBe(strings['Ask me anything...']);
+    expect(computeAccessibleName(input)).toBe(strings['Message the AI Assistant']);
+    expect(input.getAttribute('aria-label')).toBe(strings['Message the AI Assistant']);
+  });
+});
+
+describe('N10 recipient option names', () => {
+  function openToMenu() {
+    showComposer();
+    mail.state.openRecipientField = 'to';
+    mail.renderRecipientPickers();
+    return [...document.querySelectorAll('#composeToMenu [role="option"]')];
+  }
+
+  it('separates the person from the role the same way mail rows join parts', () => {
+    const options = openToMenu();
+    const dana = options.find((option) => option.dataset.email === DANA);
+    expect(dana).toBeTruthy();
+    expect(dana.querySelector('.dropdown-menu-item-label').textContent).toBe('Dana Reyes');
+    expect(dana.querySelector('.recipient-picker__option-meta').textContent).toBe('Vendor');
+    expect(computeAccessibleName(dana)).toBe('Dana Reyes. Vendor');
+    expect(dana.getAttribute('aria-label')).toBe('Dana Reyes. Vendor');
+  });
+
+  it('falls back to the email when the option has no role', () => {
+    mail.state.config.characters = [
+      ...CHARACTERS,
+      { id: 'pat', name: 'Pat Lee', email: 'pat@acme.test' },
+    ];
+    const options = openToMenu();
+    const pat = options.find((option) => option.dataset.email === 'pat@acme.test');
+    expect(pat).toBeTruthy();
+    expect(pat.querySelector('.dropdown-menu-item-label').textContent).toBe('Pat Lee');
+    expect(pat.querySelector('.recipient-picker__option-meta').textContent).toBe('pat@acme.test');
+    expect(computeAccessibleName(pat)).toBe('Pat Lee. pat@acme.test');
+    expect(pat.getAttribute('aria-label')).toBe('Pat Lee. pat@acme.test');
   });
 });
 
