@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 /**
  * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, S7, S3,
- * S2, S4, M4, M6, M9, M2, and Shift+Tab in the recipient combobox).
+ * S2, S4, M4, M6, M9, M2, M7, M11, N2, N4, N8, N9, and Shift+Tab in the
+ * recipient combobox).
  *
  * public/app.js reads the document while the module loads, so this mounts
  * public/index.html first and imports the module after that. Vitest skips
@@ -11,7 +12,8 @@ import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { computeAccessibleName } from 'dom-accessibility-api';
+import { computeAccessibleDescription, computeAccessibleName } from 'dom-accessibility-api';
+import { contrastRatio, over, parseColor } from '../design-system/tests/helpers/contrast.js';
 import { resolveDocumentLanguage } from '../lib/helpers.js';
 
 const { riveOptions } = vi.hoisted(() => ({ riveOptions: [] }));
@@ -52,9 +54,15 @@ function installPage() {
 }
 
 installPage();
-const appStyle = document.createElement('style');
-appStyle.textContent = readFileSync(join(root, 'public/app.css'), 'utf8');
-document.head.appendChild(appStyle);
+for (const file of [
+  'design-system/colors/colors.css',
+  'design-system/components/button/button.css',
+  'public/app.css',
+]) {
+  const style = document.createElement('style');
+  style.textContent = readFileSync(join(root, file), 'utf8');
+  document.head.appendChild(style);
+}
 const { mailAppTestHooks } = await import('../public/app.js');
 const mail = mailAppTestHooks();
 mail.initRecipientPickers();
@@ -1061,5 +1069,306 @@ describe('M2 reduced motion', () => {
     riveOptions.length = 0;
     mail.thinkingIndicator();
     expect(riveOptions.at(-1)?.autoplay).toBe(true);
+  });
+});
+
+function tokenColor(name) {
+  const probe = document.createElement('span');
+  probe.style.color = `var(${name})`;
+  document.body.appendChild(probe);
+  const color = getComputedStyle(probe).color;
+  probe.remove();
+  return color;
+}
+
+function contrastAfterOpacity(style, behind) {
+  const opacity = Number.parseFloat(style.opacity);
+  const text = parseColor(style.color);
+  const fill = parseColor(style.backgroundColor);
+  text.alpha = (text.alpha ?? 1) * opacity;
+  fill.alpha = (fill.alpha ?? 1) * opacity;
+  return contrastRatio(over(text, behind), over(fill, behind));
+}
+
+describe('M7 disabled primary button', () => {
+  it('keeps a disabled Send button visible without fading the enabled colors', () => {
+    const send = document.getElementById('sendBtn');
+    send.disabled = true;
+    expect(send.disabled).toBe(true);
+    expect(send.classList.contains('button-primary')).toBe(true);
+
+    const enabled = document.createElement('button');
+    enabled.type = 'button';
+    enabled.className = 'button button-primary';
+    enabled.textContent = strings.Send;
+    send.parentElement.appendChild(enabled);
+
+    const enabledStyle = getComputedStyle(enabled);
+    const disabledStyle = getComputedStyle(send);
+    const surface = tokenColor('--Colors-Surface-Container-Base');
+    const ratio = contrastAfterOpacity(disabledStyle, surface);
+    const enabledOpacity = enabledStyle.opacity === '' ? 1 : Number.parseFloat(enabledStyle.opacity);
+
+    expect(disabledStyle.cursor).toBe('not-allowed');
+    expect(enabledOpacity).toBe(1);
+    expect(enabledStyle.backgroundColor).toBe(tokenColor('--Colors-Buttons-Primary-Default'));
+    expect(enabledStyle.color).toBe(tokenColor('--Colors-Buttons-Primary-Default-Text'));
+    expect(disabledStyle.backgroundColor).not.toBe(enabledStyle.backgroundColor);
+    expect(
+      ratio >= 4.5 || Number.parseFloat(disabledStyle.opacity) >= 0.5,
+    ).toBe(true);
+    expect(ratio).toBeGreaterThanOrEqual(4.5);
+
+    for (const variant of ['button-secondary', 'button-tertiary']) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = `button ${variant}`;
+      button.disabled = true;
+      button.textContent = strings.Cancel;
+      send.parentElement.appendChild(button);
+      expect(Number.parseFloat(getComputedStyle(button).opacity)).toBeGreaterThanOrEqual(0.5);
+      expect(getComputedStyle(button).cursor).toBe('not-allowed');
+      button.remove();
+    }
+
+    enabled.remove();
+  });
+});
+
+describe('M11 assistant live regions', () => {
+  afterEach(() => {
+    mail.state.assistant.persisted = [];
+    mail.state.assistant.suggestedReplies = null;
+    mail.state.assistant.quickDraft = null;
+    mail.state.assistant.triageRanking = null;
+    mail.state.assistant.quickActionBusy = false;
+    mail.state.assistant.thinkingSince = null;
+    mail.state.assistant.thinkingKind = null;
+    mail.state.assistant.thoughtMs = {};
+    mail.state.assistant.chat = null;
+    mail.state.view = 'list';
+    mail.state.activeThreadId = null;
+    mail.resetThinkingIndicator();
+    mail.renderAssistant([]);
+    mail.renderQuickResultPanel();
+    document.getElementById('assistantQuickResult').hidden = true;
+  });
+
+  it('keeps earlier message nodes when a later turn or token arrives', () => {
+    mail.state.assistant.persisted = [
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer' },
+    ];
+    mail.renderAssistant([]);
+    const log = document.getElementById('assistantMessages');
+    const earlier = [...log.querySelectorAll('.assistant__msg')];
+    expect(earlier.map((node) => node.textContent)).toEqual([
+      'Earlier question',
+      expect.stringContaining('Earlier answer'),
+    ]);
+
+    mail.renderAssistant([
+      { id: 'live-user', role: 'user', content: 'Next question' },
+      {
+        id: 'live-ai',
+        role: 'assistant',
+        status: 'streaming',
+        parts: [{ type: 'text', text: 'Hel' }],
+      },
+    ]);
+    const during = [...log.querySelectorAll('.assistant__msg')];
+    expect(during[0]).toBe(earlier[0]);
+    expect(during[1]).toBe(earlier[1]);
+    const streaming = during.at(-1);
+    expect(streaming.textContent).toContain('Hel');
+
+    mail.renderAssistant([
+      { id: 'live-user', role: 'user', content: 'Next question' },
+      {
+        id: 'live-ai',
+        role: 'assistant',
+        status: 'streaming',
+        parts: [{ type: 'text', text: 'Hello there' }],
+      },
+    ]);
+    const after = [...log.querySelectorAll('.assistant__msg')];
+    expect(after[0]).toBe(earlier[0]);
+    expect(after[1]).toBe(earlier[1]);
+    expect(after.at(-1)).toBe(streaming);
+    expect(streaming.textContent).toContain('Hello there');
+    expect(document.getElementById('readingPane').hasAttribute('aria-live')).toBe(false);
+    expect(statusEl().textContent).toBe('');
+    expect(document.getElementById('composerStatus').textContent).toBe('');
+  });
+
+  it('localizes the typing indicator label', () => {
+    mail.state.config.strings = { ...strings, 'Thinking…': 'Pensando…' };
+    mail.renderAssistant([
+      { id: 'empty-ai', role: 'assistant', status: 'ready', content: '' },
+    ]);
+    const typing = document.querySelector('#assistantMessages .assistant__typing');
+    expect(typing).toBeTruthy();
+    expect(typing.querySelectorAll('.assistant__typing-dot').length).toBe(3);
+    expect(typing.getAttribute('aria-label')).toBe('Pensando…');
+  });
+
+  it('places the thinking status outside the message log', () => {
+    mail.state.assistant.quickActionBusy = true;
+    mail.state.assistant.thinkingSince = 10;
+    mail.state.assistant.thinkingKind = 'quick';
+    mail.updateAssistantThinking();
+
+    const log = document.getElementById('assistantMessages');
+    const status = document.querySelector('.assistant__status');
+    expect(status).toBeTruthy();
+    expect(status.getAttribute('role')).toBe('status');
+    expect(log.contains(status)).toBe(false);
+    expect(status.previousElementSibling).toBe(log);
+    expect(log.getAttribute('aria-busy')).toBe('true');
+    expect(document.getElementById('readingPane').contains(status)).toBe(false);
+    expect(statusEl().contains(status)).toBe(false);
+    expect(document.getElementById('composerStatus').contains(status)).toBe(false);
+    expect(status.textContent).toContain(strings['Working…']);
+  });
+
+  it('updates suggestion text in the same node and restores cycle focus', () => {
+    mail.state.assistant.suggestedReplies = {
+      threadId: 'thread-quote',
+      replies: ['Alpha reply', 'Beta reply'],
+      index: 0,
+    };
+    mail.selectThread('thread-quote');
+
+    const body = document.querySelector('#assistantSuggestions .assistant__suggestion-body');
+    expect(body).toBeTruthy();
+    expect(body.getAttribute('aria-live')).toBe('polite');
+    expect(body.textContent).toBe('Alpha reply');
+    const next = document.querySelector('#assistantSuggestions .assistant__cycle[data-step="1"]');
+    next.click();
+
+    expect(document.querySelector('#assistantSuggestions .assistant__suggestion-body')).toBe(body);
+    expect(body.textContent).toBe('Beta reply');
+    expect(document.activeElement).toBe(next);
+    expect(document.getElementById('readingPane').hasAttribute('aria-live')).toBe(false);
+    expect(statusEl().textContent).not.toContain('Beta reply');
+    expect(document.getElementById('composerStatus').textContent).not.toContain('Beta reply');
+  });
+});
+
+describe('N2 assistant send shortcut', () => {
+  const shortcut = strings['Enter sends. Shift+Enter inserts a newline.'];
+
+  it('describes Enter to send and leaves Shift+Enter as a newline', () => {
+    mail.applyScenarioChrome();
+    mail.bindAssistantComposer();
+    const input = document.getElementById('assistantInput');
+    expect(computeAccessibleDescription(input)).toBe(shortcut);
+    expect(computeAccessibleName(input)).toBe(strings['Message the AI Assistant']);
+
+    const send = vi.fn(async () => {});
+    mail.state.assistant.chat = { status: 'idle', send };
+    input.value = 'hello';
+    const shifted = keydown(input, 'Enter', { shiftKey: true });
+    expect(shifted.defaultPrevented).toBe(false);
+    expect(send).not.toHaveBeenCalled();
+    expect(input.value).toBe('hello');
+
+    const enter = keydown(input, 'Enter');
+    expect(enter.defaultPrevented).toBe(true);
+    expect(send).toHaveBeenCalled();
+  });
+});
+
+describe('N4 in-app mailto control', () => {
+  it('opens compose without navigating to a fragment', () => {
+    mail.initMailtoCompose();
+    const hash = location.hash;
+    const thread = mail.state.session.threads.find((item) => item.id === 'thread-quote');
+    thread.emails[0].body = 'Write to [Dana Reyes](mailto:dana@acme.test) today.';
+    mail.selectThread('thread-quote');
+
+    const control = document.querySelector('.email__body .js-compose-mailto');
+    expect(control?.tagName).toBe('BUTTON');
+    expect(control.hasAttribute('href')).toBe(false);
+    control.click();
+
+    expect(location.hash).toBe(hash);
+    expect(mail.state.composingNew).toBe(true);
+    expect(mail.state.recipients.to).toContain(DANA);
+  });
+});
+
+describe('N8 mail row names', () => {
+  function rowName(row) {
+    const from = row.querySelector('.mail-row__from').textContent;
+    const subject = row.querySelector('.mail-row__subject').textContent;
+    const date = row.querySelector('.mail-row__date').textContent;
+    return { from, subject, date };
+  }
+
+  it('separates sender, subject, and time for an unread inbox row', () => {
+    const row = document.querySelector('.mail-row[data-thread-id="thread-quote"]');
+    const { from, subject, date } = rowName(row);
+    expect(computeAccessibleName(row)).toBe(`${from}. ${subject}. ${date}. ${strings.New}`);
+    expect(row.hasAttribute('title')).toBe(false);
+    expect(computeAccessibleName(row)).not.toContain(QUOTE_BODY);
+  });
+
+  it('localizes a missing inbox subject in the row name', () => {
+    mail.state.config.strings = { ...strings, '(no subject)': '(sin asunto)' };
+    mail.renderShell();
+    const row = document.querySelector('.mail-row[data-thread-id="thread-blank"]');
+    expect(row.querySelector('.mail-row__subject').textContent).toBe('(sin asunto)');
+    expect(computeAccessibleName(row)).toContain('(sin asunto)');
+  });
+
+  it('uses the same pieces for a draft row', () => {
+    mail.state.session.drafts = [{
+      id: 'draft-1',
+      scope: 'new',
+      to: [DANA],
+      cc: [],
+      subject: 'Pricing',
+      body: 'Please review the attached numbers.',
+      updated_at: '2026-10-08T14:15:00.000Z',
+    }];
+    mail.selectMailbox('drafts');
+    const row = document.querySelector('#threadList .mail-row');
+    const { from, subject, date } = rowName(row);
+    expect(computeAccessibleName(row)).toBe(`${from}. ${subject}. ${date}`);
+    expect(computeAccessibleName(row)).not.toContain(strings.New);
+    expect(row.hasAttribute('title')).toBe(false);
+    expect(computeAccessibleName(row)).not.toContain('Please review the attached numbers.');
+  });
+});
+
+describe('N9 list separators', () => {
+  function expectBorderRule() {
+    expect(document.querySelectorAll('#threadList hr').length).toBe(0);
+    const containers = document.querySelectorAll('#threadList .mail-item__container');
+    expect(containers.length).toBeGreaterThan(0);
+    for (const container of containers) {
+      const rule = getComputedStyle(container);
+      expect(rule.borderBottomStyle).toBe('solid');
+      expect(Number.parseFloat(rule.borderBottomWidth)).toBeGreaterThan(0);
+    }
+  }
+
+  it('draws inbox rules as borders', () => {
+    expectBorderRule();
+  });
+
+  it('draws draft rules as borders', () => {
+    mail.state.session.drafts = [{
+      id: 'draft-1',
+      scope: 'new',
+      to: [DANA],
+      cc: [],
+      subject: 'Pricing',
+      body: 'Draft body',
+      updated_at: '2026-10-08T14:15:00.000Z',
+    }];
+    mail.selectMailbox('drafts');
+    expectBorderRule();
   });
 });

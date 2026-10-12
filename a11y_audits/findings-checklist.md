@@ -19,13 +19,14 @@ Remediation status after the [6 Oct 2026 re-audit](./2026-10-06-cosmomail-ux-aud
 | M4 | Moderate | `html[lang]` not synced to i18n | 3.1.1 | Fixed | [#23](https://github.com/CodeSignal/bespoke_email-simulator/issues/23) |
 | M5 | Moderate | Expanded compose modal initial focus | 2.4.3 | Fixed | — |
 | M6 | Moderate | Send/attachment errors not announced | 4.1.3 | Fixed | [#24](https://github.com/CodeSignal/bespoke_email-simulator/issues/24) |
-| M7 | Moderate | Disabled button opacity 0.24 hard to see | Usability | Open | [#25](https://github.com/CodeSignal/bespoke_email-simulator/issues/25) |
+| M7 | Moderate | Disabled button opacity 0.24 hard to see | Usability | Fixed | [#25](https://github.com/CodeSignal/bespoke_email-simulator/issues/25) |
 | M8 | Moderate | Dark mode: active recipient role text 3.86:1 | 1.4.3 | Fixed | [#26](https://github.com/CodeSignal/bespoke_email-simulator/issues/26) |
 | M9 | Moderate | Recipient remove control hidden until hover or focus | 2.5.8 | Fixed | [#27](https://github.com/CodeSignal/bespoke_email-simulator/issues/27) |
 | M10 | Moderate | Split divider focus line overridden | 2.4.7 | Fixed | [#28](https://github.com/CodeSignal/bespoke_email-simulator/issues/28) |
-| M11 | Moderate | Assistant log rebuilt inside a live region | 4.1.3 | Open | [#29](https://github.com/CodeSignal/bespoke_email-simulator/issues/29) |
-| N2 | Minor | Assistant Enter-to-send undisclosed | Best practice | Open | [#30](https://github.com/CodeSignal/bespoke_email-simulator/issues/30) |
-| N4 | Minor | `href="#"` mailto shim | Best practice | Open | [#31](https://github.com/CodeSignal/bespoke_email-simulator/issues/31) |
+| M11 | Moderate | Assistant log rebuilt inside a live region | 4.1.3 | Fixed | [#29](https://github.com/CodeSignal/bespoke_email-simulator/issues/29) |
+| N2 | Minor | Assistant Enter-to-send undisclosed | Best practice | Fixed | [#30](https://github.com/CodeSignal/bespoke_email-simulator/issues/30) |
+| N4 | Minor | `href="#"` mailto shim | Best practice | Fixed | [#31](https://github.com/CodeSignal/bespoke_email-simulator/issues/31) |
 | N5 | Minor | Icon-default token contrast | 1.4.11 | Fixed | — |
 | N7 | Minor | Composer minimized chrome | 2.1.1 | Obsolete | — |
-| N8 | Minor | Mail-row accessible names run together | 2.4.6 | Open | [#32](https://github.com/CodeSignal/bespoke_email-simulator/issues/32) |
+| N8 | Minor | Mail-row accessible names run together | 2.4.6 | Fixed | [#32](https://github.com/CodeSignal/bespoke_email-simulator/issues/32) |
+| N9 | Minor | List separators are real `<hr>` elements | Best practice | Fixed | — |
