@@ -1319,6 +1319,57 @@ describe('M13 failed upload', () => {
     expect(mail.state.assistant.chat.uploadFiles).not.toHaveBeenCalled();
     expectComposerAnnouncement(rejected);
   });
+
+  it('keeps the type warning when a mixed selection also fails to upload', async () => {
+    await openQuote();
+    mail.state.config.strings = {
+      ...strings,
+      'Upload failed': failed,
+      'File type not allowed': rejected,
+    };
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {
+      uploadFiles: vi.fn(async () => {
+        throw new Error('upload rejected');
+      }),
+    };
+
+    await mail.handleComposerFiles([
+      new File(['notes'], 'notes.exe', { type: 'application/octet-stream' }),
+      new File(['notes'], 'notes.pdf', { type: 'application/pdf' }),
+    ]);
+    await nextFrame();
+
+    const chip = document.querySelector('.composer__attachment');
+    expect(chip.textContent).toContain('notes.pdf');
+    expect(chip.textContent).toContain('(failed)');
+    expect(mail.state.assistant.chat.uploadFiles).toHaveBeenCalledTimes(1);
+    expectComposerAnnouncement(`${rejected}. ${failed}`);
+  });
+
+  it('still announces only the type warning when the allowed file uploads', async () => {
+    await openQuote();
+    mail.state.config.strings = {
+      ...strings,
+      'Upload failed': failed,
+      'File type not allowed': rejected,
+    };
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf'] };
+    mail.state.assistant.chat = {
+      uploadFiles: vi.fn(async (files) => files.map((file) => ({ name: file.name }))),
+    };
+
+    await mail.handleComposerFiles([
+      new File(['notes'], 'notes.exe', { type: 'application/octet-stream' }),
+      new File(['notes'], 'notes.pdf', { type: 'application/pdf' }),
+    ]);
+    await nextFrame();
+
+    const chip = document.querySelector('.composer__attachment');
+    expect(chip.textContent).toContain('notes.pdf');
+    expect(chip.textContent).not.toContain('(failed)');
+    expectComposerAnnouncement(rejected);
+  });
 });
 
 describe('M9 recipient remove target', () => {

@@ -2066,15 +2066,19 @@ async function handleComposerFiles(files) {
     return;
   }
   const accepted = [];
+  let rejectedType = false;
   for (const file of files) {
     if (!isAllowedFile(file)) {
       console.warn('[CosmoMail] rejected disallowed file type:', file.name);
-      announceComposerStatus(t('File type not allowed'));
+      rejectedType = true;
       continue;
     }
     accepted.push(file);
   }
-  if (!accepted.length) return;
+  if (!accepted.length) {
+    if (rejectedType) announceComposerStatus(t('File type not allowed'));
+    return;
+  }
 
   const newItems = accepted.map((file) => ({ file, ref: null, status: 'uploading' }));
   state.attachments.push(...newItems);
@@ -2086,10 +2090,14 @@ async function handleComposerFiles(files) {
       newItems[i].ref = ref;
       newItems[i].status = 'ready';
     });
+    if (rejectedType) announceComposerStatus(t('File type not allowed'));
   } catch (err) {
     console.error('[CosmoMail] upload error:', err);
     newItems.forEach((item) => { item.status = 'error'; });
-    announceComposerStatus(t('Upload failed'));
+    const messages = [];
+    if (rejectedType) messages.push(t('File type not allowed'));
+    messages.push(t('Upload failed'));
+    announceComposerStatus(messages.join('. '));
   } finally {
     renderAttachmentPreview();
   }
