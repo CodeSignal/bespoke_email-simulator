@@ -1,6 +1,6 @@
 # Findings checklist
 
-Remediation status after the [6 Oct 2026 re-audit](./2026-10-06-cosmomail-ux-audit.md). IDs from the [29 Sep audit](./2026-09-29-cosmomail-ux-audit.md) are kept. New issues start at S6, M8, and N8.
+Remediation status after the [12 Oct 2026 audit](./2026-10-12-cosmomail-ux-audit.md). IDs from the [29 Sep](./2026-09-29-cosmomail-ux-audit.md) and [6 Oct](./2026-10-06-cosmomail-ux-audit.md) audits are kept. Issues opened on 12 Oct start at S8, M12, and N10.
 
 | ID | Severity | Summary | WCAG | Status | GitHub |
 |----|----------|---------|------|--------|--------|
@@ -30,3 +30,10 @@ Remediation status after the [6 Oct 2026 re-audit](./2026-10-06-cosmomail-ux-aud
 | N7 | Minor | Composer minimized chrome | 2.1.1 | Obsolete | — |
 | N8 | Minor | Mail-row accessible names run together | 2.4.6 | Fixed | [#32](https://github.com/CodeSignal/bespoke_email-simulator/issues/32) |
 | N9 | Minor | List separators are real `<hr>` elements | Best practice | Fixed | — |
+| S8 | Serious | Opening a thread focuses a clipped heading | 2.4.7 | Fixed | [#41](https://github.com/CodeSignal/bespoke_email-simulator/issues/41) |
+| S9 | Serious | Closing compose leaves focus on the page | 2.4.3 | Fixed | [#42](https://github.com/CodeSignal/bespoke_email-simulator/issues/42) |
+| S10 | Serious | Message header clips the sender at 320px | 1.4.10 | Fixed | [#43](https://github.com/CodeSignal/bespoke_email-simulator/issues/43) |
+| S11 | Serious | Assistant transcript is not keyboard scrollable | 2.1.1 | Fixed | [#44](https://github.com/CodeSignal/bespoke_email-simulator/issues/44) |
+| M12 | Moderate | Assistant placeholder fails contrast in light and dark | 1.4.3 | Open | [#45](https://github.com/CodeSignal/bespoke_email-simulator/issues/45) |
+| M13 | Moderate | Failed upload is not announced | 4.1.3 | Open | [#46](https://github.com/CodeSignal/bespoke_email-simulator/issues/46) |
+| N10 | Minor | Recipient option names run together | 2.4.6 | Open | [#47](https://github.com/CodeSignal/bespoke_email-simulator/issues/47) |

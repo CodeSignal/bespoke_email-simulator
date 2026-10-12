@@ -1576,6 +1576,12 @@ body {
   scrollbar-color: var(--Colors-Control-Neutral-Strong) transparent;
 }
 
+.assistant__content:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: -2px;
+  border-radius: var(--UI-Radius-radius-s);
+}
+
 .assistant__messages {
   flex: 0 0 auto;
   display: flex;
@@ -2270,5 +2276,28 @@ body {
     overflow: hidden;
     background: var(--Colors-Surface-App-Base);
     box-shadow: -8px 0 24px var(--Colors-Emphasis-Shadow-Soft);
+  }
+
+  /* Wrap the sender, address and date instead of clipping them (WCAG 1.4.10). */
+  .email__row--from {
+    flex-wrap: wrap;
+    row-gap: 0;
+    column-gap: var(--UI-Spacing-spacing-xs);
+  }
+
+  .email__from,
+  .email__address,
+  .email__date {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: 100%;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .email__date {
+    text-align: left;
   }
 }

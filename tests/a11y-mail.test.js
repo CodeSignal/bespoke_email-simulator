@@ -2,7 +2,7 @@
 /**
  * Accessibility regressions for the 2026-10-06 fixes (S6, S1, S5, S7, S3,
  * S2, S4, M4, M6, M9, M2, M7, M11, N2, N4, N8, N9, and Shift+Tab in the
- * recipient combobox).
+ * recipient combobox) and the 2026-10-12 fixes (S8, S9, S10, S11).
  *
  * public/app.js reads the document while the module loads, so this mounts
  * public/index.html first and imports the module after that. Vitest skips
@@ -325,14 +325,12 @@ describe('S1 opened thread status', () => {
 });
 
 describe('S5 focus when the list and thread change', () => {
-  it('moves focus to the toolbar title and hides the list when a row opens', () => {
-    const title = document.getElementById('mailToolbarTitle');
-    expect(title.getAttribute('tabindex')).toBe('-1');
-
+  it('moves focus out of the hidden list when a row opens', () => {
     clickThread('thread-blank');
 
     expect(document.getElementById('mailList').hidden).toBe(true);
-    expect(document.activeElement).toBe(title);
+    expect(document.activeElement).toBe(document.getElementById('backBtn'));
+    expect(document.getElementById('mailList').contains(document.activeElement)).toBe(false);
     expect(document.activeElement).not.toBe(document.body);
   });
 
@@ -345,6 +343,287 @@ describe('S5 focus when the list and thread change', () => {
     expect(document.activeElement).toBe(restored);
     expect(document.activeElement).not.toBe(other);
     expect(document.activeElement).not.toBe(document.body);
+  });
+});
+
+const appCss = readFileSync(join(root, 'public/app.css'), 'utf8');
+
+// Declarations of the app.css rule whose selector list includes `selector`.
+function appCssRule(selector) {
+  for (const match of appCss.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    if (match[1].split(',').some((part) => part.trim() === selector)) return match[2];
+  }
+  return '';
+}
+
+function onScreen(el) {
+  return el.isConnected && !el.closest('[hidden], .visually-hidden');
+}
+
+describe('S8 focus target when a thread opens', () => {
+  it('focuses Back, which is on screen, instead of the visually hidden toolbar heading', () => {
+    const row = document.querySelector('.mail-row[data-thread-id="thread-quote"]');
+    row.focus();
+    row.click();
+
+    const back = document.getElementById('backBtn');
+    expect(document.getElementById('mailToolbarTitle').classList.contains('visually-hidden')).toBe(true);
+    expect(document.activeElement).toBe(back);
+    expect(onScreen(back)).toBe(true);
+    expect(computeAccessibleName(back)).toBe(strings['Back to inbox']);
+  });
+
+  it('draws a 2px focus ring on Back', () => {
+    expect(appCssRule('.mail-back:focus-visible .icon-button')).toMatch(/outline:\s*2px solid/);
+  });
+
+  it('keeps the opened-thread status and still returns to the row on Back', async () => {
+    clickThread('thread-quote');
+    await nextFrame();
+    expect(statusEl().textContent).toBe(`${strings.Opened}: Vendor quote`);
+
+    mail.backToList();
+    expect(document.activeElement).toBe(document.querySelector('.mail-row[data-thread-id="thread-quote"]'));
+  });
+});
+
+describe('S9 focus when the composer closes', () => {
+  async function settle() {
+    await Promise.resolve();
+    await nextFrame();
+  }
+
+  function expectComposerClosedWithFocusOn(target) {
+    const composer = document.getElementById('composer');
+    expect(composer.hidden).toBe(true);
+    expect(document.activeElement).not.toBe(document.body);
+    expect(composer.contains(document.activeElement)).toBe(false);
+    expect(document.activeElement).toBe(target);
+    expect(onScreen(target)).toBe(true);
+  }
+
+  it('returns to the toolbar Compose button after Close', async () => {
+    const opener = document.getElementById('toolbarComposeBtn');
+    opener.focus();
+    mail.startCompose({ blank: true });
+    expect(document.getElementById('composer').hidden).toBe(false);
+    expect(document.activeElement).toBe(document.getElementById('composeToInput'));
+
+    mail.closeComposer();
+    await settle();
+
+    expectComposerClosedWithFocusOn(opener);
+  });
+
+  it('returns to the rail Compose button after Close', async () => {
+    const opener = document.getElementById('composeBtn');
+    opener.focus();
+    mail.startCompose({ blank: true });
+    mail.closeComposer();
+    await settle();
+
+    expectComposerClosedWithFocusOn(opener);
+  });
+
+  it('returns to the opener after Cancel on a new message', async () => {
+    const opener = document.getElementById('toolbarComposeBtn');
+    opener.focus();
+    mail.startCompose({ blank: true });
+    mail.cancelComposer();
+    await settle();
+
+    expectComposerClosedWithFocusOn(opener);
+  });
+
+  it('finds the re-rendered draft row that opened the message', async () => {
+    mail.state.session.drafts = [{
+      id: 'draft-1',
+      scope: 'new',
+      to: [DANA],
+      cc: [],
+      subject: 'Pricing',
+      body: 'Draft body',
+      updated_at: '2026-10-08T14:15:00.000Z',
+    }];
+    mail.selectMailbox('drafts');
+    const row = document.querySelector('.mail-row[data-draft-id="draft-1"]');
+    row.focus();
+    row.click();
+    await settle();
+    expect(document.getElementById('composer').hidden).toBe(false);
+
+    mail.closeComposer();
+    await settle();
+
+    const restored = document.querySelector('.mail-row[data-draft-id="draft-1"]');
+    expectComposerClosedWithFocusOn(restored);
+  });
+
+  it('falls back to the toolbar Compose button when the opener is gone', async () => {
+    document.activeElement?.blur();
+    mail.startCompose({ blank: true });
+    mail.closeComposer();
+    await settle();
+
+    expectComposerClosedWithFocusOn(document.getElementById('toolbarComposeBtn'));
+  });
+
+  it('returns to the rebuilt thread Reply button after closing a reply', async () => {
+    clickThread('thread-quote');
+    const reply = document.querySelector('.thread-actions [data-reply-mode="reply"]');
+    reply.focus();
+    reply.click();
+    expect(document.getElementById('composer').hidden).toBe(false);
+    expect(reply.isConnected).toBe(false);
+
+    mail.closeComposer();
+    await settle();
+
+    const restored = document.querySelector('.thread-actions [data-reply-mode="reply"]');
+    expectComposerClosedWithFocusOn(restored);
+  });
+
+  it('returns to the per-message Reply all button after Cancel', async () => {
+    clickThread('thread-quote');
+    const action = document.querySelector('[data-email-id="email-quote"] .email__action[data-reply-mode="replyAll"]');
+    action.focus();
+    action.click();
+    expect(document.getElementById('composer').hidden).toBe(false);
+
+    mail.cancelComposer();
+    await settle();
+
+    const restored = document.querySelector('[data-email-id="email-quote"] .email__action[data-reply-mode="replyAll"]');
+    expectComposerClosedWithFocusOn(restored);
+  });
+
+  it('falls back to Back when a reply was opened from somewhere that is gone', async () => {
+    clickThread('thread-quote');
+    document.activeElement?.blur();
+    mail.startReply('reply');
+    mail.closeComposer();
+    await settle();
+
+    expectComposerClosedWithFocusOn(document.getElementById('backBtn'));
+  });
+
+  it('does not pull focus back if the learner moved on while the draft saved', async () => {
+    const opener = document.getElementById('toolbarComposeBtn');
+    opener.focus();
+    mail.startCompose({ blank: true });
+    const elsewhere = document.getElementById('assistantInput');
+    mail.closeComposer();
+    elsewhere.focus();
+    await settle();
+
+    expect(document.activeElement).toBe(elsewhere);
+  });
+});
+
+describe('S10 message header at 320px', () => {
+  function header() {
+    mail.state.session.threads[0].emails.push({
+      id: 'email-reply',
+      from: { name: 'Alex', email: LEARNER },
+      to: [{ name: 'Dana Reyes', email: DANA }],
+      date: '2026-10-05T16:00:00.000Z',
+      body: 'Thanks, Dana.',
+      outbound: true,
+    });
+    clickThread('thread-quote');
+    return [...document.querySelectorAll('#readingPane .email__row--from')];
+  }
+
+  it('wraps the sender, address, and date instead of clipping them', () => {
+    setViewport(320, 800);
+    const rows = header();
+    expect(rows.length).toBe(2);
+    for (const row of rows) {
+      expect(getComputedStyle(row).flexWrap).toBe('wrap');
+      for (const part of row.querySelectorAll('.email__from, .email__address, .email__date')) {
+        const style = getComputedStyle(part);
+        expect(style.whiteSpace).toBe('normal');
+        expect(style.textOverflow).not.toBe('ellipsis');
+        expect(style.overflow).not.toBe('hidden');
+      }
+    }
+  });
+
+  it('keeps the one-line desktop header at 1280px', () => {
+    setViewport(1280, 900);
+    const [row] = header();
+    expect(getComputedStyle(row).flexWrap).not.toBe('wrap');
+    expect(getComputedStyle(row.querySelector('.email__from')).whiteSpace).toBe('nowrap');
+    expect(getComputedStyle(row.querySelector('.email__from')).textOverflow).toBe('ellipsis');
+    expect(getComputedStyle(row.querySelector('.email__date')).whiteSpace).toBe('nowrap');
+  });
+});
+
+describe('S11 keyboard-scrollable assistant transcript', () => {
+  afterEach(() => {
+    document.getElementById('assistantChips').hidden = true;
+    document.getElementById('assistantChips').replaceChildren();
+  });
+
+  function transcript() {
+    return document.getElementById('assistantContent');
+  }
+
+  it('is a named, focusable region that wraps the existing log', () => {
+    mail.applyScenarioChrome();
+    const region = transcript();
+    const log = document.getElementById('assistantMessages');
+
+    expect(region.getAttribute('role')).toBe('region');
+    expect(region.tabIndex).toBe(0);
+    expect(computeAccessibleName(region)).toBe(strings['AI Assistant conversation']);
+    expect(region.contains(log)).toBe(true);
+    expect(log.getAttribute('role')).toBe('log');
+    expect(log.getAttribute('aria-live')).toBe('polite');
+    expect(region.hasAttribute('aria-live')).toBe(false);
+  });
+
+  it('takes keyboard focus with or without quick-action chips', () => {
+    const region = transcript();
+    const chips = document.getElementById('assistantChips');
+
+    chips.hidden = true;
+    region.focus();
+    expect(document.activeElement).toBe(region);
+
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'assistant__chip';
+    chip.textContent = 'Summarize';
+    chips.appendChild(chip);
+    chips.hidden = false;
+    region.blur();
+    region.focus();
+    expect(document.activeElement).toBe(region);
+    expect(region.tabIndex).toBe(0);
+  });
+
+  it('localizes the region name', () => {
+    mail.state.config.strings = { ...strings, 'AI Assistant conversation': 'Conversación con el asistente' };
+    mail.applyScenarioChrome();
+    expect(computeAccessibleName(transcript())).toBe('Conversación con el asistente');
+  });
+
+  it('draws a focus ring on the region', () => {
+    expect(appCssRule('.assistant__content:focus-visible')).toMatch(/outline:\s*2px solid/);
+  });
+
+  it('does not route assistant updates through the mail or composer status', () => {
+    mail.state.assistant.persisted = [
+      { role: 'user', content: 'Earlier question' },
+      { role: 'assistant', content: 'Earlier answer' },
+    ];
+    mail.renderAssistant([]);
+    expect(statusEl().textContent).toBe('');
+    expect(document.getElementById('composerStatus').textContent).toBe('');
+    expect(document.getElementById('readingPane').hasAttribute('aria-live')).toBe(false);
+    mail.state.assistant.persisted = [];
+    mail.renderAssistant([]);
   });
 });
 

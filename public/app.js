@@ -120,6 +120,7 @@ const state = {
   replying: null, // null | 'reply' | 'replyAll'
   selectedEmailId: null, // highlighted message in a multi-message thread
   replyToEmailId: null, // email a per-message reply button targeted
+  composeOpener: null, // { el, selector } focus returns to when the composer closes
   recipients: { to: [], cc: [] },
   openRecipientField: null, // null | 'to' | 'cc'
   recipientQuery: { to: '', cc: '' }, // typeahead text per field
@@ -1284,6 +1285,7 @@ function renderDraftList() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'mail-row';
+    if (draft.id) btn.dataset.draftId = draft.id;
     btn.setAttribute('aria-label', mailRowAccessibleName([from, subject, date]));
     btn.innerHTML = `
       ${avatarMarkup(draftListPerson(draft), 'lg')}
@@ -1504,6 +1506,7 @@ function renderThreadActions() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'button button-secondary button-xsmall';
+    btn.dataset.replyMode = mode;
     btn.textContent = label;
     btn.addEventListener('click', () => startReply(mode));
     actions.appendChild(btn);
@@ -1576,7 +1579,7 @@ function selectThread(threadId) {
   state.replyToEmailId = null;
   renderShell();
   announceOpenedThread(threadId);
-  focusThreadHeading();
+  focusOpenedThread();
 }
 
 // One short status when a thread opens. The reading pane is not a live region,
@@ -1620,8 +1623,56 @@ function viewScrollBehavior() {
   return prefersReducedMotion() ? 'auto' : 'smooth';
 }
 
-function focusThreadHeading() {
-  els.mailToolbarTitle?.focus({ preventScroll: true });
+// The toolbar heading is visually hidden in a conversation, so focus goes to
+// Back: it is on screen and shows a focus ring.
+function focusOpenedThread() {
+  focusControl(els.backBtn);
+}
+
+// Rows and reply buttons are rebuilt while the composer is open, so keep a
+// selector that finds the replacement as well as the original element.
+function composeOpenerSelector(el) {
+  const { threadId, draftId, replyMode } = el.dataset ?? {};
+  if (el.matches('.mail-row') && threadId) return `.mail-row[data-thread-id="${escapeSelector(threadId)}"]`;
+  if (el.matches('.mail-row') && draftId) return `.mail-row[data-draft-id="${escapeSelector(draftId)}"]`;
+  if (!replyMode) return null;
+  const mode = escapeSelector(replyMode);
+  const emailId = el.closest('[data-email-id]')?.dataset.emailId;
+  if (emailId) return `[data-email-id="${escapeSelector(emailId)}"] .email__action[data-reply-mode="${mode}"]`;
+  return el.closest('.thread-actions') ? `.thread-actions [data-reply-mode="${mode}"]` : null;
+}
+
+function rememberComposeOpener() {
+  const active = document.activeElement;
+  // Switching between a reply and a new message keeps the first opener.
+  if (els.composer?.contains(active)) return;
+  state.composeOpener = active && active !== document.body
+    ? { el: active, selector: composeOpenerSelector(active) }
+    : null;
+}
+
+function canRestoreFocusTo(el) {
+  if (!el?.isConnected || el.disabled) return false;
+  if (el.closest('[hidden], [inert], .visually-hidden') || el.hasAttribute('data-focus-covered')) return false;
+  if (els.composer?.contains(el)) return false;
+  return el.getClientRects().length > 0;
+}
+
+// Run after the composer is hidden and the view has re-rendered. Falls back to
+// a visible toolbar control so focus never drops to <body>.
+function restoreComposeFocus() {
+  const opener = state.composeOpener;
+  state.composeOpener = null;
+  const active = document.activeElement;
+  // The learner already moved on while the draft was saving.
+  if (active && active !== document.body && !els.composer?.contains(active)) return;
+  const candidates = [
+    opener?.el,
+    opener?.selector ? document.querySelector(opener.selector) : null,
+    state.view === 'thread' ? els.backBtn : null,
+    els.toolbarComposeBtn,
+  ];
+  focusControl(candidates.find(canRestoreFocusTo) ?? els.mailMain);
 }
 
 function focusMailRow(threadId) {
@@ -1631,6 +1682,7 @@ function focusMailRow(threadId) {
 }
 
 function startReply(mode, emailId = null) {
+  rememberComposeOpener();
   state.view = 'thread';
   state.composingNew = false;
   state.replying = mode;
@@ -1655,6 +1707,7 @@ function cancelReply() {
   }
   setEditorMarkdown('');
   renderShell();
+  restoreComposeFocus();
 }
 
 function startCompose({ blank = true, draft = null } = {}) {
@@ -1663,6 +1716,7 @@ function startCompose({ blank = true, draft = null } = {}) {
     els.composeToInput?.focus();
     return;
   }
+  rememberComposeOpener();
   const wasReplying = Boolean(state.replying);
   state.composingNew = true;
   state.replying = null;
@@ -1700,6 +1754,7 @@ async function closeComposeOverlay() {
   state.activeDraftId = null;
   applyView();
   refreshDraftsUi();
+  restoreComposeFocus();
 }
 
 function refreshDraftsUi() {
@@ -1740,6 +1795,7 @@ function closeComposer() {
   void saveDraftNow().then(() => {
     state.replying = null;
     renderShell();
+    restoreComposeFocus();
   });
 }
 
@@ -1814,6 +1870,7 @@ function applyScenarioChrome() {
   if (els.assistantInputHint) {
     els.assistantInputHint.textContent = t('Enter sends. Shift+Enter inserts a newline.');
   }
+  els.assistantContent?.setAttribute('aria-label', t('AI Assistant conversation'));
   if (els.assistantClearBtn) {
     els.assistantClearBtn.setAttribute('aria-label', t('New conversation'));
     els.assistantClearBtn.title = t('New conversation');
@@ -3799,6 +3856,9 @@ export function mailAppTestHooks() {
     handleComposerFiles,
     scrollToEmail,
     startReply,
+    startCompose,
+    closeComposer,
+    cancelComposer,
     insertProposedDraft,
     thinkingIndicator,
     resetThinkingIndicator,
