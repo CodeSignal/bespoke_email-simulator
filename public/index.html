@@ -176,7 +176,8 @@
           </button>
         </div>
         <!-- One scroll region so quick-action chips sit right under the latest message. -->
-        <div class="assistant__content" id="assistantContent">
+        <!-- Focusable so the transcript scrolls from the keyboard even when no chips are shown. -->
+        <div class="assistant__content" id="assistantContent" role="region" tabindex="0" aria-label="AI Assistant conversation">
           <div class="assistant__messages" id="assistantMessages" role="log" aria-live="polite">
             <p class="assistant__hint" id="assistantHint">Ask the AI Assistant to help draft, summarize, or answer questions about this thread.</p>
           </div>
