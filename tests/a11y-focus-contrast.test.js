@@ -1,7 +1,8 @@
 // M1 (button focus), M8 (recipient meta contrast), M10 (split divider focus),
-// and the M2 arrival animation. Loads the design-system CSS and color tokens
-// into happy-dom and reads the computed result. Colors come from those tokens,
-// not from the audit's old hex values.
+// M12 (assistant placeholder contrast), and the M2 arrival animation. Loads
+// the design-system CSS and color tokens into happy-dom and reads the
+// computed result. Colors come from those tokens, not from the audit's old
+// hex values.
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -12,6 +13,7 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 const STYLES = [
   'design-system/colors/colors.css',
+  'design-system/typography/typography.css',
   'design-system/components/button/button.css',
   'design-system/components/split-panel/split-panel.css',
   'public/global.css',
@@ -318,6 +320,85 @@ describe('M1 button focus', () => {
         expectPseudoIndicator(css, variant, [':focus']);
       }
     });
+  });
+});
+
+function placeholderColor(window, input) {
+  const rule = styleRules(window.document)
+    .filter((entry) => selectorList(entry.selectorText).includes('.assistant__input::placeholder'))
+    .at(-1);
+  const probe = window.document.createElement('span');
+  probe.style.color = rule?.style.color || '';
+  window.document.body.appendChild(probe);
+  const fromRule = parseColor(window.getComputedStyle(probe).color);
+  const pseudo = window.getComputedStyle(input, '::placeholder');
+  if (!pseudo?.color || !opaque(pseudo.color)) return fromRule;
+  const fromPseudo = parseColor(pseudo.color);
+  const inputColor = parseColor(window.getComputedStyle(input).color);
+  // happy-dom may ignore ::placeholder and return the input text color.
+  if (fromPseudo.r === inputColor.r && fromPseudo.g === inputColor.g && fromPseudo.b === inputColor.b) {
+    return fromRule;
+  }
+  return fromPseudo;
+}
+
+function stackedBackground(window, el) {
+  const layers = [];
+  let node = el;
+  while (node && node !== window.document.documentElement) {
+    const color = window.getComputedStyle(node).backgroundColor;
+    layers.push(parseColor(color));
+    if (layers.at(-1).a >= 1) break;
+    node = node.parentElement;
+  }
+  if (!layers.length || layers.at(-1).a < 1) {
+    layers.push(parseColor(window.getComputedStyle(window.document.body).backgroundColor));
+  }
+  return layers.reduceRight((backdrop, fill) => (fill.a >= 1 ? fill : composite(fill, backdrop)));
+}
+
+function assistantPlaceholderContrast(scheme) {
+  return withScheme(scheme, (window) => {
+    const { document } = window;
+    const app = document.createElement('div');
+    app.className = 'mail-app';
+    const assistant = document.createElement('aside');
+    assistant.className = 'assistant';
+    const card = document.createElement('div');
+    card.className = 'assistant__card';
+    const composer = document.createElement('div');
+    composer.className = 'assistant__composer';
+    const input = document.createElement('textarea');
+    input.className = 'assistant__input';
+    input.placeholder = 'Ask me anything...';
+    input.setAttribute('aria-label', 'Message the AI Assistant');
+    composer.appendChild(input);
+    card.appendChild(composer);
+    assistant.appendChild(card);
+    app.appendChild(assistant);
+    document.body.appendChild(app);
+
+    const style = window.getComputedStyle(input);
+    const size = Number.parseFloat(style.fontSize);
+    const weight = Number.parseInt(style.fontWeight, 10) || 400;
+    return {
+      ratio: contrast(placeholderColor(window, input), stackedBackground(window, input)),
+      size,
+      weight,
+      name: input.getAttribute('aria-label'),
+    };
+  });
+}
+
+describe('M12 assistant placeholder contrast', () => {
+  it('clears 4.5:1 on the composited composer fill in light and dark', () => {
+    for (const scheme of ['light', 'dark']) {
+      const measured = assistantPlaceholderContrast(scheme);
+      expect(measured.ratio, scheme).toBeGreaterThanOrEqual(4.5);
+      expect(measured.size, scheme).toBeLessThan(18);
+      expect(measured.weight, scheme).toBeLessThan(700);
+      expect(measured.name, scheme).toBe('Message the AI Assistant');
+    }
   });
 });
 

@@ -541,7 +541,8 @@ function renderRecipientMenu(field) {
     text.className = 'recipient-picker__option-text';
     const name = document.createElement('span');
     name.className = 'dropdown-menu-item-label';
-    name.innerHTML = highlightMatch(characterLabel(character), query);
+    const person = characterLabel(character);
+    name.innerHTML = highlightMatch(person, query);
     text.appendChild(name);
     const metaText = character.role || character.email;
     if (metaText) {
@@ -550,6 +551,7 @@ function renderRecipientMenu(field) {
       meta.innerHTML = highlightMatch(metaText, query);
       text.appendChild(meta);
     }
+    option.setAttribute('aria-label', mailRowAccessibleName([person, metaText]));
     content.appendChild(text);
     option.appendChild(content);
     // mousedown keeps focus in the input so the caret never leaves the row.
@@ -2087,6 +2089,7 @@ async function handleComposerFiles(files) {
   } catch (err) {
     console.error('[CosmoMail] upload error:', err);
     newItems.forEach((item) => { item.status = 'error'; });
+    announceComposerStatus(t('Upload failed'));
   } finally {
     renderAttachmentPreview();
   }
