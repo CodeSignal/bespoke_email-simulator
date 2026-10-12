@@ -262,7 +262,13 @@ function formatAddressList(list) {
 
 function dateLocale() {
   const language = String(state.config?.documentLanguage ?? '').trim();
-  return isDocumentLanguageTag(language) ? language : undefined;
+  if (!isDocumentLanguageTag(language)) return undefined;
+  try {
+    const [canonical] = Intl.getCanonicalLocales(language);
+    return canonical || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function formatDate(iso) {

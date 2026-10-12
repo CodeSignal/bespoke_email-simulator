@@ -1735,6 +1735,23 @@ describe('date stamps', () => {
       ].join(' '),
     );
   });
+
+  it('canonicalizes a valid tag and falls back when Intl rejects it', () => {
+    const browser = [
+      new Date(iso).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }),
+      new Date(iso).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }),
+    ].join(' ');
+    mail.state.config.documentLanguage = 'ES';
+    expect(mail.formatDate(iso)).toBe(
+      [
+        new Date(iso).toLocaleDateString('es', { year: 'numeric', month: 'short', day: 'numeric' }),
+        new Date(iso).toLocaleTimeString('es', { hour: 'numeric', minute: '2-digit' }),
+      ].join(' '),
+    );
+
+    mail.state.config.documentLanguage = 'zh-min-nan';
+    expect(mail.formatDate(iso)).toBe(browser);
+  });
 });
 
 describe('composer send chrome', () => {
