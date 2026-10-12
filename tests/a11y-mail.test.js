@@ -1893,3 +1893,72 @@ describe('N9 list separators', () => {
     expectBorderRule();
   });
 });
+
+describe('delete drafts', () => {
+  const pricing = {
+    id: 'draft-1',
+    scope: 'new',
+    to: [DANA],
+    cc: [],
+    subject: 'Pricing',
+    body: 'Draft body',
+    updated_at: '2026-10-08T14:15:00.000Z',
+  };
+  const followup = {
+    id: 'draft-2',
+    scope: 'new',
+    to: [SAM],
+    cc: [],
+    subject: 'Follow-up',
+    body: 'Checking in',
+    updated_at: '2026-10-08T15:15:00.000Z',
+  };
+
+  function showDrafts(drafts) {
+    mail.state.session.drafts = drafts;
+    mail.selectMailbox('drafts');
+  }
+
+  it('names a delete control on each draft row', () => {
+    showDrafts([pricing]);
+    const remove = document.querySelector('.mail-item__delete');
+    expect(remove).toBeTruthy();
+    expect(computeAccessibleName(remove)).toBe(strings['Delete draft']);
+    expect(document.querySelector('.mail-row').contains(remove)).toBe(false);
+  });
+
+  it('removes only the chosen draft from the folder', async () => {
+    showDrafts([pricing, followup]);
+    const row = document.querySelector('.mail-row[data-draft-id="draft-1"]');
+    row.closest('.mail-item').querySelector('.mail-item__delete').click();
+    await Promise.resolve();
+
+    expect(mail.state.session.drafts.map((draft) => draft.id)).toEqual(['draft-2']);
+    expect(document.querySelector('.mail-row[data-draft-id="draft-1"]')).toBeNull();
+    expect(document.querySelector('.mail-row[data-draft-id="draft-2"]')).toBeTruthy();
+    expect(document.getElementById('composer').hidden).toBe(true);
+  });
+
+  it('shows the empty drafts folder after the last draft is deleted', async () => {
+    showDrafts([pricing]);
+    document.querySelector('.mail-item__delete').click();
+    await Promise.resolve();
+
+    expect(mail.state.session.drafts).toEqual([]);
+    expect(document.querySelector('.mail-list__empty-title').textContent).toBe(strings['No drafts']);
+  });
+
+  it('closes an open composer without putting the draft back', async () => {
+    showDrafts([pricing]);
+    mail.startCompose({ blank: false, draft: pricing });
+    expect(document.getElementById('composer').hidden).toBe(false);
+
+    document.querySelector('.mail-item__delete').click();
+    await Promise.resolve();
+    await nextFrame();
+
+    expect(mail.state.composingNew).toBe(false);
+    expect(document.getElementById('composer').hidden).toBe(true);
+    expect(mail.state.session.drafts).toEqual([]);
+  });
+});
