@@ -1480,7 +1480,8 @@ function renderAttachmentList(attachments) {
     const name = attachment.name || t('Attachment');
     const hasText = typeof attachment.text === 'string' && attachment.text.length > 0;
     const imageUrl = isImageAttachment(attachment) ? attachment.ref?.url || '' : '';
-    const previewable = hasText || Boolean(imageUrl);
+    let canPreviewImage = Boolean(imageUrl);
+    const previewable = hasText || canPreviewImage;
     const chip = document.createElement(previewable ? 'button' : 'span');
     chip.className = 'tag outline email__attachment';
     chip.textContent = name;
@@ -1489,13 +1490,14 @@ function renderAttachmentList(attachments) {
       chip.classList.add('email__attachment--preview');
       chip.setAttribute('aria-label', `${t('Preview attachment')}: ${name}`);
       chip.addEventListener('click', () => {
-        if (chip.classList.contains('attachment--image')) openImagePreview(name, imageUrl);
+        if (canPreviewImage) openImagePreview(name, imageUrl);
         else openAttachmentPreview(attachment);
       });
     }
     // Upload URLs are presigned and expire; fall back to the plain name chip.
     if (imageUrl) {
       prependAttachmentThumb(chip, imageUrl, () => {
+        canPreviewImage = false;
         if (!hasText) chip.replaceWith(Object.assign(document.createElement('span'), {
           className: 'tag outline email__attachment',
           textContent: name,
@@ -2435,6 +2437,7 @@ function readyAttachments() {
 }
 
 function clearAttachments() {
+  for (const item of state.attachments) releaseFilePreview(item.file);
   state.attachments = [];
   renderAttachmentPreview();
 }
@@ -4235,6 +4238,7 @@ async function handleAssistantFiles(files) {
 }
 
 function clearAssistantAttachments() {
+  for (const item of state.assistant.attachments) releaseFilePreview(item.file);
   state.assistant.attachments = [];
   renderAssistantAttachments();
 }

@@ -1406,6 +1406,20 @@ describe('Attachment thumbnails', () => {
     expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo');
   });
 
+  it('releases preview URLs when the composer is cleared', async () => {
+    clickThread('thread-quote');
+    await nextFrame();
+    URL.createObjectURL = vi.fn(() => 'blob:photo');
+    URL.revokeObjectURL = vi.fn();
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.png'] };
+    mail.state.assistant.chat = { uploadFiles: vi.fn(async (files) => files.map((file) => ({ name: file.name }))) };
+
+    await mail.handleComposerFiles([new File(['png'], 'photo.png', { type: 'image/png' })]);
+    mail.startCompose({ blank: true });
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo');
+  });
+
   it('shows a sent image thumbnail and falls back to the name when the URL fails', () => {
     const list = mail.renderAttachmentList([
       { name: 'photo.png', type: 'image/png', ref: { url: 'https://files.test/photo.png' } },
