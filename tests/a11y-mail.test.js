@@ -1375,6 +1375,53 @@ describe('M13 failed upload', () => {
   });
 });
 
+describe('Attachment thumbnails', () => {
+  const { createObjectURL, revokeObjectURL } = URL;
+  afterEach(() => {
+    URL.createObjectURL = createObjectURL;
+    URL.revokeObjectURL = revokeObjectURL;
+  });
+
+  it('shows a local preview for an image in the composer and revokes it on remove', async () => {
+    clickThread('thread-quote');
+    await nextFrame();
+    URL.createObjectURL = vi.fn(() => 'blob:photo');
+    URL.revokeObjectURL = vi.fn();
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.png', '.pdf'] };
+    mail.state.assistant.chat = { uploadFiles: vi.fn(async (files) => files.map((file) => ({ name: file.name }))) };
+
+    await mail.handleComposerFiles([
+      new File(['png'], 'photo.png', { type: 'image/png' }),
+      new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' }),
+    ]);
+
+    const [imageChip, pdfChip] = document.querySelectorAll('.composer__attachment');
+    const thumb = imageChip.querySelector('img.attachment-thumb');
+    expect(thumb.getAttribute('src')).toBe('blob:photo');
+    expect(thumb.alt).toBe('');
+    expect(pdfChip.querySelector('img')).toBeNull();
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(1);
+
+    imageChip.querySelector('.composer__attachment-remove').click();
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:photo');
+  });
+
+  it('shows a sent image thumbnail and falls back to the name when the URL fails', () => {
+    const list = mail.renderAttachmentList([
+      { name: 'photo.png', type: 'image/png', ref: { url: 'https://files.test/photo.png' } },
+    ]);
+    const chip = list.querySelector('.email__attachment--preview');
+    expect(computeAccessibleName(chip)).toBe(`${strings['Preview attachment']}: photo.png`);
+    const thumb = chip.querySelector('img.attachment-thumb');
+    expect(thumb.getAttribute('src')).toBe('https://files.test/photo.png');
+
+    thumb.dispatchEvent(new Event('error'));
+    expect(list.querySelector('img')).toBeNull();
+    expect(list.querySelector('button')).toBeNull();
+    expect(list.querySelector('.email__attachment').textContent).toBe('photo.png');
+  });
+});
+
 describe('Assistant chat attachments', () => {
   const pdf = () => new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' });
   const docx = () => new File(['doc'], 'notes.docx', {

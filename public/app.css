@@ -1508,6 +1508,22 @@ body {
   gap: var(--UI-Spacing-spacing-xxs);
 }
 
+.tag.attachment--image {
+  height: auto;
+  min-height: var(--UI-Input-sm);
+  padding-block: var(--UI-Spacing-spacing-xxs);
+  padding-left: var(--UI-Spacing-spacing-xxs);
+}
+
+.attachment-thumb {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  object-fit: cover;
+  border-radius: var(--UI-Radius-tag-medium);
+  background: var(--Colors-Border-Subtle);
+}
+
 .composer__attachment-remove {
   display: inline-flex;
   align-items: center;
@@ -2110,6 +2126,14 @@ body {
 .replace-draft-dialog .modal-content {
   padding-top: 0;
   padding-bottom: 0;
+}
+
+.attachment-preview-modal__image {
+  display: block;
+  max-width: 100%;
+  max-height: min(60vh, 28rem);
+  margin: 0 auto;
+  object-fit: contain;
 }
 
 .attachment-preview-modal__body {
