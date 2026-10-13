@@ -1429,6 +1429,20 @@ describe('Assistant chat attachments', () => {
     expect(document.getElementById('assistantAttachments').hidden).toBe(true);
   });
 
+  it('keeps the attachments for a retry when send rejects', async () => {
+    await mail.handleAssistantFiles([pdf()]);
+    mail.state.assistant.chat.send = vi.fn(async () => { throw new Error('offline'); });
+    const input = document.getElementById('assistantInput');
+    input.disabled = false;
+    input.value = 'Read this';
+
+    await mail.sendAssistant();
+
+    expect(mail.state.assistant.attachments.map((item) => item.ref)).toEqual([ref]);
+    const chips = document.querySelectorAll('#assistantAttachments .assistant__attachment');
+    expect([...chips].map((c) => c.textContent)).toEqual(['brief.pdf']);
+  });
+
   it('omits FILES when nothing is attached', async () => {
     const input = document.getElementById('assistantInput');
     input.disabled = false;

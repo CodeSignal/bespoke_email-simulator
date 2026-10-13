@@ -15,7 +15,13 @@ import {
   parseCharacterReply,
   buildCharacterReplyHeaders,
 } from './lib/character-replies.js';
-import { buildCapabilityInstructions, assistantAttachmentsEnabled } from './lib/assistant.js';
+import {
+  buildCapabilityInstructions,
+  assistantAttachmentsEnabled,
+  assistantAttachmentTypes,
+  fileExtension,
+  uploadAllowed,
+} from './lib/assistant.js';
 import { removeScopedDraft } from './lib/drafts.js';
 import { findThreadEmail, forwardedSnapshot } from './lib/forwarding.js';
 import {
@@ -459,6 +465,13 @@ app.post('/api/assistant/trigger', async (req, res) => {
     // Candidates must not supply custom instructions, even if the client tries.
     if (config.audience === 'candidate') delete payload.CUSTOM_INSTRUCTIONS;
     if (!assistantAttachmentsEnabled(config) && payload.input) delete payload.input.FILES;
+    const files = payload.input?.FILES;
+    if (files !== undefined) {
+      const allowed = assistantAttachmentTypes(config);
+      if (!Array.isArray(files) || !files.every((f) => allowed.includes(fileExtension(f?.filename)))) {
+        return res.status(400).json({ error: 'File type not allowed' });
+      }
+    }
   } catch (err) {
     console.error('[assistant/trigger] Error:', err);
     return res.status(500).json({ error: 'Failed to load scenario config' });
@@ -617,6 +630,10 @@ app.post('/api/upload-urls', async (req, res) => {
     return res.status(400).json({ error: 'sessionId and files[] are required' });
   }
   try {
+    const { config } = await getScenario();
+    if (!files.every((f) => uploadAllowed(config, f?.filename))) {
+      return res.status(400).json({ error: 'File type not allowed' });
+    }
     const result = await octavus.files.getUploadUrls(sessionId, files);
     res.json(result);
   } catch (err) {

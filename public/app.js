@@ -34,7 +34,7 @@ import {
   avatarPath,
   initialsFromName,
 } from '../lib/characters.js';
-import { assistantAttachmentsEnabled, assistantAttachmentTypes, buildMailboxContext } from '../lib/assistant.js';
+import { assistantAttachmentsEnabled, assistantAttachmentTypes, buildMailboxContext, scenarioAllowedTypes } from '../lib/assistant.js';
 import { draftForScope, draftHasPersistableContent, parseInsertedDraft, removeScopedDraft, sameDraftScope, upsertScopedDraft, visibleDrafts } from '../lib/drafts.js';
 import { bodyWithForwarded, findThreadEmail, forwardedSnapshot, forwardSubject } from '../lib/forwarding.js';
 import {
@@ -2275,7 +2275,7 @@ function initComposer() {
 
 // ── Attachments ───────────────────────────────────────────────
 function allowedAttachmentTypes() {
-  return (state.config?.attachments?.allowedTypes ?? []).map((t) => t.toLowerCase());
+  return scenarioAllowedTypes(state.config);
 }
 
 function isAllowedFile(file) {
@@ -4169,7 +4169,8 @@ async function sendAssistant() {
   const text = els.assistantInput.value.trim();
   if (!text) return;
   if (state.assistant.attachments.some((item) => item.status === 'uploading')) return;
-  const files = state.assistant.attachments
+  const pending = state.assistant.attachments;
+  const files = pending
     .filter((item) => item.status === 'ready')
     .map((item) => item.ref);
   els.assistantInput.value = '';
@@ -4198,6 +4199,8 @@ async function sendAssistant() {
     state.assistant.thinkingKind = null;
     updateAssistantThinking();
     console.error('[CosmoMail] assistant send failed:', err);
+    state.assistant.attachments = [...pending, ...state.assistant.attachments];
+    renderAssistantAttachments();
     setAssistantEnabled(true);
   }
 }

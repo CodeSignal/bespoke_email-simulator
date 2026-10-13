@@ -12,6 +12,7 @@ import {
   normalizeCapabilities,
   serializeAttachments,
   serializeMailbox,
+  uploadAllowed,
 } from '../lib/assistant.js';
 import { validateScenario, withScenarioDefaults, loadScenario } from '../lib/scenario.js';
 import path from 'path';
@@ -142,6 +143,23 @@ describe('assistant chat attachment types', () => {
   it('is on by default and off when the flag is false', () => {
     expect(assistantAttachmentsEnabled(withScenarioDefaults({}))).toBe(true);
     expect(assistantAttachmentsEnabled(withScenarioDefaults({ assistant: { attachments: false } }))).toBe(false);
+  });
+
+  it('treats a non-array allowedTypes as empty instead of throwing', () => {
+    const config = withScenarioDefaults({ attachments: { allowedTypes: '.pdf' } });
+    expect(assistantAttachmentTypes(config)).toEqual([]);
+    expect(validateScenario(config)).toContain('attachments.allowedTypes must be an array of file extensions');
+  });
+
+  it('allows uploads for the composer or the chat, and nothing else', () => {
+    const config = withScenarioDefaults({});
+    expect(uploadAllowed(config, 'notes.DOCX')).toBe(true);
+    expect(uploadAllowed(config, 'brief.pdf')).toBe(true);
+    expect(uploadAllowed(config, 'tool.exe')).toBe(false);
+    expect(uploadAllowed(config, 'no-extension')).toBe(false);
+    const chatOnly = withScenarioDefaults({ attachments: { enabled: false } });
+    expect(uploadAllowed(chatOnly, 'brief.pdf')).toBe(true);
+    expect(uploadAllowed(chatOnly, 'notes.docx')).toBe(false);
   });
 
   it('is off when no allowed type is readable', () => {
