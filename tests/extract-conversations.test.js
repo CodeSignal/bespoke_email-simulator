@@ -143,4 +143,66 @@ describe('extract-conversations provenance', () => {
     expect(out).toContain('**Quick action** `suggested_replies`');
     expect(out).toContain('Happy to discuss pricing next week.');
   });
+
+  it('quotes a forwarded original under the cover note in thread mode', () => {
+    writeFileSync(
+      sessionsFile,
+      JSON.stringify({
+        sessions: [
+          {
+            session_id: 's1',
+            updated_at: '2026-01-02T00:00:00.000Z',
+            created_at: '2026-01-01T00:00:00.000Z',
+            threads: [
+              {
+                id: 'thread-fwd',
+                subject: 'Fwd: Proposal',
+                emails: [
+                  {
+                    id: 'email-fwd',
+                    from: { name: 'You', email: 'you@example.com' },
+                    to: [{ name: 'Dana', email: 'dana@acme-vendor.com' }],
+                    date: '2026-01-02T00:00:00.000Z',
+                    subject: 'Fwd: Proposal',
+                    body: 'Dana, see below.',
+                    outbound: true,
+                    forwarded: {
+                      emailId: 'email-1',
+                      from: { name: 'Sam', email: 'sam@example.com' },
+                      to: [{ name: 'You', email: 'you@example.com' }],
+                      cc: [],
+                      date: '2026-01-01T00:00:00.000Z',
+                      subject: 'Proposal',
+                      body: 'Original proposal text.',
+                      attachments: [{ name: 'terms.txt' }],
+                    },
+                  },
+                ],
+              },
+            ],
+            assistant_messages: [],
+            events: [],
+          },
+        ],
+      }),
+    );
+
+    const result = spawnSync(
+      process.execPath,
+      [SCRIPT, '--mode', 'thread', '--output', outputFile],
+      {
+        cwd: ROOT,
+        env: { ...process.env, SESSIONS_FILE: sessionsFile, SCENARIO_FILE: scenarioFile },
+        encoding: 'utf8',
+      },
+    );
+
+    expect(result.status).toBe(0);
+    const out = readFileSync(outputFile, 'utf8');
+    expect(out).toContain('Dana, see below.');
+    expect(out).toContain('> **From:** Sam <sam@example.com>  ');
+    expect(out).toMatch(/> \*\*Date:\*\* .* · _Forwarded_ {2}/);
+    expect(out).toContain('> **Attachments:** terms.txt  ');
+    expect(out).toContain('> Original proposal text.');
+  });
 });
