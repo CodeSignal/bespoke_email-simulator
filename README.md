@@ -163,8 +163,9 @@ shape, relative to the project root.
 | `assistant.systemPromptExtra` | string | Trusted extra instructions for the copilot. |
 | `assistant.initialMessage` | string | Cosmo's opening message. |
 | `assistant.allowCustomInstructions` | boolean | Let learners add their own instructions. Ignored (always off) when `audience` is `candidate`. |
+| `assistant.attachments` | boolean | Default `true`. Let learners attach documents to AI Assistant chat messages so Cosmo can answer questions about them and use them in drafts. Accepted types are the `attachments.allowedTypes` that the model can read (PDF, images, `.txt`, `.md`, `.csv`); Word files are not accepted in chat. |
 | `generation` | `{ model, temperature, thinking, language }` | LLM settings. |
-| `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support (learner can attach files in the composer when enabled). |
+| `attachments` | `{ enabled, allowedTypes }` | Outbound attachment support (learner can attach files in the composer when enabled). Cosmo and the recipients see only the names of these files. |
 | Seed email `attachments[]` | `{ name, text? }` | Optional on seeded inbound emails. `name` is shown in the UI. Author-provided `text` is readable by Cosmo (Q&A / summarize / extract); omit `text` when contents should stay unknown. Not real file parsing. |
 | `ui` | `{ hideHistory, strings }` | UI overrides + i18n strings. |
 

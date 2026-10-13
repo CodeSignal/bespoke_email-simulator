@@ -352,3 +352,31 @@ describe('session lifecycle', () => {
     expect(reload.status).toBe(404);
   });
 });
+
+describe('attachment type allowlist', () => {
+  it('POST /api/upload-urls rejects a type the scenario does not allow', async () => {
+    const res = await request(app).post('/api/upload-urls').send({
+      sessionId: 'any',
+      files: [
+        { filename: 'brief.pdf', mediaType: 'application/pdf', size: 10 },
+        { filename: 'tool.exe', mediaType: 'application/octet-stream', size: 10 },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('File type not allowed');
+  });
+
+  it('POST /api/assistant/trigger rejects chat files Cosmo cannot read', async () => {
+    const res = await request(app).post('/api/assistant/trigger').send({
+      sessionId: 'any',
+      type: 'trigger',
+      triggerName: 'assistant-message',
+      input: {
+        USER_MESSAGE: 'Read this',
+        FILES: [{ id: 'f1', mediaType: 'application/msword', url: 'https://files.test/a.docx', filename: 'a.docx' }],
+      },
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe('File type not allowed');
+  });
+});

@@ -52,6 +52,12 @@ describe('validateScenario', () => {
     expect(validateScenario(cfg)).toEqual([]);
   });
 
+  it('turns assistant chat attachments on by default and rejects non-booleans', () => {
+    expect(withScenarioDefaults({ id: 'ok' }).assistant.attachments).toBe(true);
+    const cfg = withScenarioDefaults({ id: 'ok', assistant: { attachments: 'yes' } });
+    expect(validateScenario(cfg)).toContain('assistant.attachments must be true or false');
+  });
+
   it('flags bad enums and missing id', () => {
     const cfg = withScenarioDefaults({ id: '', primarySkill: 'nope', scenarioType: 'bad' });
     const errors = validateScenario(cfg);

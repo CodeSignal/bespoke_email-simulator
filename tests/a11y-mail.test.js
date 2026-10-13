@@ -1375,6 +1375,127 @@ describe('M13 failed upload', () => {
   });
 });
 
+describe('Assistant chat attachments', () => {
+  const pdf = () => new File(['%PDF'], 'brief.pdf', { type: 'application/pdf' });
+  const docx = () => new File(['doc'], 'notes.docx', {
+    type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  });
+  const ref = { id: 'file-1', mediaType: 'application/pdf', url: 'https://files.test/brief.pdf', filename: 'brief.pdf' };
+
+  beforeEach(() => {
+    mail.state.config.attachments = { enabled: true, allowedTypes: ['.pdf', '.docx'] };
+    mail.state.assistant.attachments = [];
+    mail.state.assistant.persisted = [];
+    mail.state.assistant.chat = {
+      status: 'idle',
+      messages: [],
+      uploadFiles: vi.fn(async (files) => files.map(() => ref)),
+      send: vi.fn(async () => {}),
+    };
+    document.getElementById('assistantAttachments').innerHTML = '';
+    document.getElementById('assistantAttachStatus').textContent = '';
+  });
+
+  afterEach(() => {
+    mail.state.assistant.chat = null;
+    mail.state.assistant.attachments = [];
+  });
+
+  it('uploads only types Cosmo can read and announces the rejected one', async () => {
+    await mail.handleAssistantFiles([pdf(), docx()]);
+    await nextFrame();
+
+    expect(mail.state.assistant.chat.uploadFiles).toHaveBeenCalledTimes(1);
+    expect(mail.state.assistant.chat.uploadFiles.mock.calls[0][0].map((f) => f.name)).toEqual(['brief.pdf']);
+    const chips = document.querySelectorAll('#assistantAttachments .assistant__attachment');
+    expect([...chips].map((c) => c.textContent)).toEqual(['brief.pdf']);
+    expect(document.getElementById('assistantAttachStatus').textContent).toBe('File type not allowed');
+  });
+
+  it('sends uploaded files with the message and clears the chips', async () => {
+    await mail.handleAssistantFiles([pdf()]);
+    const input = document.getElementById('assistantInput');
+    input.disabled = false;
+    input.value = 'What is the deadline in this brief?';
+
+    await mail.sendAssistant();
+
+    const [trigger, vars, options] = mail.state.assistant.chat.send.mock.calls[0];
+    expect(trigger).toBe('assistant-message');
+    expect(vars.USER_MESSAGE).toBe('What is the deadline in this brief?');
+    expect(vars.FILES).toEqual([ref]);
+    expect(options.userMessage).toEqual({ content: 'What is the deadline in this brief?', files: [ref] });
+    expect(mail.state.assistant.attachments).toEqual([]);
+    expect(document.getElementById('assistantAttachments').hidden).toBe(true);
+  });
+
+  it('keeps the attachments for a retry when send rejects', async () => {
+    await mail.handleAssistantFiles([pdf()]);
+    mail.state.assistant.chat.send = vi.fn(async () => { throw new Error('offline'); });
+    const input = document.getElementById('assistantInput');
+    input.disabled = false;
+    input.value = 'Read this';
+
+    await mail.sendAssistant();
+
+    expect(mail.state.assistant.attachments.map((item) => item.ref)).toEqual([ref]);
+    const chips = document.querySelectorAll('#assistantAttachments .assistant__attachment');
+    expect([...chips].map((c) => c.textContent)).toEqual(['brief.pdf']);
+  });
+
+  it('omits FILES when nothing is attached', async () => {
+    const input = document.getElementById('assistantInput');
+    input.disabled = false;
+    input.value = 'Summarize this thread';
+
+    await mail.sendAssistant();
+
+    const [, vars, options] = mail.state.assistant.chat.send.mock.calls[0];
+    expect(vars).not.toHaveProperty('FILES');
+    expect(options.userMessage).toEqual({ content: 'Summarize this thread' });
+  });
+
+  it('holds Send while a file is still uploading', async () => {
+    let finish;
+    mail.state.assistant.chat.uploadFiles = vi.fn(() => new Promise((resolve) => { finish = resolve; }));
+    const input = document.getElementById('assistantInput');
+    input.disabled = false;
+    input.value = 'Read this';
+
+    const pending = mail.handleAssistantFiles([pdf()]);
+    expect(document.getElementById('assistantSendBtn').disabled).toBe(true);
+    await mail.sendAssistant();
+    expect(mail.state.assistant.chat.send).not.toHaveBeenCalled();
+
+    finish([ref]);
+    await pending;
+    expect(document.getElementById('assistantSendBtn').disabled).toBe(false);
+  });
+
+  it('shows attached file names on live and saved user messages', () => {
+    mail.state.assistant.persisted = [
+      { role: 'user', content: 'Earlier question', files: [{ name: 'old.pdf', type: 'application/pdf' }] },
+      { role: 'assistant', content: 'Earlier answer' },
+    ];
+    mail.renderAssistant([
+      {
+        id: 'u1',
+        role: 'user',
+        parts: [
+          { type: 'text', text: 'Use this brief' },
+          { type: 'file', id: 'file-1', mediaType: 'application/pdf', url: ref.url, filename: 'brief.pdf' },
+        ],
+      },
+    ]);
+
+    const rows = document.querySelectorAll('#assistantMessages .assistant__row--user');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].querySelector('.assistant__msg-files').textContent).toBe('old.pdf');
+    expect(rows[1].querySelector('.assistant__msg-files').textContent).toBe('brief.pdf');
+    expect(rows[1].querySelector('.assistant__msg--user').textContent).toBe('Use this brief');
+  });
+});
+
 describe('M9 recipient remove target', () => {
   it('shows a remove control of at least 24 by 24 without hover', () => {
     showComposer();
