@@ -173,8 +173,14 @@ describe('extract-conversations provenance', () => {
                       cc: [],
                       date: '2026-01-01T00:00:00.000Z',
                       subject: 'Proposal',
-                      body: 'Original proposal text.',
+                      body: 'Original proposal text.\n\nSecond paragraph.',
                       attachments: [{ name: 'terms.txt' }],
+                      forwarded: {
+                        from: { name: 'Lee', email: 'lee@example.com' },
+                        to: [{ name: 'Sam', email: 'sam@example.com' }],
+                        date: '2025-12-31T00:00:00.000Z',
+                        body: 'Nested line one.\nNested line two.',
+                      },
                     },
                   },
                 ],
@@ -203,6 +209,11 @@ describe('extract-conversations provenance', () => {
     expect(out).toContain('> **From:** Sam <sam@example.com>  ');
     expect(out).toMatch(/> \*\*Date:\*\* .* · _Forwarded_ {2}/);
     expect(out).toContain('> **Attachments:** terms.txt  ');
-    expect(out).toContain('> Original proposal text.');
+    expect(out).toContain('> Original proposal text.\n>\n> Second paragraph.');
+    expect(out).toContain('> > Nested line one.\n> > Nested line two.');
+    const lines = out.split('\n');
+    const start = lines.findIndex((line) => line.startsWith('> **From:** Sam'));
+    const end = lines.findIndex((line) => line === '> > Nested line two.');
+    expect(lines.slice(start, end + 1).every((line) => line.startsWith('>'))).toBe(true);
   });
 });

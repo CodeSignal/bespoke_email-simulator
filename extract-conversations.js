@@ -225,7 +225,7 @@ function emailLines(email, { forwarded = false } = {}) {
   lines.push(String(email.body ?? ''));
   lines.push('');
   if (email.forwarded) {
-    const quoted = emailLines(email.forwarded, { forwarded: true });
+    const quoted = emailLines(email.forwarded, { forwarded: true }).flatMap((entry) => entry.split('\n'));
     lines.push(...quoted.map((line) => (line ? `> ${line}` : '>')), '');
   }
   return lines;
