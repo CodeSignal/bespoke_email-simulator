@@ -42,6 +42,8 @@
     "Messages you send will appear here.": "Los mensajes que envíes aparecerán aquí.",
     "No drafts": "No hay borradores",
     "Messages you start and close without sending will show up here.": "Los mensajes que empieces y cierres sin enviar aparecerán aquí.",
+    "Delete draft": "Eliminar borrador",
+    "Draft deleted": "Borrador eliminado",
     "No spam.": "No hay spam.",
     "Hooray, no spam here!": "¡Hurra, no hay spam aquí!",
     "Messages that look like spam will show up in this folder.": "Los mensajes que parezcan spam aparecerán en esta carpeta.",

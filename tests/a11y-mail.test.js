@@ -143,6 +143,7 @@ function mockRect(el, box) {
 async function resetMailbox() {
   setViewport(1280, 800);
   clearTimeout(mail.state.draftSaveTimer);
+  mail.resetDraftWriteQueue();
   const { state } = mail;
   state.config = {
     strings,
@@ -176,6 +177,7 @@ async function resetMailbox() {
   // Drop an "Opened:" callback queued by the previous test.
   await nextFrame();
   if (state.view !== 'thread') statusEl().textContent = '';
+  if (composerStatus) composerStatus.textContent = '';
 }
 
 function showComposer() {
@@ -1891,5 +1893,136 @@ describe('N9 list separators', () => {
     }];
     mail.selectMailbox('drafts');
     expectBorderRule();
+  });
+});
+
+describe('delete drafts', () => {
+  const pricing = {
+    id: 'draft-1',
+    scope: 'new',
+    to: [DANA],
+    cc: [],
+    subject: 'Pricing',
+    body: 'Draft body',
+    updated_at: '2026-10-08T14:15:00.000Z',
+  };
+  const followup = {
+    id: 'draft-2',
+    scope: 'new',
+    to: [SAM],
+    cc: [],
+    subject: 'Follow-up',
+    body: 'Checking in',
+    updated_at: '2026-10-08T15:15:00.000Z',
+  };
+
+  function showDrafts(drafts) {
+    mail.state.session.drafts = drafts;
+    mail.selectMailbox('drafts');
+  }
+
+  async function flushDraftWrites() {
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  }
+
+  it('names a delete control on each draft row', () => {
+    showDrafts([pricing]);
+    const remove = document.querySelector('.mail-item__delete');
+    expect(remove).toBeTruthy();
+    expect(computeAccessibleName(remove)).toBe(strings['Delete draft']);
+    expect(document.querySelector('.mail-row').contains(remove)).toBe(false);
+  });
+
+  it('removes only the chosen draft from the folder', async () => {
+    showDrafts([pricing, followup]);
+    const row = document.querySelector('.mail-row[data-draft-id="draft-1"]');
+    row.closest('.mail-item').querySelector('.mail-item__delete').click();
+    await flushDraftWrites();
+
+    expect(mail.state.session.drafts.map((draft) => draft.id)).toEqual(['draft-2']);
+    expect(document.querySelector('.mail-row[data-draft-id="draft-1"]')).toBeNull();
+    expect(document.querySelector('.mail-row[data-draft-id="draft-2"]')).toBeTruthy();
+    expect(document.getElementById('composer').hidden).toBe(true);
+  });
+
+  it('shows the empty drafts folder after the last draft is deleted', async () => {
+    showDrafts([pricing]);
+    document.querySelector('.mail-item__delete').click();
+    await flushDraftWrites();
+
+    expect(mail.state.session.drafts).toEqual([]);
+    expect(document.querySelector('.mail-list__empty-title').textContent).toBe(strings['No drafts']);
+  });
+
+  it('closes an open composer without putting the draft back', async () => {
+    showDrafts([pricing]);
+    mail.startCompose({ blank: false, draft: pricing });
+    expect(document.getElementById('composer').hidden).toBe(false);
+
+    document.querySelector('.mail-item__delete').click();
+    await Promise.resolve();
+    await nextFrame();
+
+    expect(mail.state.composingNew).toBe(false);
+    expect(document.getElementById('composer').hidden).toBe(true);
+    expect(mail.state.session.drafts).toEqual([]);
+  });
+
+  it('clears attachments when the open new-message draft is deleted', async () => {
+    showDrafts([pricing]);
+    mail.startCompose({ blank: false, draft: pricing });
+    mail.state.attachments = [{ file: { name: 'deck.pdf' }, status: 'ready' }];
+
+    await mail.deleteDraft(pricing);
+
+    expect(mail.state.attachments).toEqual([]);
+    expect(mail.state.composingNew).toBe(false);
+  });
+
+  it('keeps the draft and stays quiet when the session save fails', async () => {
+    mail.state.session.sessionId = 'session-1';
+    showDrafts([pricing]);
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: false, status: 500 })));
+
+    await mail.deleteDraft(pricing);
+    await nextFrame();
+
+    expect(mail.state.session.drafts).toEqual([pricing]);
+    expect(document.querySelector('.mail-row[data-draft-id="draft-1"]')).toBeTruthy();
+    expect(document.getElementById('composerStatus').textContent).toBe('');
+  });
+
+  it('lets a later delete win over an in-flight save', async () => {
+    mail.state.session.sessionId = 'session-1';
+    showDrafts([pricing]);
+    mail.startCompose({ blank: false, draft: pricing });
+
+    const bodies = [];
+    let releaseFirst;
+    vi.stubGlobal('fetch', vi.fn((_url, opts) => {
+      bodies.push(JSON.parse(opts.body).drafts.map((item) => item.id));
+      if (bodies.length === 1) {
+        return new Promise((resolve) => {
+          releaseFirst = () => resolve({ ok: true, json: async () => ({}) });
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({}) });
+    }));
+
+    const save = mail.saveDraftNow();
+    const remove = mail.deleteDraft(pricing);
+    await Promise.resolve();
+    releaseFirst();
+    await save;
+    await remove;
+
+    expect(mail.state.session.drafts).toEqual([]);
+    expect(bodies.at(-1)).toEqual([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 });

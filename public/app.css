@@ -497,6 +497,22 @@ body {
   border-bottom: 1px solid var(--Colors-Border-Subtle);
 }
 
+.mail-item__row {
+  display: flex;
+  align-items: center;
+  gap: var(--UI-Spacing-spacing-xxs);
+  min-width: 0;
+}
+
+.mail-item__row .mail-row {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mail-item__delete {
+  flex: 0 0 auto;
+}
+
 /* Figma "Badge Marker" (small): 6px dot + 3px 15% ring, inside the row,
    8px left of it and vertically centred on the content. */
 .mail-item__marker {

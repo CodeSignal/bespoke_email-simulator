@@ -795,6 +795,8 @@ const EMAIL_REPLY_ALL_ICON = '<svg width="16" height="14" viewBox="0 0 16 14" fi
 // Figma untitled-ui mail-01 with lines (thread header).
 const THREAD_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 5.14583L6.59962 8.59889C6.99907 8.87851 7.1988 9.01832 7.41605 9.07247C7.60795 9.12031 7.80866 9.12031 8.00056 9.07247C8.21781 9.01832 8.41754 8.87851 8.817 8.59889L13.7499 5.14583M13.7499 8.16665V6.23332C13.7499 5.21823 13.7499 4.71068 13.5524 4.32297C13.3786 3.98193 13.1014 3.70465 12.7603 3.53088C12.3726 3.33333 11.8651 3.33333 10.85 3.33333H4.56665C3.55156 3.33333 3.04402 3.33333 2.6563 3.53088C2.31526 3.70465 2.03799 3.98193 1.86422 4.32297C1.66667 4.71068 1.66667 5.21823 1.66667 6.23332V10.1C1.66667 11.1151 1.66667 11.6226 1.86422 12.0103C2.03799 12.3514 2.31526 12.6286 2.6563 12.8024C3.04402 13 3.55156 13 4.56665 13H8.70831"/><path d="M11 10.5H18M11 13.5H18M11 16.5H16"/></svg>';
 
+const DRAFT_DELETE_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14H6L5 6M10 11v6M14 11v6"/></svg>';
+
 // Figma "Content Icon" sparkles used inside AI Assistant action chips.
 const CHIP_ICON = '<span class="assistant__chip-icon" aria-hidden="true"><img src="/icons/chip-sparkles.svg" width="18" height="18" alt="" /></span>';
 
@@ -1301,6 +1303,7 @@ function renderDraftList() {
     btn.type = 'button';
     btn.className = 'mail-row';
     if (draft.id) btn.dataset.draftId = draft.id;
+    if (draft.scope === 'reply' && draft.threadId) btn.dataset.draftThread = draft.threadId;
     btn.setAttribute('aria-label', mailRowAccessibleName([from, subject, date]));
     btn.innerHTML = `
       ${avatarMarkup(draftListPerson(draft), 'lg')}
@@ -1311,9 +1314,23 @@ function renderDraftList() {
       <span class="mail-row__date">${escapeHtml(date)}</span>
     `;
     btn.addEventListener('click', () => openDraft(draft));
+    const deleteBtn = document.createElement('button');
+    deleteBtn.type = 'button';
+    deleteBtn.className = 'icon-button icon-button--ghost mail-item__delete';
+    deleteBtn.setAttribute('aria-label', t('Delete draft'));
+    deleteBtn.title = t('Delete draft');
+    deleteBtn.innerHTML = DRAFT_DELETE_ICON;
+    deleteBtn.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void deleteDraft(draft);
+    });
+    const row = document.createElement('div');
+    row.className = 'mail-item__row';
+    row.append(btn, deleteBtn);
     const container = document.createElement('div');
     container.className = 'mail-item__container';
-    container.append(btn);
+    container.append(row);
     item.appendChild(container);
     els.threadList.appendChild(item);
   }
@@ -1651,6 +1668,9 @@ function composeOpenerSelector(el) {
   const { threadId, draftId, replyMode } = el.dataset ?? {};
   if (el.matches('.mail-row') && threadId) return `.mail-row[data-thread-id="${escapeSelector(threadId)}"]`;
   if (el.matches('.mail-row') && draftId) return `.mail-row[data-draft-id="${escapeSelector(draftId)}"]`;
+  if (el.matches('.mail-row') && el.dataset.draftThread) {
+    return `.mail-row[data-draft-thread="${escapeSelector(el.dataset.draftThread)}"]`;
+  }
   if (!replyMode) return null;
   const mode = escapeSelector(replyMode);
   const emailId = el.closest('[data-email-id]')?.dataset.emailId;
@@ -1779,6 +1799,72 @@ function refreshDraftsUi() {
     els.mailToolbarCount.textContent = `(${mailboxItemCount()})`;
   }
   if (state.view === 'list') renderMailList();
+}
+
+function draftIsOpen(draft) {
+  const scope = draftScope();
+  return Boolean(scope && sameDraftScope(draft, scope));
+}
+
+function focusAfterDeletedDraft() {
+  const first = els.threadList?.querySelector('.mail-row');
+  focusControl(first || els.mailToolbarTitle || els.toolbarComposeBtn || els.mailMain);
+}
+
+async function deleteDraft(draft) {
+  if (!draft || !state.session) return;
+  const open = draftIsOpen(draft);
+  if (open) {
+    clearTimeout(state.draftSaveTimer);
+    state.draftSaveTimer = null;
+  }
+  await enqueueDraftWrite(async () => {
+    const previousDrafts = state.session.drafts;
+    const hadInserted = sameDraftScope(state.assistant.lastInserted, draft);
+    const previousInserted = hadInserted ? state.assistant.lastInserted : null;
+    const restoreCompose = open && state.composingNew
+      ? { activeDraftId: state.activeDraftId, attachments: state.attachments.slice() }
+      : null;
+    const restoreReply = open && state.replying ? state.replying : null;
+
+    if (open) {
+      closeRecipientMenus();
+      if (state.composingNew) {
+        state.composingNew = false;
+        state.activeDraftId = null;
+        clearAttachments();
+      } else if (state.replying) {
+        state.replying = null;
+      }
+    }
+
+    state.session.drafts = removeScopedDraft(state.session.drafts, draft);
+    if (hadInserted) state.assistant.lastInserted = null;
+
+    const ok = await persistDraftsNow();
+    if (!ok) {
+      state.session.drafts = previousDrafts;
+      if (hadInserted) state.assistant.lastInserted = previousInserted;
+      if (restoreCompose) {
+        state.composingNew = true;
+        state.activeDraftId = restoreCompose.activeDraftId;
+        state.attachments = restoreCompose.attachments;
+        renderAttachmentPreview();
+      } else if (restoreReply) {
+        state.replying = restoreReply;
+      }
+      return;
+    }
+
+    refreshDraftsUi();
+    if (open) {
+      applyView();
+      restoreComposeFocus();
+    } else {
+      focusAfterDeletedDraft();
+    }
+    announceComposerStatus(t('Draft deleted'));
+  });
 }
 
 async function openDraft(draft) {
@@ -1971,33 +2057,53 @@ function updateSendEnabled() {
   els.sendBtn.disabled = !hasContent || draft.to.length === 0;
 }
 
-async function persistDrafts() {
-  if (!state.session?.sessionId) return;
+// One writer at a time so an in-flight save cannot overwrite a later delete.
+let draftWriteQueue = Promise.resolve();
+
+function enqueueDraftWrite(work) {
+  const run = draftWriteQueue.then(work, work);
+  draftWriteQueue = run.then(() => {}, () => {});
+  return run;
+}
+
+function resetDraftWriteQueue() {
+  draftWriteQueue = Promise.resolve();
+}
+
+async function persistDraftsNow() {
+  if (!state.session?.sessionId) return true;
   try {
-    await fetch('/api/session/save', {
+    const res = await fetch('/api/session/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: state.session.sessionId, drafts: state.session.drafts ?? [] }),
     });
+    if (!res.ok) throw new Error(`draft save failed (${res.status})`);
+    return true;
   } catch (err) {
     console.error('[CosmoMail] draft save failed:', err);
+    return false;
   }
 }
 
+async function persistDrafts() {
+  return enqueueDraftWrite(() => persistDraftsNow());
+}
+
 async function saveDraftNow() {
-  if (!state.session?.sessionId || !draftScope()) return;
-  const draft = currentDraft();
-  const scope = draftScope();
-  if (!draftHasPersistableContent(draft)) {
-    state.session.drafts = removeScopedDraft(state.session.drafts, scope);
-    await persistDrafts();
+  return enqueueDraftWrite(async () => {
+    if (!state.session?.sessionId || !draftScope()) return;
+    const draft = currentDraft();
+    const scope = draftScope();
+    if (!draftHasPersistableContent(draft)) {
+      state.session.drafts = removeScopedDraft(state.session.drafts, scope);
+    } else {
+      if (draft.scope === 'new' && !draft.id) draft.id = newDraftId();
+      state.session.drafts = upsertScopedDraft(state.session.drafts, draft);
+    }
+    await persistDraftsNow();
     refreshDraftsUi();
-    return;
-  }
-  if (draft.scope === 'new' && !draft.id) draft.id = newDraftId();
-  state.session.drafts = upsertScopedDraft(state.session.drafts, draft);
-  await persistDrafts();
-  refreshDraftsUi();
+  });
 }
 
 function scheduleDraftSave() {
@@ -3905,6 +4011,9 @@ export function mailAppTestHooks() {
     startCompose,
     closeComposer,
     cancelComposer,
+    deleteDraft,
+    saveDraftNow,
+    resetDraftWriteQueue,
     insertProposedDraft,
     thinkingIndicator,
     resetThinkingIndicator,
