@@ -15,7 +15,7 @@ import {
   parseCharacterReply,
   buildCharacterReplyHeaders,
 } from './lib/character-replies.js';
-import { buildCapabilityInstructions } from './lib/assistant.js';
+import { buildCapabilityInstructions, assistantAttachmentsEnabled } from './lib/assistant.js';
 import { removeScopedDraft } from './lib/drafts.js';
 import { findThreadEmail, forwardedSnapshot } from './lib/forwarding.js';
 import {
@@ -337,7 +337,9 @@ function buildGenerationInput(config) {
 function buildAgentSessionInput(config) {
   const input = buildGenerationInput(config);
   if (config.assistant?.systemPromptExtra) input.EXTRA_INSTRUCTIONS = config.assistant.systemPromptExtra;
-  input.CAPABILITIES = buildCapabilityInstructions(config.assistant?.capabilities);
+  input.CAPABILITIES = buildCapabilityInstructions(config.assistant?.capabilities, {
+    attachments: assistantAttachmentsEnabled(config),
+  });
   input.LEARNER_NAME = config.learner?.displayName || 'You';
   input.LEARNER_EMAIL = config.learner?.email || 'you@example.com';
   return input;
@@ -456,6 +458,7 @@ app.post('/api/assistant/trigger', async (req, res) => {
     const { config } = await getScenario();
     // Candidates must not supply custom instructions, even if the client tries.
     if (config.audience === 'candidate') delete payload.CUSTOM_INSTRUCTIONS;
+    if (!assistantAttachmentsEnabled(config) && payload.input) delete payload.input.FILES;
   } catch (err) {
     console.error('[assistant/trigger] Error:', err);
     return res.status(500).json({ error: 'Failed to load scenario config' });

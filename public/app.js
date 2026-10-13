@@ -34,7 +34,7 @@ import {
   avatarPath,
   initialsFromName,
 } from '../lib/characters.js';
-import { buildMailboxContext } from '../lib/assistant.js';
+import { assistantAttachmentsEnabled, assistantAttachmentTypes, buildMailboxContext } from '../lib/assistant.js';
 import { draftForScope, draftHasPersistableContent, parseInsertedDraft, removeScopedDraft, sameDraftScope, upsertScopedDraft, visibleDrafts } from '../lib/drafts.js';
 import { bodyWithForwarded, findThreadEmail, forwardedSnapshot, forwardSubject } from '../lib/forwarding.js';
 import {
@@ -152,6 +152,8 @@ const state = {
     triageRanking: null,
     // Suggested reply options under the focused email.
     suggestedReplies: null, // { threadId, emailId, replies: string[], index }
+    // Files attached to the next chat message: { file, ref, status }.
+    attachments: [],
   },
   characterSessions: {},
   attachments: [],
@@ -221,6 +223,10 @@ const els = {
   assistantInput: document.getElementById('assistantInput'),
   assistantInputHint: document.getElementById('assistantInputHint'),
   assistantSendBtn: document.getElementById('assistantSendBtn'),
+  assistantAttachBtn: document.getElementById('assistantAttachBtn'),
+  assistantFileInput: document.getElementById('assistantFileInput'),
+  assistantAttachments: document.getElementById('assistantAttachments'),
+  assistantAttachStatus: document.getElementById('assistantAttachStatus'),
   assistantClearBtn: document.getElementById('assistantClearBtn'),
   assistantChips: document.getElementById('assistantChips'),
   assistantQuickResult: document.getElementById('assistantQuickResult'),
@@ -2793,6 +2799,13 @@ function messageText(message) {
   return message.content || '';
 }
 
+// File names and types only; the presigned URLs expire, so they are not kept.
+function messageFiles(message) {
+  return (message?.parts ?? [])
+    .filter((p) => p.type === 'file')
+    .map((p) => ({ name: p.filename || t('Attachment'), type: p.mediaType || '' }));
+}
+
 function draftsFromLiveMessage(message) {
   if (!message?.parts) return [];
   return draftsFromMessageParts(message.parts, {
@@ -2920,11 +2933,25 @@ function assistantNodeSpec(key, signature, create, update) {
   return { key, signature, create, update };
 }
 
-function paintAssistantRow(row, { role, html, drafts, streaming, markdown }) {
+function messageFileList(files) {
+  const list = document.createElement('div');
+  list.className = 'assistant__msg-files';
+  for (const file of files) {
+    const chip = document.createElement('span');
+    chip.className = 'tag outline assistant__attachment';
+    chip.innerHTML = `<span class="assistant__attachment-name">${escapeHtml(file.name)}</span>`;
+    list.appendChild(chip);
+  }
+  return list;
+}
+
+function paintAssistantRow(row, { role, html, drafts, streaming, markdown, files }) {
   const bubble = row.querySelector('.assistant__msg');
   if (bubble && bubble.innerHTML !== html) bubble.innerHTML = html;
   for (const card of row.querySelectorAll('.assistant__draft')) card.remove();
   for (const button of row.querySelectorAll('.assistant__insert')) button.remove();
+  row.querySelector('.assistant__msg-files')?.remove();
+  if (role === 'user' && files?.length) row.insertBefore(messageFileList(files), bubble);
   if (role !== 'user') {
     for (const draft of drafts ?? []) appendDraftCard(row, draft, { streaming });
     if (!streaming) appendFenceInsertFallback(row, markdown);
@@ -2938,6 +2965,7 @@ function assistantBubbleSpec(key, details) {
     streaming: Boolean(details.streaming),
     markdown: details.streaming ? '' : (details.markdown ?? ''),
     drafts: details.drafts ?? [],
+    files: details.files ?? [],
   });
   return assistantNodeSpec(
     key,
@@ -3036,6 +3064,7 @@ function renderAssistant(liveMessages = []) {
         drafts: message.role === 'assistant' ? (message.drafts ?? []) : [],
         streaming: false,
         markdown: message.role === 'assistant' ? message.content : '',
+        files: message.role === 'user' ? (message.files ?? []) : [],
       }));
     });
 
@@ -3049,6 +3078,7 @@ function renderAssistant(liveMessages = []) {
           drafts: [],
           streaming: false,
           markdown: '',
+          files: messageFiles(message),
         }));
         return;
       }
@@ -3191,9 +3221,13 @@ function syncAssistantBusyControls() {
   if (!els.assistantSendBtn) return;
   // Preserve input-disabled (agent unavailable / assistant off); only gate Send on empty + busy.
   const inputDisabled = els.assistantInput?.disabled === true;
-  els.assistantSendBtn.disabled = inputDisabled
-    || !String(els.assistantInput?.value ?? '').trim()
-    || assistantIsBusy();
+  els.assistantSendBtn.disabled = inputDisabled || assistantSendBlocked();
+}
+
+function assistantSendBlocked() {
+  return !String(els.assistantInput?.value ?? '').trim()
+    || assistantIsBusy()
+    || state.assistant.attachments.some((item) => item.status === 'uploading');
 }
 
 // The clear button is only actionable when there is something to clear and
@@ -3226,6 +3260,7 @@ async function clearAssistant() {
     state.session.assistantMessages = [];
     state.assistant.lastContextHash = null; // resend the full mailbox on the next turn
     if (octavusSessionId) state.assistant.octavusSessionId = octavusSessionId;
+    clearAssistantAttachments();
     // Replacing the live message list notifies subscribers, which re-renders.
     if (chat) chat.replaceMessages([]);
     else renderAssistant([]);
@@ -3836,7 +3871,13 @@ function persistAssistant() {
   const live = (state.assistant.chat?.messages ?? []).map((m) => {
     const content = messageText(m) || m.content || '';
     if (m.role !== 'assistant') {
-      return { role: m.role, content, timestamp: new Date().toISOString() };
+      const files = messageFiles(m);
+      return {
+        role: m.role,
+        content,
+        ...(files.length ? { files } : {}),
+        timestamp: new Date().toISOString(),
+      };
     }
     const { drafts, events } = draftsFromMessageParts(m.parts ?? [], {
       seenToolCallIds: state.assistant.seenToolCallIds,
@@ -3870,7 +3911,8 @@ function persistAssistant() {
 
 function setAssistantEnabled(enabled) {
   els.assistantInput.disabled = !enabled;
-  els.assistantSendBtn.disabled = !enabled || !els.assistantInput.value.trim() || assistantIsBusy();
+  els.assistantSendBtn.disabled = !enabled || assistantSendBlocked();
+  if (els.assistantAttachBtn) els.assistantAttachBtn.disabled = !enabled;
   updateAssistantThinking();
 }
 
@@ -4005,8 +4047,7 @@ function bindAssistantComposer() {
   if (assistantComposerBound || !els.assistantInput || !els.assistantSendBtn) return;
   assistantComposerBound = true;
   els.assistantInput.addEventListener('input', () => {
-    els.assistantSendBtn.disabled = !els.assistantInput.value.trim()
-      || assistantIsBusy();
+    els.assistantSendBtn.disabled = assistantSendBlocked();
   });
   els.assistantInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -4015,6 +4056,111 @@ function bindAssistantComposer() {
     }
   });
   els.assistantSendBtn.addEventListener('click', sendAssistant);
+  initAssistantAttachments();
+}
+
+// ── Assistant chat attachments ────────────────────────────────
+function initAssistantAttachments() {
+  const btn = els.assistantAttachBtn;
+  const input = els.assistantFileInput;
+  if (!btn || !input) return;
+  if (!assistantAttachmentsEnabled(state.config)) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  btn.setAttribute('aria-label', t('Attach files'));
+  btn.title = t('Attach files');
+  input.accept = assistantAttachmentTypes(state.config).join(',');
+  btn.addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    const files = Array.from(input.files || []);
+    input.value = '';
+    handleAssistantFiles(files);
+  });
+}
+
+function announceAssistantAttachStatus(message) {
+  const status = els.assistantAttachStatus;
+  const text = String(message ?? '');
+  if (!status || !text) return;
+  status.textContent = '';
+  requestAnimationFrame(() => {
+    status.textContent = text;
+  });
+}
+
+function renderAssistantAttachments() {
+  const host = els.assistantAttachments;
+  if (!host) return;
+  const items = state.assistant.attachments;
+  host.hidden = items.length === 0;
+  host.innerHTML = '';
+  items.forEach((item, idx) => {
+    const chip = document.createElement('span');
+    chip.className = 'tag outline assistant__attachment';
+    const label = item.status === 'uploading' ? `${item.file.name} ${t('(uploading…)')}`
+      : item.status === 'error' ? `${item.file.name} ${t('(failed)')}` : item.file.name;
+    chip.innerHTML = `<span class="assistant__attachment-name">${escapeHtml(label)}</span>`;
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'composer__attachment-remove';
+    remove.setAttribute('aria-label', `${t('Remove')} ${item.file.name}`);
+    remove.innerHTML = '<span class="icon icon-trash icon-small" aria-hidden="true"></span>';
+    remove.addEventListener('click', () => {
+      state.assistant.attachments.splice(idx, 1);
+      renderAssistantAttachments();
+      syncAssistantBusyControls();
+      els.assistantInput?.focus();
+    });
+    chip.appendChild(remove);
+    host.appendChild(chip);
+  });
+}
+
+async function handleAssistantFiles(files) {
+  const chat = state.assistant.chat;
+  if (!chat) return;
+  const allowed = assistantAttachmentTypes(state.config);
+  const accepted = files.filter((file) => {
+    const name = (file.name || '').toLowerCase();
+    const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
+    return allowed.includes(ext);
+  });
+  const rejectedType = accepted.length < files.length;
+  if (!accepted.length) {
+    if (rejectedType) announceAssistantAttachStatus(t('File type not allowed'));
+    return;
+  }
+
+  const newItems = accepted.map((file) => ({ file, ref: null, status: 'uploading' }));
+  state.assistant.attachments.push(...newItems);
+  renderAssistantAttachments();
+  syncAssistantBusyControls();
+
+  try {
+    const refs = await chat.uploadFiles(accepted);
+    refs.forEach((ref, i) => {
+      newItems[i].ref = ref;
+      newItems[i].status = 'ready';
+    });
+    if (rejectedType) announceAssistantAttachStatus(t('File type not allowed'));
+  } catch (err) {
+    console.error('[CosmoMail] assistant upload error:', err);
+    newItems.forEach((item) => { item.status = 'error'; });
+    const messages = [];
+    if (rejectedType) messages.push(t('File type not allowed'));
+    messages.push(t('Upload failed'));
+    announceAssistantAttachStatus(messages.join('. '));
+  } finally {
+    renderAssistantAttachments();
+    syncAssistantBusyControls();
+  }
+}
+
+function clearAssistantAttachments() {
+  state.assistant.attachments = [];
+  renderAssistantAttachments();
 }
 
 async function sendAssistant() {
@@ -4022,7 +4168,12 @@ async function sendAssistant() {
   if (!chat || chat.status === 'streaming') return;
   const text = els.assistantInput.value.trim();
   if (!text) return;
+  if (state.assistant.attachments.some((item) => item.status === 'uploading')) return;
+  const files = state.assistant.attachments
+    .filter((item) => item.status === 'ready')
+    .map((item) => item.ref);
   els.assistantInput.value = '';
+  clearAssistantAttachments();
   setAssistantEnabled(false);
   startThinking('chat');
 
@@ -4036,8 +4187,9 @@ async function sendAssistant() {
         CUSTOM_INSTRUCTIONS: customInstructionsValue(),
         THREAD_CONTEXT: context.text,
         CURRENT_DRAFT: getEditorMarkdown() || '(empty)',
+        ...(files.length ? { FILES: files } : {}),
       },
-      { userMessage: { content: text } },
+      { userMessage: { content: text, ...(files.length ? { files } : {}) } },
     );
   } catch (err) {
     // The turn may not have reached the model; resend the full mailbox next time.
@@ -4119,6 +4271,8 @@ export function mailAppTestHooks() {
     formatListDate,
     sendEmail,
     handleComposerFiles,
+    handleAssistantFiles,
+    sendAssistant,
     scrollToEmail,
     startReply,
     startForward,

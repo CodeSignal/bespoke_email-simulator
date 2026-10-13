@@ -186,9 +186,17 @@
           <div class="assistant__chips" id="assistantChips" hidden></div>
         </div>
         <div class="assistant__composer">
+          <div class="assistant__attachments" id="assistantAttachments" hidden></div>
           <textarea class="assistant__input" id="assistantInput" rows="1" placeholder="Ask me anything..." aria-label="Message the AI Assistant" aria-describedby="assistantInputHint"></textarea>
           <span class="visually-hidden" id="assistantInputHint">Enter sends. Shift+Enter inserts a newline.</span>
+          <div class="visually-hidden" id="assistantAttachStatus" role="status"></div>
+          <input type="file" id="assistantFileInput" multiple hidden />
           <div class="assistant__composer-footer">
+            <button type="button" class="assistant__attach" id="assistantAttachBtn" aria-label="Attach files" title="Attach files" hidden>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M21.44 11.05L12.25 20.24C11.1242 21.3658 9.59718 21.9983 8.005 21.9983C6.41282 21.9983 4.88584 21.3658 3.76 20.24C2.63416 19.1142 2.00166 17.5872 2.00166 15.995C2.00166 14.4028 2.63416 12.8758 3.76 11.75L12.33 3.18C13.0806 2.42943 14.0985 2.00777 15.16 2.00777C16.2215 2.00777 17.2394 2.42943 17.99 3.18C18.7406 3.93057 19.1622 4.94853 19.1622 6.01C19.1622 7.07147 18.7406 8.08943 17.99 8.84L9.41 17.41C9.03472 17.7853 8.52573 17.9961 7.995 17.9961C7.46427 17.9961 6.95528 17.7853 6.58 17.41C6.20472 17.0347 5.99389 16.5257 5.99389 15.995C5.99389 15.4643 6.20472 14.9553 6.58 14.58L15.07 6.1"/>
+              </svg>
+            </button>
             <button type="button" class="assistant__send" id="assistantSendBtn" aria-label="Send" title="Send" disabled>
               <svg width="18" height="16" viewBox="0 0 18 16" fill="currentColor" aria-hidden="true">
                 <path d="M1.18333 0.0143778C1.51468 -0.0349085 1.79953 0.0546397 1.93669 0.100755C2.11893 0.162062 2.33475 0.257749 2.5378 0.346449L16.6411 6.50705L16.9417 6.64046C17.0405 6.68563 17.1354 6.73137 17.2185 6.77674C17.3449 6.84582 17.5985 6.99099 17.7791 7.26045L17.8512 7.3833L17.9165 7.53206C18.0279 7.83469 18.0278 8.16612 17.9165 8.46877L17.8512 8.61753C17.6732 8.96668 17.3629 9.14614 17.2185 9.22505C17.1355 9.27037 17.0404 9.31622 16.9417 9.36133L16.6411 9.49474L2.54274 15.6534C2.33896 15.7424 2.12222 15.8377 1.93966 15.8991C1.80237 15.9453 1.51717 16.0351 1.18531 15.9855L1.04096 15.9548C0.660986 15.8517 0.343208 15.6025 0.160059 15.2686L0.0898641 15.1198C-0.0579491 14.7517 0.0198033 14.4032 0.0582268 14.2464C0.102964 14.064 0.179095 13.8456 0.250028 13.6399L1.5967 9.72967C1.63195 9.62732 1.64958 9.57615 1.68072 9.53536C1.70827 9.49928 1.74336 9.46924 1.78368 9.44721C1.82926 9.42232 1.88376 9.41174 1.99277 9.39058L7.54342 8.31329C7.89608 8.24482 7.89608 7.75601 7.54342 7.68754L1.97567 6.60565C1.86642 6.58442 1.81179 6.57381 1.76615 6.54883C1.72577 6.52672 1.69065 6.49658 1.6631 6.46038C1.63197 6.41947 1.61443 6.36814 1.57934 6.26549L0.243107 2.35616C0.172955 2.15098 0.0975036 1.93285 0.0532834 1.75056C0.015348 1.59404 -0.0602514 1.2456 0.0878867 0.878148L0.158082 0.729388C0.341575 0.396205 0.659451 0.147743 1.03898 0.0450896L1.18333 0.0143778Z"/>

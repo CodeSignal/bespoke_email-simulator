@@ -3,6 +3,8 @@ import {
   CANDIDATE_DEFAULTS,
   MAILBOX_CONTEXT_MAX_CHARS,
   VALID_CAPABILITIES,
+  assistantAttachmentTypes,
+  assistantAttachmentsEnabled,
   buildCapabilityInstructions,
   buildMailboxContext,
   fenceAttachmentText,
@@ -107,6 +109,44 @@ describe('buildCapabilityInstructions', () => {
     const text = buildCapabilityInstructions([]);
     expect(text).toContain('Nothing.');
     for (const label of ['Compose & revise', 'Summarize']) expect(text).toContain(label);
+  });
+
+  it('tells Cosmo it can read chat attachments by default', () => {
+    const text = buildCapabilityInstructions(VALID_CAPABILITIES);
+    expect(text).toContain('Attached documents:');
+    expect(text).toContain('can attach documents');
+    expect(text).not.toContain('cannot attach files');
+  });
+
+  it('tells Cosmo chat attachments are off when disabled', () => {
+    const text = buildCapabilityInstructions(VALID_CAPABILITIES, { attachments: false });
+    expect(text).toContain('cannot attach files');
+    expect(text).not.toContain('can attach documents');
+  });
+});
+
+describe('assistant chat attachment types', () => {
+  it('keeps only allowed types the model can read', () => {
+    const config = withScenarioDefaults({});
+    expect(assistantAttachmentTypes(config)).toEqual([
+      '.pdf', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.txt',
+    ]);
+    expect(assistantAttachmentTypes(config)).not.toContain('.docx');
+  });
+
+  it('matches allowed types without regard to case', () => {
+    const config = { attachments: { allowedTypes: ['.PDF', '.MD'] } };
+    expect(assistantAttachmentTypes(config)).toEqual(['.pdf', '.md']);
+  });
+
+  it('is on by default and off when the flag is false', () => {
+    expect(assistantAttachmentsEnabled(withScenarioDefaults({}))).toBe(true);
+    expect(assistantAttachmentsEnabled(withScenarioDefaults({ assistant: { attachments: false } }))).toBe(false);
+  });
+
+  it('is off when no allowed type is readable', () => {
+    const config = withScenarioDefaults({ attachments: { allowedTypes: ['.docx'] } });
+    expect(assistantAttachmentsEnabled(config)).toBe(false);
   });
 });
 

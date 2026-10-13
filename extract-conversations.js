@@ -387,6 +387,9 @@ function assistantLines(session) {
     lines.push(`**${who}:**`);
     if (m.role === 'user') {
       lines.push(...String(m.content || '').split('\n').map((l) => `> ${l}`));
+      if (m.files?.length) {
+        lines.push('', `_Attached: ${m.files.map((f) => f.name || 'file').join(', ')}_`);
+      }
     } else {
       lines.push('', String(m.content || ''));
       for (const draft of m.drafts ?? []) {
