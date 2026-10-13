@@ -1479,18 +1479,92 @@ function renderAttachmentList(attachments) {
   for (const attachment of attachments) {
     const name = attachment.name || t('Attachment');
     const hasText = typeof attachment.text === 'string' && attachment.text.length > 0;
-    const chip = document.createElement(hasText ? 'button' : 'span');
+    const imageUrl = isImageAttachment(attachment) ? attachment.ref?.url || '' : '';
+    let canPreviewImage = Boolean(imageUrl);
+    const previewable = hasText || canPreviewImage;
+    const chip = document.createElement(previewable ? 'button' : 'span');
     chip.className = 'tag outline email__attachment';
     chip.textContent = name;
-    if (hasText) {
+    if (previewable) {
       chip.type = 'button';
       chip.classList.add('email__attachment--preview');
       chip.setAttribute('aria-label', `${t('Preview attachment')}: ${name}`);
-      chip.addEventListener('click', () => openAttachmentPreview(attachment));
+      chip.addEventListener('click', () => {
+        if (canPreviewImage) openImagePreview(name, imageUrl);
+        else openAttachmentPreview(attachment);
+      });
+    }
+    // Upload URLs are presigned and expire; fall back to the plain name chip.
+    if (imageUrl) {
+      prependAttachmentThumb(chip, imageUrl, () => {
+        canPreviewImage = false;
+        if (!hasText) chip.replaceWith(Object.assign(document.createElement('span'), {
+          className: 'tag outline email__attachment',
+          textContent: name,
+        }));
+      });
     }
     list.appendChild(chip);
   }
   return list;
+}
+
+function isImageAttachment({ type, name } = {}) {
+  if (typeof type === 'string' && type.startsWith('image/')) return true;
+  return /\.(png|jpe?g|gif|webp)$/i.test(name || '');
+}
+
+function prependAttachmentThumb(chip, src, onError) {
+  if (!src) return;
+  const img = document.createElement('img');
+  img.className = 'attachment-thumb';
+  img.alt = '';
+  img.decoding = 'async';
+  img.addEventListener('error', () => {
+    img.remove();
+    chip.classList.remove('attachment--image');
+    onError?.();
+  }, { once: true });
+  img.src = src;
+  chip.classList.add('attachment--image');
+  chip.prepend(img);
+}
+
+const filePreviewUrls = new WeakMap();
+
+function filePreviewUrl(file) {
+  if (!file || !isImageAttachment(file) || typeof URL.createObjectURL !== 'function') return '';
+  let url = filePreviewUrls.get(file);
+  if (!url) {
+    url = URL.createObjectURL(file);
+    filePreviewUrls.set(file, url);
+  }
+  return url;
+}
+
+function releaseFilePreview(file) {
+  const url = filePreviewUrls.get(file);
+  if (!url) return;
+  URL.revokeObjectURL(url);
+  filePreviewUrls.delete(file);
+}
+
+function openImagePreview(name, url) {
+  const modal = new Modal({
+    size: 'medium',
+    title: name,
+    content: `<img class="attachment-preview-modal__image" src="${escapeHtml(url)}" alt="${escapeHtml(name)}">`,
+    closeOnOverlayClick: true,
+    closeButtonLabel: t('Close'),
+    footerButtons: [
+      {
+        label: t('Close'),
+        type: 'secondary',
+        onClick: () => modal.close(),
+      },
+    ],
+  });
+  modal.open();
 }
 
 // The original message carried by a forward, quoted under the cover note.
@@ -2296,6 +2370,7 @@ function renderAttachmentPreview() {
     const label = item.status === 'uploading' ? `${item.file.name} ${t('(uploading…)')}`
       : item.status === 'error' ? `${item.file.name} ${t('(failed)')}` : item.file.name;
     chip.innerHTML = `<span class="composer__attachment-name">${escapeHtml(label)}</span>`;
+    prependAttachmentThumb(chip, filePreviewUrl(item.file));
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'composer__attachment-remove';
@@ -2303,6 +2378,7 @@ function renderAttachmentPreview() {
     remove.innerHTML = '<span class="icon icon-trash icon-small" aria-hidden="true"></span>';
     remove.addEventListener('click', () => {
       state.attachments.splice(idx, 1);
+      releaseFilePreview(item.file);
       renderAttachmentPreview();
     });
     chip.appendChild(remove);
@@ -2361,6 +2437,7 @@ function readyAttachments() {
 }
 
 function clearAttachments() {
+  for (const item of state.attachments) releaseFilePreview(item.file);
   state.attachments = [];
   renderAttachmentPreview();
 }
@@ -4102,6 +4179,7 @@ function renderAssistantAttachments() {
     const label = item.status === 'uploading' ? `${item.file.name} ${t('(uploading…)')}`
       : item.status === 'error' ? `${item.file.name} ${t('(failed)')}` : item.file.name;
     chip.innerHTML = `<span class="assistant__attachment-name">${escapeHtml(label)}</span>`;
+    prependAttachmentThumb(chip, filePreviewUrl(item.file));
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'composer__attachment-remove';
@@ -4109,6 +4187,7 @@ function renderAssistantAttachments() {
     remove.innerHTML = '<span class="icon icon-trash icon-small" aria-hidden="true"></span>';
     remove.addEventListener('click', () => {
       state.assistant.attachments.splice(idx, 1);
+      releaseFilePreview(item.file);
       renderAssistantAttachments();
       syncAssistantBusyControls();
       els.assistantInput?.focus();
@@ -4159,6 +4238,7 @@ async function handleAssistantFiles(files) {
 }
 
 function clearAssistantAttachments() {
+  for (const item of state.assistant.attachments) releaseFilePreview(item.file);
   state.assistant.attachments = [];
   renderAssistantAttachments();
 }
@@ -4275,6 +4355,7 @@ export function mailAppTestHooks() {
     sendEmail,
     handleComposerFiles,
     handleAssistantFiles,
+    renderAttachmentList,
     sendAssistant,
     scrollToEmail,
     startReply,
