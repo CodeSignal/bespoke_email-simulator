@@ -209,8 +209,8 @@ function overviewLines() {
   return lines;
 }
 
-function emailLines(email) {
-  const dir = email.outbound ? 'Outbound (participant)' : 'Inbound';
+function emailLines(email, { forwarded = false } = {}) {
+  const dir = forwarded ? 'Forwarded' : email.outbound ? 'Outbound (participant)' : 'Inbound';
   const lines = [
     `**From:** ${addr(email.from)}  `,
     `**To:** ${addrList(email.to)}  `,
@@ -224,6 +224,10 @@ function emailLines(email) {
   lines.push('');
   lines.push(String(email.body ?? ''));
   lines.push('');
+  if (email.forwarded) {
+    const quoted = emailLines(email.forwarded, { forwarded: true }).flatMap((entry) => entry.split('\n'));
+    lines.push(...quoted.map((line) => (line ? `> ${line}` : '>')), '');
+  }
   return lines;
 }
 

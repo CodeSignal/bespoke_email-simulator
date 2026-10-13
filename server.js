@@ -17,6 +17,7 @@ import {
 } from './lib/character-replies.js';
 import { buildCapabilityInstructions } from './lib/assistant.js';
 import { removeScopedDraft } from './lib/drafts.js';
+import { findThreadEmail, forwardedSnapshot } from './lib/forwarding.js';
 import {
   appendSessionEvents,
   makeDraftProposedEvent,
@@ -629,10 +630,13 @@ function publicResponder(character) {
 
 // POST /api/email/send — simulate sending: append the learner's email to the
 // thread (creating one for compose-new), clear the draft, and list who will
-// write back.
+// write back. `forwardOf: { threadId, emailId }` attaches a snapshot of that
+// email, read from the session rather than trusted from the client.
 app.post('/api/email/send', async (req, res) => {
-  const { sessionId, threadId, draftId, to, cc, subject, body, attachments } = req.body;
+  const { sessionId, draftId, to, cc, subject, body, attachments, forwardOf } = req.body;
   if (!sessionId) return res.status(400).json({ error: 'sessionId is required' });
+  // A forward always starts its own thread.
+  const threadId = forwardOf ? null : req.body.threadId;
   try {
     const { config } = await getScenario();
     const characters = config.characters ?? [];
@@ -648,7 +652,17 @@ app.post('/api/email/send', async (req, res) => {
 
     let email;
     let thread;
+    let forwardMissing = false;
     const record = await updateSessionById(sessionId, (fresh) => {
+      let forwarded = null;
+      if (forwardOf) {
+        const source = findThreadEmail(fresh.threads, forwardOf);
+        if (!source) {
+          forwardMissing = true;
+          return;
+        }
+        forwarded = forwardedSnapshot(source.email, { subjectFallback: source.thread.subject });
+      }
       thread = fresh.threads.find((t) => t.id === threadId);
       if (!thread) {
         thread = { id: `thread-${randomUUID()}`, subject: subject || '(no subject)', emails: [] };
@@ -669,6 +683,7 @@ app.post('/api/email/send', async (req, res) => {
         outbound: true,
         attachments: Array.isArray(attachments) ? attachments : [],
       };
+      if (forwarded) email.forwarded = forwarded;
       thread.emails.push(email);
       // Drop only the draft that was sent; keep other scoped drafts.
       fresh.drafts = removeScopedDraft(
@@ -677,6 +692,7 @@ app.post('/api/email/send', async (req, res) => {
       );
     });
     if (!record) return res.status(404).json({ error: 'Session not found' });
+    if (forwardMissing) return res.status(400).json({ error: 'Forwarded email not found' });
 
     const responders = selectResponders(email, characters, { doneIds: doneCharacterIds(record) }).map(
       publicResponder,

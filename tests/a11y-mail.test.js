@@ -156,6 +156,7 @@ async function resetMailbox() {
   state.activeThreadId = null;
   state.view = 'list';
   state.composingNew = false;
+  state.forwardOf = null;
   state.replying = null;
   state.selectedEmailId = null;
   state.replyToEmailId = null;
@@ -2020,6 +2021,150 @@ describe('delete drafts', () => {
 
     expect(mail.state.session.drafts).toEqual([]);
     expect(bodies.at(-1)).toEqual([]);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+});
+
+describe('Forward', () => {
+  const FORWARD_OF = { threadId: 'thread-quote', emailId: 'email-quote' };
+
+  function forwardButton() {
+    return document.querySelector('[data-email-id="email-quote"] .email__action[data-reply-mode="forward"]');
+  }
+
+  async function settle() {
+    for (let i = 0; i < 5; i += 1) await Promise.resolve();
+    await nextFrame();
+  }
+
+  it('names the message action group and its Forward button', () => {
+    clickThread('thread-quote');
+    const group = document.querySelector('[data-email-id="email-quote"] .email__actions');
+    expect(computeAccessibleName(group)).toBe(strings['Message actions']);
+    expect(computeAccessibleName(forwardButton())).toBe(strings.Forward);
+    expect(document.querySelector('.thread-actions [data-reply-mode="forward"]').textContent).toBe(strings.Forward);
+  });
+
+  it('opens a new message with the subject and a preview of the original', async () => {
+    clickThread('thread-quote');
+    forwardButton().focus();
+    forwardButton().click();
+    await Promise.resolve();
+
+    const { state } = mail;
+    expect(state.composingNew).toBe(true);
+    expect(state.forwardOf).toEqual(FORWARD_OF);
+    expect(state.recipients.to).toEqual([]);
+    expect(document.getElementById('composeSubject').value).toBe('Fwd: Vendor quote');
+    expect(document.getElementById('composerTitle').textContent).toBe(strings.Forward);
+    expect(document.activeElement).toBe(document.getElementById('composeToInput'));
+
+    const preview = document.getElementById('composerForwarded');
+    expect(preview.hidden).toBe(false);
+    expect(computeAccessibleName(preview)).toBe(strings['Forwarded message']);
+    expect(preview.textContent).toContain(QUOTE_BODY);
+    expect(preview.textContent).toContain('Dana Reyes <dana@acme.test>');
+  });
+
+  it('forwards the thread tip from the footer button', async () => {
+    clickThread('thread-quote');
+    document.querySelector('.thread-actions [data-reply-mode="forward"]').click();
+    await Promise.resolve();
+    expect(mail.state.forwardOf).toEqual(FORWARD_OF);
+  });
+
+  it('keeps the forward on its draft and drops it for a plain new message', async () => {
+    clickThread('thread-quote');
+    await mail.startForward('email-quote');
+    expect(mail.state.session.drafts).toEqual([]);
+    mail.state.session.sessionId = 'session-1';
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, json: async () => ({}) })));
+    await mail.saveDraftNow();
+    expect(mail.state.session.drafts).toEqual([
+      expect.objectContaining({ scope: 'new', subject: 'Fwd: Vendor quote', forwardOf: FORWARD_OF }),
+    ]);
+
+    mail.closeComposer();
+    await settle();
+    expect(mail.state.composingNew).toBe(false);
+    mail.startCompose({ blank: true });
+    expect(mail.state.forwardOf).toBeNull();
+    expect(document.getElementById('composerForwarded').hidden).toBe(true);
+
+    mail.startCompose({ draft: mail.state.session.drafts[0] });
+    expect(mail.state.forwardOf).toEqual(FORWARD_OF);
+    expect(document.getElementById('composerForwarded').hidden).toBe(false);
+  });
+
+  it('sends forwardOf and renders the original under the cover note', async () => {
+    clickThread('thread-quote');
+    await mail.startForward('email-quote');
+    mail.state.session.sessionId = 'session-1';
+    mail.state.recipients.to = [SAM];
+    document.getElementById('sendBtn').disabled = false;
+
+    const sent = {
+      id: 'email-fwd',
+      from: { name: 'Alex', email: LEARNER },
+      to: [{ name: 'Sam Okonkwo', email: SAM }],
+      date: '2026-10-06T15:00:00.000Z',
+      subject: 'Fwd: Vendor quote',
+      body: '',
+      outbound: true,
+      forwarded: {
+        emailId: 'email-quote',
+        from: { name: 'Dana Reyes', email: DANA },
+        to: [{ name: 'Alex', email: LEARNER }],
+        cc: [],
+        date: '2026-10-05T15:00:00.000Z',
+        subject: 'Vendor quote',
+        body: QUOTE_BODY,
+        attachments: [{ name: 'quote.txt', text: 'Total: $1,200' }],
+      },
+    };
+    let payload;
+    vi.stubGlobal('fetch', vi.fn(async (url, opts) => {
+      if (String(url).includes('/api/email/send')) {
+        payload = JSON.parse(opts.body);
+        return {
+          ok: true,
+          json: async () => ({
+            email: sent,
+            thread: { id: 'thread-fwd', subject: 'Fwd: Vendor quote', emails: [sent] },
+            responders: [],
+          }),
+        };
+      }
+      return { ok: true, json: async () => ({}) };
+    }));
+
+    await mail.sendEmail();
+
+    expect(payload.forwardOf).toEqual(FORWARD_OF);
+    expect(payload.threadId).toBeNull();
+    expect(mail.state.forwardOf).toBeNull();
+    expect(mail.state.activeThreadId).toBe('thread-fwd');
+    const block = document.querySelector('[data-email-id="email-fwd"] .email__forwarded');
+    expect(computeAccessibleName(block)).toBe(strings['Forwarded message']);
+    expect(block.textContent).toContain(QUOTE_BODY);
+    expect(computeAccessibleName(block.querySelector('.email__attachment--preview')))
+      .toBe(`${strings['Preview attachment']}: quote.txt`);
+  });
+
+  it('returns focus to the per-message Forward button after Close', async () => {
+    clickThread('thread-quote');
+    forwardButton().focus();
+    forwardButton().click();
+    await Promise.resolve();
+
+    mail.closeComposer();
+    await settle();
+
+    expect(document.getElementById('composer').hidden).toBe(true);
+    expect(document.activeElement).toBe(forwardButton());
   });
 
   afterEach(() => {

@@ -1527,6 +1527,52 @@ body {
   border-top: 1px solid var(--Colors-Border-Subtle);
 }
 
+/* The original a forward carries, quoted under the cover note. */
+.email__forwarded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-s);
+  margin-top: var(--UI-Spacing-spacing-ms);
+  padding-left: var(--UI-Spacing-spacing-m);
+  border-left: 3px solid var(--Colors-Border-Subtle);
+}
+
+.email__forwarded-label {
+  margin: 0;
+  color: var(--Colors-Text-Body-Medium);
+  font-size: var(--Fonts-Body-Default-xs);
+  font-weight: 600;
+}
+
+.email__forwarded-meta {
+  display: flex;
+  flex-direction: column;
+  gap: var(--UI-Spacing-spacing-xxs);
+}
+
+.email__forwarded .email__attachments {
+  margin-top: 0;
+}
+
+.composer__forwarded {
+  max-height: 160px;
+  overflow-y: auto;
+  padding: var(--UI-Spacing-spacing-mxs);
+  border: 1.5px solid var(--Colors-Border-Subtle);
+  border-radius: var(--UI-Radius-radius-s);
+  scrollbar-width: thin;
+  scrollbar-color: var(--Colors-Control-Neutral-Strong) transparent;
+}
+
+.composer__forwarded:focus-visible {
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 0;
+}
+
+.composer__forwarded > .email__forwarded {
+  margin-top: 0;
+}
+
 /* ── Assistant panel (Figma "Assistant Sidebar") ── */
 .assistant {
   display: flex;

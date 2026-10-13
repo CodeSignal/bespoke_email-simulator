@@ -36,6 +36,7 @@ import {
 } from '../lib/characters.js';
 import { buildMailboxContext } from '../lib/assistant.js';
 import { draftForScope, draftHasPersistableContent, parseInsertedDraft, removeScopedDraft, sameDraftScope, upsertScopedDraft, visibleDrafts } from '../lib/drafts.js';
+import { bodyWithForwarded, findThreadEmail, forwardedSnapshot, forwardSubject } from '../lib/forwarding.js';
 import {
   appendSessionEvents,
   draftFieldsToMarkdown,
@@ -117,6 +118,7 @@ const state = {
   view: 'list', // list | thread
   composingNew: false,
   activeDraftId: null,
+  forwardOf: null, // { threadId, emailId } when the new message is a forward
   replying: null, // null | 'reply' | 'replyAll'
   selectedEmailId: null, // highlighted message in a multi-message thread
   replyToEmailId: null, // email a per-message reply button targeted
@@ -212,6 +214,7 @@ const els = {
   attachBtn: document.getElementById('attachBtn'),
   fileInput: document.getElementById('fileInput'),
   attachmentPreview: document.getElementById('attachmentPreview'),
+  composerForwarded: document.getElementById('composerForwarded'),
   assistantPanel: document.getElementById('assistantPanel'),
   assistantContent: document.getElementById('assistantContent'),
   assistantMessages: document.getElementById('assistantMessages'),
@@ -791,6 +794,8 @@ const MAILBOX_ICONS = {
 // weight can be set: 1.25px.
 const EMAIL_REPLY_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6.25 2.5 1.25 7l5 4.5M1.75 7h4.5c4.25 0 6.5 1.75 6.5 5.5"/></svg>';
 const EMAIL_REPLY_ALL_ICON = '<svg width="16" height="14" viewBox="0 0 16 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.75 2.5 0.75 7l4 4.5M8.25 2.5 3.75 7l4.5 4.5M4.25 7h3.75c4.25 0 6.5 1.75 6.5 5.5"/></svg>';
+// The reply arrow, mirrored.
+const EMAIL_FORWARD_ICON = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7.75 2.5 12.75 7l-5 4.5M12.25 7h-4.5c-4.25 0-6.5 1.75-6.5 5.5"/></svg>';
 
 // Figma untitled-ui mail-01 with lines (thread header).
 const THREAD_ICON = '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1.66667 5.14583L6.59962 8.59889C6.99907 8.87851 7.1988 9.01832 7.41605 9.07247C7.60795 9.12031 7.80866 9.12031 8.00056 9.07247C8.21781 9.01832 8.41754 8.87851 8.817 8.59889L13.7499 5.14583M13.7499 8.16665V6.23332C13.7499 5.21823 13.7499 4.71068 13.5524 4.32297C13.3786 3.98193 13.1014 3.70465 12.7603 3.53088C12.3726 3.33333 11.8651 3.33333 10.85 3.33333H4.56665C3.55156 3.33333 3.04402 3.33333 2.6563 3.53088C2.31526 3.70465 2.03799 3.98193 1.86422 4.32297C1.66667 4.71068 1.66667 5.21823 1.66667 6.23332V10.1C1.66667 11.1151 1.66667 11.6226 1.86422 12.0103C2.03799 12.3514 2.31526 12.6286 2.6563 12.8024C3.04402 13 3.55156 13 4.56665 13H8.70831"/><path d="M11 10.5H18M11 13.5H18M11 16.5H16"/></svg>';
@@ -813,8 +818,16 @@ function renderShell() {
 const COMPOSER_REPLY_ICON = '<svg width="13" height="14" viewBox="0 0 12.9376 13.5058" fill="currentColor" aria-hidden="true"><path d="M6.18669 3.3738V0.561079C6.18639 0.447659 6.15182 0.336976 6.0875 0.243553C6.02319 0.15013 5.93214 0.0783306 5.82629 0.037574C5.72044 -0.00318247 5.60475 -0.0109922 5.49439 0.0151697C5.38403 0.0413316 5.28415 0.100243 5.20786 0.184175L0.144972 5.80961C0.05168 5.91298 3.91006e-05 6.04727 3.91006e-05 6.18651C3.91006e-05 6.32575 0.05168 6.46005 0.144972 6.56342L5.20786 12.1888C5.28415 12.2728 5.38403 12.3317 5.49439 12.3579C5.60475 12.384 5.72044 12.3762 5.82629 12.3355C5.93214 12.2947 6.02319 12.2229 6.0875 12.1295C6.15182 12.036 6.18639 11.9254 6.18669 11.8119V8.99923C9.48319 9.11174 10.1695 10.2818 11.4746 12.5039C11.604 12.7345 11.7446 12.9708 11.8909 13.2127C11.9392 13.2987 12.0094 13.3706 12.0943 13.4209C12.1793 13.4713 12.2759 13.4984 12.3747 13.4996C12.425 13.5078 12.4763 13.5078 12.5266 13.4996C12.6482 13.4655 12.7549 13.3915 12.8294 13.2895C12.9039 13.1875 12.9419 13.0633 12.9372 12.937C12.9372 9.67991 12.9372 3.70007 6.18669 3.3738ZM5.62414 7.87414C5.47495 7.87414 5.33186 7.93341 5.22637 8.03891C5.12087 8.1444 5.0616 8.28749 5.0616 8.43669V10.3437L1.32069 6.18651L5.0616 2.02932V3.93634C5.0616 4.08553 5.12087 4.22862 5.22637 4.33412C5.33186 4.43961 5.47495 4.49888 5.62414 4.49888C10.6027 4.49888 11.5759 7.78976 11.7671 10.8219C10.6083 8.99923 9.33693 7.87414 5.62414 7.87414Z"/></svg>';
 const COMPOSER_NEW_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20H21M3.00003 20H4.67457C5.16375 20 5.40834 20 5.63852 19.9447C5.84259 19.8957 6.03768 19.8149 6.21662 19.7053C6.41846 19.5816 6.59141 19.4086 6.93731 19.0627L19.5001 6.49999C20.3285 5.67156 20.3285 4.32842 19.5001 3.49999C18.6716 2.67156 17.3285 2.67156 16.5001 3.49999L3.93729 16.0627C3.59138 16.4086 3.41843 16.5816 3.29475 16.7834C3.18509 16.9624 3.10428 17.1575 3.05529 17.3615C3.00003 17.5917 3.00003 17.8363 3.00003 18.3255V20Z"/></svg>';
 
+const COMPOSER_FORWARD_ICON = COMPOSER_REPLY_ICON.replace('<path ', '<path transform="matrix(-1 0 0 1 12.9376 0)" ');
+
 function composeOverlayTitle() {
+  if (state.composingNew && state.forwardOf) return t('Forward');
   return state.composingNew ? t('New message') : t('Reply to');
+}
+
+function composerHeadIcon() {
+  if (!state.composingNew) return COMPOSER_REPLY_ICON;
+  return state.forwardOf ? COMPOSER_FORWARD_ICON : COMPOSER_NEW_ICON;
 }
 
 function parkComposer() {
@@ -1183,7 +1196,8 @@ function applyView() {
   }
   placeComposer();
   if (els.composerTitle) els.composerTitle.textContent = composeOverlayTitle();
-  if (els.composerIcon) els.composerIcon.innerHTML = overlayCompose ? COMPOSER_NEW_ICON : COMPOSER_REPLY_ICON;
+  if (els.composerIcon) els.composerIcon.innerHTML = composerHeadIcon();
+  renderComposerForwarded();
   if (els.composer) els.composer.setAttribute('aria-label', composeOverlayTitle());
   if (els.composerCloseBtn) {
     els.composerCloseBtn.setAttribute('aria-label', t('Close'));
@@ -1412,18 +1426,6 @@ function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } =
     ? `<div class="email__row"><span class="email__label">${escapeHtml(t('Cc'))}:</span> <span class="email__recipients">${escapeHtml(recipientNames(email.cc))}</span></div>`
     : '';
   const attachments = Array.isArray(email.attachments) ? email.attachments : [];
-  const attachmentsHtml = attachments.length
-    ? `<div class="email__attachments">${attachments
-        .map((a, index) => {
-          const name = escapeHtml(a.name || t('Attachment'));
-          const hasText = typeof a.text === 'string' && a.text.length > 0;
-          if (hasText) {
-            return `<button type="button" class="tag outline email__attachment email__attachment--preview" data-attachment-index="${index}" aria-label="${escapeHtml(t('Preview attachment'))}: ${name}">${name}</button>`;
-          }
-          return `<span class="tag outline email__attachment">${name}</span>`;
-        })
-        .join('')}</div>`
-    : '';
   wrap.innerHTML = `
     <div class="email__meta">
       ${avatarMarkup(sender, 'lg')}
@@ -1439,30 +1441,82 @@ function renderEmail(email, learnerEmail, { showSubject = true, subject = '' } =
       </div>
     </div>
     <div class="email__divider">
-      <div class="email__actions" role="group" aria-label="${escapeHtml(t('Reply options'))}">
+      <div class="email__actions" role="group" aria-label="${escapeHtml(t('Message actions'))}">
         <button type="button" class="email__action" data-reply-mode="reply" aria-label="${escapeHtml(t('Reply'))}" title="${escapeHtml(t('Reply'))}">${EMAIL_REPLY_ICON}</button>
         <button type="button" class="email__action" data-reply-mode="replyAll" aria-label="${escapeHtml(t('Reply all'))}" title="${escapeHtml(t('Reply all'))}"><span class="email__action-icon">${EMAIL_REPLY_ALL_ICON}</span></button>
+        <button type="button" class="email__action" data-reply-mode="forward" aria-label="${escapeHtml(t('Forward'))}" title="${escapeHtml(t('Forward'))}">${EMAIL_FORWARD_ICON}</button>
       </div>
     </div>
     <div class="email__content">
       <div class="email__body">${renderMarkdown(email.body)}</div>
-      ${attachmentsHtml}
     </div>
   `;
+  const content = wrap.querySelector('.email__content');
+  if (email.forwarded) content.appendChild(renderForwardedBlock(email.forwarded));
+  const attachmentList = renderAttachmentList(attachments);
+  if (attachmentList) content.appendChild(attachmentList);
   for (const btn of wrap.querySelectorAll('.email__action')) {
     btn.addEventListener('click', (event) => {
       event.stopPropagation();
-      startReply(btn.dataset.replyMode, email.id);
-    });
-  }
-  for (const btn of wrap.querySelectorAll('.email__attachment--preview')) {
-    btn.addEventListener('click', () => {
-      const index = Number(btn.dataset.attachmentIndex);
-      const attachment = attachments[index];
-      if (attachment) openAttachmentPreview(attachment);
+      const mode = btn.dataset.replyMode;
+      if (mode === 'forward') void startForward(email.id);
+      else startReply(mode, email.id);
     });
   }
   return wrap;
+}
+
+function renderAttachmentList(attachments) {
+  if (!attachments?.length) return null;
+  const list = document.createElement('div');
+  list.className = 'email__attachments';
+  for (const attachment of attachments) {
+    const name = attachment.name || t('Attachment');
+    const hasText = typeof attachment.text === 'string' && attachment.text.length > 0;
+    const chip = document.createElement(hasText ? 'button' : 'span');
+    chip.className = 'tag outline email__attachment';
+    chip.textContent = name;
+    if (hasText) {
+      chip.type = 'button';
+      chip.classList.add('email__attachment--preview');
+      chip.setAttribute('aria-label', `${t('Preview attachment')}: ${name}`);
+      chip.addEventListener('click', () => openAttachmentPreview(attachment));
+    }
+    list.appendChild(chip);
+  }
+  return list;
+}
+
+// The original message carried by a forward, quoted under the cover note.
+// The composer preview names its own scrolling container instead.
+function renderForwardedBlock(forwarded, { labelled = true } = {}) {
+  const block = document.createElement('div');
+  block.className = 'email__forwarded';
+  if (labelled) {
+    block.setAttribute('role', 'group');
+    block.setAttribute('aria-label', t('Forwarded message'));
+  }
+  const row = (label, value) => (value
+    ? `<div class="email__row"><span class="email__label">${escapeHtml(t(label))}:</span> <span class="email__recipients">${escapeHtml(value)}</span></div>`
+    : '');
+  const fromName = displayName(forwarded.from);
+  const fromEmail = addressEmail(forwarded.from);
+  const from = fromName && fromEmail && fromName !== fromEmail ? `${fromName} <${fromEmail}>` : (fromName || fromEmail);
+  block.innerHTML = `
+    <p class="email__forwarded-label">${escapeHtml(t('Forwarded message'))}</p>
+    <div class="email__forwarded-meta">
+      ${row('From', from)}
+      ${row('Date', forwarded.date ? formatDate(forwarded.date) : '')}
+      ${row('Subject', forwarded.subject)}
+      ${row('To', recipientNames(forwarded.to))}
+      ${forwarded.cc?.length ? row('Cc', recipientNames(forwarded.cc)) : ''}
+    </div>
+    <div class="email__body">${renderMarkdown(forwarded.body)}</div>
+  `;
+  const attachmentList = renderAttachmentList(forwarded.attachments);
+  if (attachmentList) block.appendChild(attachmentList);
+  if (forwarded.forwarded) block.appendChild(renderForwardedBlock(forwarded.forwarded));
+  return block;
 }
 
 function openAttachmentPreview(attachment) {
@@ -1531,17 +1585,17 @@ function renderThread(threadId) {
   syncCoveredFocus();
 }
 
-// Reply / Reply all sit after the conversation (the toolbar holds Compose).
+// Reply / Reply all / Forward sit after the conversation (the toolbar holds Compose).
 function renderThreadActions() {
   const actions = document.createElement('div');
   actions.className = 'thread-actions';
-  for (const [mode, label] of [['reply', t('Reply')], ['replyAll', t('Reply all')]]) {
+  for (const [mode, label] of [['reply', t('Reply')], ['replyAll', t('Reply all')], ['forward', t('Forward')]]) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'button button-secondary button-xsmall';
     btn.dataset.replyMode = mode;
     btn.textContent = label;
-    btn.addEventListener('click', () => startReply(mode));
+    btn.addEventListener('click', () => (mode === 'forward' ? void startForward() : startReply(mode)));
     actions.appendChild(btn);
   }
   return actions;
@@ -1721,6 +1775,7 @@ function startReply(mode, emailId = null) {
   rememberComposeOpener();
   state.view = 'thread';
   state.composingNew = false;
+  state.forwardOf = null;
   state.replying = mode;
   state.replyToEmailId = emailId;
   if (emailId) state.selectedEmailId = emailId;
@@ -1759,12 +1814,14 @@ function startCompose({ blank = true, draft = null } = {}) {
   if (state.view === 'compose') state.view = 'list';
   if (draft) {
     state.activeDraftId = draft.id || newDraftId();
+    state.forwardOf = draft.forwardOf ?? null;
     applyRecipientDraft(draft);
     els.composeSubject.value = draft.subject || '';
     setEditorMarkdown(draft.body || '');
     clearAttachments();
   } else if (blank) {
     state.activeDraftId = newDraftId();
+    state.forwardOf = null;
     applyRecipientDraft({ to: [], cc: [] });
     els.composeSubject.value = '';
     setEditorMarkdown('');
@@ -1772,6 +1829,7 @@ function startCompose({ blank = true, draft = null } = {}) {
   } else {
     const initial = computeInitialDraft();
     state.activeDraftId = initial.id || newDraftId();
+    state.forwardOf = initial.forwardOf ?? null;
     applyRecipientDraft(initial);
     els.composeSubject.value = initial.subject || '';
     setEditorMarkdown(initial.body || '');
@@ -1782,12 +1840,57 @@ function startCompose({ blank = true, draft = null } = {}) {
   els.composeToInput?.focus();
 }
 
+// Forward opens a new message whose subject is prefilled and whose original
+// rides along under the cover note. It never reuses an earlier forward draft.
+async function startForward(emailId = null) {
+  const threadId = state.activeThreadId;
+  const thread = (state.session?.threads ?? []).find((th) => th.id === threadId);
+  if (!thread) return;
+  const source = (emailId && thread.emails?.find((email) => email.id === emailId)) || replyTargetEmail(thread);
+  if (!source?.id) return;
+  if (composerIsOpen()) {
+    clearTimeout(state.draftSaveTimer);
+    await saveDraftNow();
+  }
+  startCompose({
+    draft: {
+      id: newDraftId(),
+      to: [],
+      cc: [],
+      subject: forwardSubject(source.subject || thread.subject),
+      body: '',
+      forwardOf: { threadId, emailId: source.id },
+    },
+  });
+}
+
+function forwardedForComposer() {
+  if (!state.composingNew || !state.forwardOf) return null;
+  const found = findThreadEmail(state.session?.threads, state.forwardOf);
+  return found ? forwardedSnapshot(found.email, { subjectFallback: found.thread.subject }) : null;
+}
+
+// Read-only preview of what the forward will carry, under the cover note.
+function renderComposerForwarded() {
+  const host = els.composerForwarded;
+  if (!host) return;
+  const forwarded = forwardedForComposer();
+  const key = forwarded ? `${state.forwardOf.threadId}/${state.forwardOf.emailId}` : '';
+  if (host.dataset.forwardKey === key) return;
+  host.dataset.forwardKey = key;
+  host.setAttribute('aria-label', t('Forwarded message'));
+  host.innerHTML = '';
+  host.hidden = !forwarded;
+  if (forwarded) host.appendChild(renderForwardedBlock(forwarded, { labelled: false }));
+}
+
 async function closeComposeOverlay() {
   if (!state.composingNew) return;
   clearTimeout(state.draftSaveTimer);
   await saveDraftNow();
   state.composingNew = false;
   state.activeDraftId = null;
+  state.forwardOf = null;
   applyView();
   refreshDraftsUi();
   restoreComposeFocus();
@@ -1823,7 +1926,7 @@ async function deleteDraft(draft) {
     const hadInserted = sameDraftScope(state.assistant.lastInserted, draft);
     const previousInserted = hadInserted ? state.assistant.lastInserted : null;
     const restoreCompose = open && state.composingNew
-      ? { activeDraftId: state.activeDraftId, attachments: state.attachments.slice() }
+      ? { activeDraftId: state.activeDraftId, forwardOf: state.forwardOf, attachments: state.attachments.slice() }
       : null;
     const restoreReply = open && state.replying ? state.replying : null;
 
@@ -1832,6 +1935,7 @@ async function deleteDraft(draft) {
       if (state.composingNew) {
         state.composingNew = false;
         state.activeDraftId = null;
+        state.forwardOf = null;
         clearAttachments();
       } else if (state.replying) {
         state.replying = null;
@@ -1848,6 +1952,7 @@ async function deleteDraft(draft) {
       if (restoreCompose) {
         state.composingNew = true;
         state.activeDraftId = restoreCompose.activeDraftId;
+        state.forwardOf = restoreCompose.forwardOf;
         state.attachments = restoreCompose.attachments;
         renderAttachmentPreview();
       } else if (restoreReply) {
@@ -2039,7 +2144,7 @@ function draftScope() {
 
 function currentDraft() {
   const scope = draftScope();
-  return {
+  const draft = {
     scope: scope?.scope || 'new',
     id: scope?.id || state.activeDraftId || null,
     threadId: scope?.threadId || null,
@@ -2049,6 +2154,8 @@ function currentDraft() {
     body: getEditorMarkdown(),
     updated_at: new Date().toISOString(),
   };
+  if (state.composingNew && state.forwardOf) draft.forwardOf = { ...state.forwardOf };
+  return draft;
 }
 
 function updateSendEnabled() {
@@ -2478,6 +2585,7 @@ async function sendEmail() {
         subject: draft.subject,
         body: draft.body,
         attachments: readyAttachments(),
+        forwardOf: draft.forwardOf,
       }),
     });
     if (!res.ok) throw new Error(`send failed (${res.status})`);
@@ -2504,6 +2612,7 @@ async function sendEmail() {
     replaceThread(thread);
     state.composingNew = false;
     state.activeDraftId = null;
+    state.forwardOf = null;
     state.replying = null;
     state.view = 'thread';
     state.activeThreadId = thread.id;
@@ -2587,7 +2696,7 @@ async function runCharacterReply(character, sentEmail, threadId) {
       }),
   });
   const chat = new OctavusChat({ transport });
-  const sentBody = sentEmail?.body || '';
+  const sentBody = bodyWithForwarded(sentEmail, { formatDate });
   try {
     await chat.send(
       'character-reply',
@@ -2624,7 +2733,7 @@ function serializeThreadContext(threadId = state.activeThreadId) {
       lines.push(`Attachments: ${email.attachments.map((a) => a.name || 'file').join(', ')}`);
     }
     lines.push('');
-    lines.push(String(email.body ?? ''));
+    lines.push(bodyWithForwarded(email, { formatDate }));
     lines.push('\n---\n');
   }
   return lines.join('\n');
@@ -2640,6 +2749,7 @@ function assistantMailboxContext() {
     viewing: {
       threadId: state.view === 'thread' ? state.activeThreadId : null,
       composingNew: state.composingNew,
+      forwarding: state.composingNew ? state.forwardOf : null,
       mailbox: state.activeMailbox,
     },
     previousHash: state.assistant.lastContextHash,
@@ -3391,6 +3501,7 @@ async function runQuickAction(action, detail = '') {
     viewing: {
       threadId: sourceThreadId,
       composingNew: state.composingNew,
+      forwarding: state.composingNew ? state.forwardOf : null,
       mailbox: state.activeMailbox,
     },
     previousHash: null, // always send full mailbox for one-shot sessions
@@ -3577,11 +3688,13 @@ function composerIsOpen() {
 }
 
 // Confirm before overwrite only when the open composer has user content.
-// Reply mode pre-fills To/Subject from the thread, so those alone are not dirty.
+// Reply mode pre-fills To/Subject from the thread, and Forward pre-fills the
+// subject, so those alone are not dirty.
 function composerIsDirty() {
   if (!composerIsOpen()) return false;
   const draft = currentDraft();
   if (draft.body.trim()) return true;
+  if (state.composingNew && state.forwardOf) return Boolean(draft.to.length || draft.cc.length);
   if (state.composingNew) {
     return Boolean(draft.subject.trim() || draft.to.length || draft.cc.length);
   }
@@ -4008,6 +4121,7 @@ export function mailAppTestHooks() {
     handleComposerFiles,
     scrollToEmail,
     startReply,
+    startForward,
     startCompose,
     closeComposer,
     cancelComposer,

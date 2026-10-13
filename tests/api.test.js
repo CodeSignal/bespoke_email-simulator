@@ -167,6 +167,57 @@ describe('session lifecycle', () => {
     ]);
   });
 
+  it('POST /api/email/send forwards a session email into a new thread', async () => {
+    const before = await request(app).get('/api/session').query({ id: sessionId });
+    const source = before.body.threads.find((thread) => thread.id === 'thread-1');
+    const original = source.emails[0];
+    await request(app).post('/api/session/save').send({
+      sessionId,
+      drafts: [
+        { scope: 'new', id: 'draft-fwd', to: ['dana@acme-vendor.com'], cc: [], subject: 'Fwd: x', body: 'FYI', forwardOf: { threadId: 'thread-1', emailId: original.id } },
+      ],
+    });
+
+    const res = await request(app).post('/api/email/send').send({
+      sessionId,
+      // A forward ignores the thread it came from.
+      threadId: 'thread-1',
+      draftId: 'draft-fwd',
+      to: ['dana@acme-vendor.com'],
+      subject: 'Fwd: x',
+      body: 'FYI',
+      forwardOf: { threadId: 'thread-1', emailId: original.id },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.thread.id).not.toBe('thread-1');
+    expect(res.body.thread.subject).toBe('Fwd: x');
+    expect(res.body.email.body).toBe('FYI');
+    expect(res.body.email.forwarded).toEqual(expect.objectContaining({
+      emailId: original.id,
+      from: original.from,
+      body: original.body,
+      subject: original.subject || source.subject,
+    }));
+
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.threads.find((thread) => thread.id === 'thread-1').emails).toHaveLength(source.emails.length);
+    expect(reload.body.drafts.some((draft) => draft.id === 'draft-fwd')).toBe(false);
+  });
+
+  it('POST /api/email/send rejects a forward of an unknown email', async () => {
+    const before = await request(app).get('/api/session').query({ id: sessionId });
+    const res = await request(app).post('/api/email/send').send({
+      sessionId,
+      to: ['dana@acme-vendor.com'],
+      subject: 'Fwd: ghost',
+      body: 'FYI',
+      forwardOf: { threadId: 'thread-1', emailId: 'email-missing' },
+    });
+    expect(res.status).toBe(400);
+    const reload = await request(app).get('/api/session').query({ id: sessionId });
+    expect(reload.body.threads).toHaveLength(before.body.threads.length);
+  });
+
   it('POST /api/session/save persists drafts and assistant messages', async () => {
     const save = await request(app)
       .post('/api/session/save')
