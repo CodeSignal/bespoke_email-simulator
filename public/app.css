@@ -1091,6 +1091,57 @@ body {
   flex: 1 1 auto;
 }
 
+/* Top-edge grabber: 24px hit target (WCAG 2.5.8), compact in layout. */
+.composer__resize {
+  box-sizing: content-box;
+  position: relative;
+  flex: 0 0 4px;
+  height: 4px;
+  padding: 10px 0;
+  margin: -12px 0 -4px;
+  cursor: ns-resize;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 1;
+}
+
+.composer__resize-handle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--Colors-Border-Medium);
+  pointer-events: none;
+}
+
+.composer__resize:hover .composer__resize-handle,
+.composer__resize:focus-visible .composer__resize-handle,
+.composer__resize.is-dragging .composer__resize-handle {
+  height: 6px;
+  background: var(--Colors-Base-Primary-700);
+}
+
+.composer__resize:focus-visible {
+  outline: none;
+}
+
+.composer__resize:focus-visible::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 48px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  border-radius: var(--UI-Radius-radius-xxs);
+  outline: 2px solid var(--Colors-Stroke-Primary);
+  outline-offset: 2px;
+}
+
 @media (prefers-color-scheme: dark) {
   .composer {
     background: var(--Colors-Surface-Container-Subtle-Alt);
@@ -1115,6 +1166,28 @@ body {
   z-index: 50;
   max-height: calc(100% - 64px - var(--UI-Spacing-spacing-mxs));
   overflow-y: auto;
+}
+
+/* User-chosen height: the body flexes and the fields scroll so Send stays put. */
+.composer.is-inline.is-resized,
+.composer.is-new.is-resized {
+  height: var(--composer-height);
+  max-height: min(var(--composer-height), calc(100% - 64px - var(--UI-Spacing-spacing-mxs)));
+  overflow: hidden;
+}
+
+.composer.is-resized .composer__panel {
+  overflow-y: auto;
+}
+
+.composer.is-resized .composer__body {
+  flex: 1 1 auto;
+  min-height: 80px;
+  max-height: none;
+}
+
+.composer.is-resizing .composer__panel {
+  pointer-events: none;
 }
 
 /* Head: icon · title · close */
@@ -1448,12 +1521,12 @@ body {
   color: var(--Colors-Text-Body-Light);
 }
 
-/* Buttons row (Figma): Send then Cancel, 16px apart, 15px under the box */
+/* Buttons row (Figma): Send then Cancel, 16px apart, pinned under the panel */
 .composer__toolbar {
   display: flex;
   align-items: center;
   gap: var(--UI-Spacing-spacing-ms);
-  margin-top: 7px;
+  flex: 0 0 auto;
 }
 
 .composer .button.composer__send {
@@ -2461,5 +2534,44 @@ body {
 
   .email__date {
     text-align: left;
+  }
+
+  /* Leave room to read the thread; the handle can grow the composer again. */
+  .composer.is-inline:not(.is-resized),
+  .composer.is-new:not(.is-resized) {
+    max-height: min(20rem, 48vh, calc(100% - 88px));
+    overflow: hidden;
+  }
+
+  .composer.is-inline .composer__panel,
+  .composer.is-new .composer__panel {
+    overflow-y: auto;
+  }
+
+  .composer.is-inline .composer__body,
+  .composer.is-new .composer__body {
+    flex: 1 1 auto;
+    min-height: 80px;
+    max-height: none;
+  }
+}
+
+@media (max-height: 720px) {
+  .composer.is-inline:not(.is-resized),
+  .composer.is-new:not(.is-resized) {
+    max-height: min(20rem, 48vh, calc(100% - 88px));
+    overflow: hidden;
+  }
+
+  .composer.is-inline .composer__panel,
+  .composer.is-new .composer__panel {
+    overflow-y: auto;
+  }
+
+  .composer.is-inline .composer__body,
+  .composer.is-new .composer__body {
+    flex: 1 1 auto;
+    min-height: 80px;
+    max-height: none;
   }
 }

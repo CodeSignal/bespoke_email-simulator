@@ -165,6 +165,7 @@ async function resetMailbox() {
   state.recipientQuery = { to: '', cc: '' };
   state.recipientActiveIndex = 0;
   state.attachments = [];
+  mail.clearComposerHeight();
   statusEl().textContent = '';
   const composerStatus = document.getElementById('composerStatus');
   if (composerStatus) composerStatus.textContent = '';
@@ -222,6 +223,7 @@ describe('English catalog', () => {
       'Upload failed': 'Upload failed',
       'File type not allowed': 'File type not allowed',
       'Message the AI Assistant': 'Message the AI Assistant',
+      'Resize compose panel': 'Resize compose panel',
     });
   });
 });
@@ -1936,6 +1938,105 @@ describe('date stamps', () => {
 
     mail.state.config.documentLanguage = 'zh-min-nan';
     expect(mail.formatDate(iso)).toBe(browser);
+  });
+});
+
+describe('composer resize', () => {
+  function handle() {
+    return document.getElementById('composerResize');
+  }
+
+  function key(el, keyName, { shiftKey = false } = {}) {
+    const event = new KeyboardEvent('keydown', { key: keyName, shiftKey, bubbles: true, cancelable: true });
+    el.dispatchEvent(event);
+    return event;
+  }
+
+  it('exposes a labeled horizontal separator on the compose panel', () => {
+    showComposer();
+    mail.applyScenarioChrome();
+    const resize = handle();
+    expect(resize).toBeTruthy();
+    expect(resize.getAttribute('role')).toBe('separator');
+    expect(resize.getAttribute('aria-orientation')).toBe('horizontal');
+    expect(resize.tabIndex).toBe(0);
+    expect(computeAccessibleName(resize)).toBe(strings['Resize compose panel']);
+    expect(document.getElementById('composer').contains(resize)).toBe(true);
+  });
+
+  it('localizes the resize control', () => {
+    mail.state.config.strings = {
+      ...strings,
+      'Resize compose panel': 'Cambiar el tamaño del panel de redacción',
+    };
+    mail.applyScenarioChrome();
+    expect(computeAccessibleName(handle())).toBe('Cambiar el tamaño del panel de redacción');
+  });
+
+  it('shrinks and grows the panel from the keyboard and remembers the height', () => {
+    showComposer();
+    const composer = document.getElementById('composer');
+    Object.defineProperty(composer, 'offsetHeight', { configurable: true, value: 360 });
+
+    mail.applyComposerHeight(360);
+    expect(composer.classList.contains('is-resized')).toBe(true);
+    expect(composer.style.getPropertyValue('--composer-height')).toBe('360px');
+
+    const down = key(handle(), 'ArrowDown');
+    expect(down.defaultPrevented).toBe(true);
+    expect(mail.state.composerHeight).toBe(344);
+    expect(composer.style.getPropertyValue('--composer-height')).toBe('344px');
+    expect(sessionStorage.getItem('cosmoMail.composerHeight')).toBe('344');
+
+    key(handle(), 'ArrowUp', { shiftKey: true });
+    expect(mail.state.composerHeight).toBe(392);
+    expect(handle().getAttribute('aria-valuenow')).toBe('392');
+  });
+
+  it('clamps Home and End to the available range', () => {
+    showComposer();
+    setViewport(1280, 800);
+    mail.applyComposerHeight(300);
+    key(handle(), 'End');
+    expect(mail.state.composerHeight).toBe(160);
+    expect(handle().getAttribute('aria-valuemin')).toBe('160');
+
+    key(handle(), 'Home');
+    const max = Number(handle().getAttribute('aria-valuemax'));
+    expect(mail.state.composerHeight).toBe(max);
+    expect(max).toBeGreaterThan(160);
+  });
+
+  it('follows a pointer drag on the handle', () => {
+    showComposer();
+    const composer = document.getElementById('composer');
+    Object.defineProperty(composer, 'offsetHeight', { configurable: true, value: 400 });
+    mail.applyComposerHeight(400);
+
+    const resize = handle();
+    resize.dispatchEvent(new PointerEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+      pointerType: 'mouse',
+      button: 0,
+      clientY: 420,
+    }));
+    document.dispatchEvent(new PointerEvent('pointermove', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+      clientY: 500,
+    }));
+    document.dispatchEvent(new PointerEvent('pointerup', {
+      bubbles: true,
+      cancelable: true,
+      pointerId: 1,
+      clientY: 500,
+    }));
+
+    expect(mail.state.composerHeight).toBe(320);
+    expect(composer.style.getPropertyValue('--composer-height')).toBe('320px');
   });
 });
 
