@@ -8,6 +8,9 @@ import {
   buildCharacterReplyHeaders,
   characterMentionedIn,
   normalizeWorld,
+  resolveCcAdds,
+  formatPeopleDirectory,
+  selectIntroducedResponders,
 } from '../lib/character-replies.js';
 import { normalizeCharacters } from '../lib/characters.js';
 
@@ -155,15 +158,93 @@ describe('parseCharacterReply', () => {
     expect(parseCharacterReply('Thanks, that works.\n\n[[done]]')).toEqual({
       body: 'Thanks, that works.',
       done: true,
+      cc: [],
     });
     expect(parseCharacterReply('Could you send a redline?\n[[continue]]')).toEqual({
       body: 'Could you send a redline?',
       done: false,
+      cc: [],
     });
   });
 
   it('treats a short "nothing left to say" body as done', () => {
     expect(parseCharacterReply('I have nothing left to say.')).toMatchObject({ done: true });
+  });
+
+  it('collects trailing [[cc:]] tags and keeps them out of the body', () => {
+    expect(
+      parseCharacterReply(
+        'Looping in Victoria Vance (cc\'d).\n\nRyan\n\n[[cc: Victoria Vance]]\n[[cc: alex.rivera@bestcrm.com]]\n[[done]]',
+      ),
+    ).toEqual({
+      body: 'Looping in Victoria Vance (cc\'d).\n\nRyan',
+      done: true,
+      cc: ['Victoria Vance', 'alex.rivera@bestcrm.com'],
+    });
+  });
+
+  it('strips a [[cc:]] tag buried in the body', () => {
+    expect(parseCharacterReply('Thanks.\n[[cc: Victoria]]\nSee you Friday.')).toEqual({
+      body: 'Thanks.\nSee you Friday.',
+      done: false,
+      cc: ['Victoria'],
+    });
+  });
+});
+
+describe('resolveCcAdds / formatPeopleDirectory', () => {
+  const victoria = {
+    id: 'victoria',
+    name: 'Victoria Vance',
+    email: 'victoria.vance@globalsolutionsltd.com',
+    role: 'Procurement Lead',
+    persona: { goal: 'Review commercials' },
+  };
+  const people = normalizeCharacters([dana, marcus, victoria, priyaSilent]);
+
+  it('resolves email, angled address, full name, and unique first name', () => {
+    expect(
+      resolveCcAdds(
+        [
+          'victoria.vance@globalsolutionsltd.com',
+          'Dana Reyes <dana@acme-vendor.com>',
+          'Marcus Bell',
+          'Priya',
+        ],
+        people,
+      ),
+    ).toEqual([
+      victoria.email,
+      dana.email,
+      marcus.email,
+      priyaSilent.email,
+    ]);
+  });
+
+  it('drops unknown people, duplicates, and excluded addresses', () => {
+    expect(
+      resolveCcAdds(
+        ['Nobody Important', 'Dana', dana.email, 'not-an-email'],
+        people,
+        { excludeEmails: [dana.email] },
+      ),
+    ).toEqual([]);
+  });
+
+  it('lists everyone except the writing character', () => {
+    expect(
+      formatPeopleDirectory(people, {
+        excludeEmails: [dana.email],
+        learner: { displayName: 'You', email: 'you@bestcrm.com' },
+      }),
+    ).toBe(
+      [
+        '- You <you@bestcrm.com>',
+        '- Marcus Bell <marcus.bell@example.com> — Customer',
+        '- Victoria Vance <victoria.vance@globalsolutionsltd.com> — Procurement Lead',
+        '- Priya Nair <priya@brightlabs.io> — Partner',
+      ].join('\n'),
+    );
   });
 });
 
@@ -185,5 +266,96 @@ describe('buildCharacterReplyHeaders', () => {
       cc: [morgan.email],
       subject: 'Re: Proposal for annual license',
     });
+  });
+
+  it('adds directory people the character asked to Cc', () => {
+    expect(
+      buildCharacterReplyHeaders(
+        {
+          from: { name: 'You', email: 'you@company.com' },
+          to: [dana.email],
+          cc: [marcus.email],
+          subject: 'Proposal for annual license',
+        },
+        dana,
+        {
+          learnerEmail: 'you@company.com',
+          ccAdds: [morgan.email, dana.email, 'you@company.com'],
+        },
+      ),
+    ).toEqual({
+      to: ['you@company.com'],
+      cc: [marcus.email, morgan.email],
+      subject: 'Re: Proposal for annual license',
+    });
+  });
+});
+
+describe('selectIntroducedResponders', () => {
+  const victoria = {
+    id: 'victoria',
+    name: 'Victoria Vance',
+    email: 'victoria.vance@globalsolutionsltd.com',
+    persona: { goal: 'Review commercials' },
+  };
+  const people = normalizeCharacters([dana, marcus, victoria, morgan, priyaSilent]);
+
+  it('returns live people newly added to Cc, not anyone already on the thread', () => {
+    const prior = {
+      from: { name: 'You', email: 'you@company.com' },
+      to: [dana.email],
+      cc: [marcus.email],
+    };
+    const reply = {
+      from: dana,
+      to: ['you@company.com'],
+      cc: [marcus.email, victoria.email, morgan.email, priyaSilent.email],
+    };
+    expect(selectIntroducedResponders(reply, prior, people).map((c) => c.id)).toEqual([
+      'victoria',
+    ]);
+  });
+
+  it('returns nobody when the reply only reply-alls existing recipients', () => {
+    const prior = { from: { email: 'you@company.com' }, to: [dana.email], cc: [marcus.email] };
+    const reply = { from: dana, to: ['you@company.com'], cc: [marcus.email] };
+    expect(selectIntroducedResponders(reply, prior, people)).toEqual([]);
+  });
+});
+
+describe('Ryan introducing Victoria', () => {
+  const ryan = {
+    id: 'ryan',
+    name: 'Ryan Smith',
+    email: 'ryan.smith@globalsolutionsltd.com',
+    persona: { goal: 'Introduce Victoria when persuaded' },
+  };
+  const victoria = {
+    id: 'victoria',
+    name: 'Victoria Vance',
+    email: 'victoria.vance@globalsolutionsltd.com',
+    persona: { goal: 'Review commercials once introduced' },
+  };
+  const people = normalizeCharacters([ryan, victoria]);
+  const learnerEmail = 'you@bestcrm.com';
+  const sent = {
+    from: { name: 'You', email: learnerEmail },
+    to: [ryan.email],
+    cc: [],
+    subject: 'Re: Following up on our session / pricing details',
+  };
+
+  it('puts Victoria on Cc and flags her as the next responder', () => {
+    const parsed = parseCharacterReply(
+      "Looping in Victoria Vance (cc'd).\n\nRyan\n\n[[cc: Victoria Vance]]\n[[done]]",
+    );
+    const ccAdds = resolveCcAdds(parsed.cc, people, {
+      excludeEmails: [ryan.email, learnerEmail],
+    });
+    const headers = buildCharacterReplyHeaders(sent, ryan, { learnerEmail, ccAdds });
+    const reply = { from: ryan, to: headers.to, cc: headers.cc };
+    expect(parsed.body).toBe("Looping in Victoria Vance (cc'd).\n\nRyan");
+    expect(headers.cc).toEqual([victoria.email]);
+    expect(selectIntroducedResponders(reply, sent, people).map((c) => c.id)).toEqual(['victoria']);
   });
 });

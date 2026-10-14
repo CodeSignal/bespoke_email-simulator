@@ -49,6 +49,11 @@ input:
     optional: true
     default: "You"
     description: The name of the person this character is emailing with.
+  PEOPLE:
+    type: string
+    optional: true
+    default: ""
+    description: Directory of people this character may add to Cc (name <email>).
 
 triggers:
   character-reply:
@@ -76,6 +81,7 @@ agent:
     CHARACTER_CARD: CHARACTER_CARD
     WORLD: WORLD
     LEARNER_NAME: LEARNER_NAME
+    PEOPLE: PEOPLE
   temperature: TEMPERATURE
   thinking: THINKING
   webSearch: false

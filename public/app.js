@@ -2910,9 +2910,9 @@ async function finalizeCharacterReply(characterId, threadId, replyText, inReplyT
     }),
   });
   if (!res.ok) return null;
-  const { thread, email } = await res.json();
+  const { thread, email, responders } = await res.json();
   refreshMailAfterInbound(thread, email);
-  return email;
+  return { email, responders };
 }
 
 async function ensureCharacterSession(characterId) {
@@ -2970,7 +2970,10 @@ async function runCharacterReply(character, sentEmail, threadId) {
 
   const replyText = assistantTextFromMessages(chat.messages);
   if (!replyText.trim()) return;
-  await finalizeCharacterReply(character.id, threadId, replyText, sentEmail?.id);
+  const recorded = await finalizeCharacterReply(character.id, threadId, replyText, sentEmail?.id);
+  if (recorded?.responders?.length) {
+    await collectCharacterReplies(recorded.responders, recorded.email, threadId);
+  }
 }
 
 // ── Assistant (Cosmo) ─────────────────────────────────────────
