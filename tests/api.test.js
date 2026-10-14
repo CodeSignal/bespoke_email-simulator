@@ -347,6 +347,33 @@ describe('session lifecycle', () => {
     expect(res.body.responders).toEqual([]);
   });
 
+  it('POST /api/character/complete Ccs a directory person and returns them as a responder', async () => {
+    const sent = await request(app).post('/api/email/send').send({
+      sessionId,
+      threadId: 'thread-1',
+      to: ['dana@acme-vendor.com'],
+      cc: [],
+      subject: 'Re: Proposal for annual license',
+      body: 'Please involve deal desk on the 24-month option.',
+    });
+    expect(sent.status).toBe(200);
+
+    const res = await request(app).post('/api/character/complete').send({
+      sessionId,
+      threadId: 'thread-1',
+      characterId: 'dana',
+      inReplyToId: sent.body.email.id,
+      reply: 'Looping in Lee from deal desk.\n\nDana\n\n[[cc: Lee Park]]\n[[continue]]',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.email.cc).toEqual([
+      expect.objectContaining({ name: 'Lee Park', email: 'lee.park@acme-vendor.com' }),
+    ]);
+    expect(res.body.responders).toEqual([
+      expect.objectContaining({ id: 'lee', email: 'lee.park@acme-vendor.com' }),
+    ]);
+  });
+
   it('POST /api/assistant/clear wipes the assistant transcript', async () => {
     const clear = await request(app).post('/api/assistant/clear').send({ sessionId });
     expect(clear.status).toBe(200);

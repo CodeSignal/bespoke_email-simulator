@@ -30,6 +30,16 @@
           "Do not invent discounts, legal terms, or dates that are not in knowledge"
         ]
       }
+    },
+    {
+      "id": "lee",
+      "name": "Lee Park",
+      "email": "lee.park@acme-vendor.com",
+      "role": "Deal desk",
+      "persona": {
+        "goal": "Review commercial exceptions when Dana loops you in.",
+        "constraints": ["Do not engage until Dana introduces you."]
+      }
     }
   ],
 

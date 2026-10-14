@@ -358,4 +358,16 @@ describe('Ryan introducing Victoria', () => {
     expect(headers.cc).toEqual([victoria.email]);
     expect(selectIntroducedResponders(reply, sent, people).map((c) => c.id)).toEqual(['victoria']);
   });
+
+  it('keeps Ryan on To when Victoria replies to his introduction', () => {
+    const ryanReply = {
+      from: ryan,
+      to: [learnerEmail],
+      cc: [victoria.email],
+      subject: 'Re: Following up on our session / pricing details',
+    };
+    const headers = buildCharacterReplyHeaders(ryanReply, victoria, { learnerEmail });
+    expect(headers.to).toEqual([learnerEmail, ryan.email]);
+    expect(headers.cc).toEqual([]);
+  });
 });
