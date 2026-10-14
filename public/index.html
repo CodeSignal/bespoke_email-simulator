@@ -109,6 +109,9 @@
            the same accessible semantics a <section aria-label> would have had. -->
       <div class="composer" id="composer" role="group" aria-label="Compose" hidden>
         <!-- Figma "Replying" (470:12849): one panel for new messages and replies. -->
+        <div class="composer__resize" id="composerResize" role="separator" aria-orientation="horizontal" aria-label="Resize compose panel" tabindex="0">
+          <span class="composer__resize-handle" aria-hidden="true"></span>
+        </div>
         <header class="composer__head" id="composerChrome">
           <span class="composer__head-icon" id="composerIcon" aria-hidden="true"></span>
           <h2 class="composer__title" id="composerTitle">New message</h2>
@@ -149,11 +152,11 @@
           <div class="composer__attachments" id="attachmentPreview" hidden></div>
           <div class="composer__forwarded" id="composerForwarded" role="group" aria-label="Forwarded message" tabindex="0" hidden></div>
           <input type="file" id="fileInput" multiple hidden />
-          <div class="composer__toolbar">
-            <button type="button" class="button button-primary composer__send" id="sendBtn" disabled>Send</button>
-            <button type="button" class="composer__text-btn" id="discardBtn" hidden>Cancel</button>
-            <button type="button" class="composer__text-btn composer__attach" id="attachBtn" hidden>Attach</button>
-          </div>
+        </div>
+        <div class="composer__toolbar">
+          <button type="button" class="button button-primary composer__send" id="sendBtn" disabled>Send</button>
+          <button type="button" class="composer__text-btn" id="discardBtn" hidden>Cancel</button>
+          <button type="button" class="composer__text-btn composer__attach" id="attachBtn" hidden>Attach</button>
         </div>
       </div>
       <div class="mail-toasts" id="mailToasts" aria-live="polite" aria-relevant="additions"></div>

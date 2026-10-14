@@ -157,6 +157,7 @@ const state = {
   },
   characterSessions: {},
   attachments: [],
+  composerHeight: null, // px; null keeps the CSS default
   mailSplit: null,
   railDrawerOpen: false,
   assistantDrawerOpen: false,
@@ -192,6 +193,7 @@ const els = {
   mailViewStatus: document.getElementById('mailViewStatus'),
   composerStatus: document.getElementById('composerStatus'),
   composer: document.getElementById('composer'),
+  composerResize: document.getElementById('composerResize'),
   composerChrome: document.getElementById('composerChrome'),
   composerTitle: document.getElementById('composerTitle'),
   composerIcon: document.getElementById('composerIcon'),
@@ -1209,6 +1211,7 @@ function applyView() {
     els.composerCloseBtn.setAttribute('aria-label', t('Close'));
     els.composerCloseBtn.title = t('Close');
   }
+  syncComposerResize();
   if (els.discardBtn) {
     els.discardBtn.hidden = !showComposer;
     els.discardBtn.textContent = t('Cancel');
@@ -2176,6 +2179,7 @@ function applyScenarioChrome() {
   if (els.mailboxList) els.mailboxList.setAttribute('aria-label', t('Folders'));
   if (els.mailList) els.mailList.setAttribute('aria-label', t('Mail'));
   if (els.readingPane) els.readingPane.setAttribute('aria-label', t('Conversation'));
+  labelComposerResize();
   if (els.assistantHint && state.config?.assistant?.initialMessage) {
     els.assistantHint.textContent = state.config.assistant.initialMessage;
   } else if (els.assistantHint) {
@@ -2300,6 +2304,174 @@ function scheduleDraftSave() {
   state.draftSaveTimer = setTimeout(saveDraftNow, 600);
 }
 
+const COMPOSER_HEIGHT_KEY = 'cosmoMail.composerHeight';
+const COMPOSER_MIN_HEIGHT = 160;
+
+function composerHostHeight() {
+  const host = els.composer?.parentElement;
+  const fromHost = host?.clientHeight || 0;
+  if (fromHost >= COMPOSER_MIN_HEIGHT + 40) return fromHost;
+  return window.innerHeight || 800;
+}
+
+function composerMaxHeight() {
+  const reserve = els.composer?.parentElement === els.readingPane ? 96 : 80;
+  return Math.max(COMPOSER_MIN_HEIGHT, Math.round(composerHostHeight() - reserve));
+}
+
+function clampComposerHeight(height) {
+  return Math.round(Math.min(composerMaxHeight(), Math.max(COMPOSER_MIN_HEIGHT, Number(height) || COMPOSER_MIN_HEIGHT)));
+}
+
+function readStoredComposerHeight() {
+  try {
+    const value = Number(sessionStorage.getItem(COMPOSER_HEIGHT_KEY));
+    if (Number.isFinite(value) && value >= COMPOSER_MIN_HEIGHT) return value;
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
+
+function labelComposerResize() {
+  const handle = els.composerResize;
+  if (!handle) return;
+  const label = t('Resize compose panel');
+  handle.setAttribute('aria-label', label);
+  handle.title = label;
+}
+
+function updateComposerResizeAria() {
+  const handle = els.composerResize;
+  if (!handle) return;
+  labelComposerResize();
+  const min = COMPOSER_MIN_HEIGHT;
+  const max = composerMaxHeight();
+  const now = clampComposerHeight(state.composerHeight ?? els.composer?.offsetHeight ?? min);
+  const span = Math.max(1, max - min);
+  const pct = Math.round(((now - min) / span) * 100);
+  handle.setAttribute('aria-orientation', 'horizontal');
+  handle.setAttribute('aria-valuemin', String(min));
+  handle.setAttribute('aria-valuemax', String(max));
+  handle.setAttribute('aria-valuenow', String(now));
+  handle.setAttribute('aria-valuetext', `${pct}%`);
+}
+
+function applyComposerHeight(height, { persist = true } = {}) {
+  if (!els.composer) return null;
+  if (height == null) {
+    state.composerHeight = null;
+    els.composer.style.removeProperty('--composer-height');
+    els.composer.classList.remove('is-resized');
+    updateComposerResizeAria();
+    return null;
+  }
+  const next = clampComposerHeight(height);
+  state.composerHeight = next;
+  els.composer.style.setProperty('--composer-height', `${next}px`);
+  els.composer.classList.add('is-resized');
+  if (persist) {
+    try {
+      sessionStorage.setItem(COMPOSER_HEIGHT_KEY, String(next));
+    } catch {
+      /* ignore */
+    }
+  }
+  updateComposerResizeAria();
+  syncCoveredFocus();
+  return next;
+}
+
+function currentComposerHeight() {
+  return state.composerHeight ?? els.composer?.offsetHeight ?? COMPOSER_MIN_HEIGHT;
+}
+
+function syncComposerResize() {
+  if (state.composerHeight != null) applyComposerHeight(state.composerHeight, { persist: false });
+  else updateComposerResizeAria();
+}
+
+function clearComposerHeight() {
+  try {
+    sessionStorage.removeItem(COMPOSER_HEIGHT_KEY);
+  } catch {
+    /* ignore */
+  }
+  applyComposerHeight(null, { persist: false });
+}
+
+function initComposerResize() {
+  const handle = els.composerResize;
+  if (!handle || initComposerResize.done) {
+    syncComposerResize();
+    return;
+  }
+  initComposerResize.done = true;
+
+  const stored = readStoredComposerHeight();
+  if (stored != null) applyComposerHeight(stored, { persist: false });
+  else updateComposerResizeAria();
+
+  let dragging = false;
+  let startY = 0;
+  let startHeight = 0;
+
+  function endDrag() {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('is-dragging');
+    els.composer?.classList.remove('is-resizing');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    document.body.style.webkitUserSelect = '';
+    applyComposerHeight(currentComposerHeight(), { persist: true });
+  }
+
+  handle.addEventListener('pointerdown', (event) => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    event.preventDefault();
+    dragging = true;
+    startY = event.clientY;
+    startHeight = currentComposerHeight();
+    handle.classList.add('is-dragging');
+    els.composer?.classList.add('is-resizing');
+    document.body.style.cursor = 'ns-resize';
+    document.body.style.userSelect = 'none';
+    document.body.style.webkitUserSelect = 'none';
+    handle.setPointerCapture?.(event.pointerId);
+  });
+
+  document.addEventListener('pointermove', (event) => {
+    if (!dragging) return;
+    event.preventDefault();
+    applyComposerHeight(startHeight + (startY - event.clientY), { persist: false });
+  });
+
+  document.addEventListener('pointerup', endDrag);
+  document.addEventListener('pointercancel', endDrag);
+
+  handle.addEventListener('keydown', (event) => {
+    const step = event.shiftKey ? 48 : 16;
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      applyComposerHeight(currentComposerHeight() + step);
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      applyComposerHeight(currentComposerHeight() - step);
+    } else if (event.key === 'Home') {
+      event.preventDefault();
+      applyComposerHeight(composerMaxHeight());
+    } else if (event.key === 'End') {
+      event.preventDefault();
+      applyComposerHeight(COMPOSER_MIN_HEIGHT);
+    }
+  });
+
+  window.addEventListener('resize', () => {
+    syncComposerResize();
+  });
+}
+
 function initComposer() {
   const draft = computeInitialDraft();
   applyRecipientDraft(draft);
@@ -2344,6 +2516,7 @@ function initComposer() {
   els.toolbarComposeBtn?.addEventListener('click', () => startCompose({ blank: true }));
   els.discardBtn?.addEventListener('click', cancelComposer);
   els.composerCloseBtn?.addEventListener('click', closeComposer);
+  initComposerResize();
   updateSendEnabled();
 }
 
@@ -4332,7 +4505,10 @@ async function boot() {
 // The browser bundle boots on load. Vitest imports this module after mounting
 // public/index.html, and drives the real UI from there.
 if (globalThis.process?.env?.VITEST !== 'true') boot();
-else initShellDrawers();
+else {
+  initShellDrawers();
+  initComposerResize();
+}
 initSkipToMail();
 
 /** Live mailbox behaviors for the accessibility regression tests. */
@@ -4363,6 +4539,9 @@ export function mailAppTestHooks() {
     startCompose,
     closeComposer,
     cancelComposer,
+    applyComposerHeight,
+    clearComposerHeight,
+    initComposerResize,
     deleteDraft,
     saveDraftNow,
     resetDraftWriteQueue,
