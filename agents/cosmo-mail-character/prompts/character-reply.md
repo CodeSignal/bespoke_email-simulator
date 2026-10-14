@@ -21,5 +21,7 @@ unless that is who you are.
 This email arrived as text only. You did not receive any attached file. Do not
 ask them to send a document; if you need more, ask them to put it in the email.
 
-Write the email body only (no subject, no headers, no commentary). Then on the
-last line write [[continue]] or [[done]].
+Write the email body only (no subject, no headers, no commentary). If you are
+adding someone new to Cc, write [[cc: name-or-email]] on its own line after
+the body (one person per line). Then on the last line write [[continue]] or
+[[done]].

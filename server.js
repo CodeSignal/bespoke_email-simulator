@@ -14,6 +14,9 @@ import {
   compileCharacterCard,
   parseCharacterReply,
   buildCharacterReplyHeaders,
+  resolveCcAdds,
+  selectIntroducedResponders,
+  formatPeopleDirectory,
 } from './lib/character-replies.js';
 import {
   buildCapabilityInstructions,
@@ -359,6 +362,10 @@ function buildCharacterSessionInput(config, character) {
   input.CHARACTER_CARD = compileCharacterCard(character);
   if (config.world) input.WORLD = config.world;
   input.LEARNER_NAME = config.learner?.displayName || 'You';
+  input.PEOPLE = formatPeopleDirectory(config.characters, {
+    excludeEmails: [character?.email],
+    learner: config.learner,
+  });
   return input;
 }
 
@@ -771,7 +778,8 @@ app.post('/api/character/trigger', async (req, res) => {
 });
 
 // POST /api/character/complete — append a finished character reply as inbound
-// mail (reply-all) and record whether that character is done.
+// mail (reply-all, plus any [[cc:]] adds), record whether that character is
+// done, and list live people they just looped in so the client can ask them.
 app.post('/api/character/complete', async (req, res) => {
   const { sessionId, threadId, characterId, reply, inReplyToId } = req.body;
   if (!sessionId || !characterId) {
@@ -786,6 +794,7 @@ app.post('/api/character/complete', async (req, res) => {
     let email;
     let thread;
     let done;
+    let sent;
     const record = await updateSessionById(sessionId, (fresh) => {
       thread = fresh.threads.find((t) => t.id === threadId) ?? fresh.threads[0];
       if (!thread) {
@@ -794,15 +803,19 @@ app.post('/api/character/complete', async (req, res) => {
         throw err;
       }
 
-      const sent =
+      sent =
         thread.emails.find((entry) => entry.id === inReplyToId) ??
         [...thread.emails].reverse().find((entry) => entry.outbound);
       const parsed = parseCharacterReply(reply);
       done = parsed.done;
       const learnerEmail = config.learner?.email || 'you@example.com';
+      const ccAdds = resolveCcAdds(parsed.cc, characters, {
+        excludeEmails: [character.email, learnerEmail],
+      });
       const headers = buildCharacterReplyHeaders(sent, character, {
         learnerEmail,
         subjectFallback: thread.subject,
+        ccAdds,
       });
 
       email = {
@@ -826,7 +839,8 @@ app.post('/api/character/complete', async (req, res) => {
     });
     if (!record) return res.status(404).json({ error: 'Session not found' });
 
-    res.json({ email, thread, done });
+    const responders = selectIntroducedResponders(email, sent, characters).map(publicResponder);
+    res.json({ email, thread, done, responders });
   } catch (err) {
     if (err?.status === 404) return res.status(404).json({ error: err.message });
     console.error('[character/complete] Error:', err);
