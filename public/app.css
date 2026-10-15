@@ -1121,8 +1121,11 @@ body {
 .composer__resize:hover .composer__resize-handle,
 .composer__resize:focus-visible .composer__resize-handle,
 .composer__resize.is-dragging .composer__resize-handle {
+  background: var(--Colors-Base-Primary-600);
+}
+
+.composer__resize:focus-visible .composer__resize-handle {
   height: 6px;
-  background: var(--Colors-Base-Primary-700);
 }
 
 .composer__resize:focus-visible {
