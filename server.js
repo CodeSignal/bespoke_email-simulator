@@ -377,7 +377,7 @@ function doneCharacterIds(record) {
 
 // Attach to an Octavus session, execute the payload, and pipe the SSE stream.
 async function streamAgent(res, octavusSessionId, payload, { tools } = {}) {
-  const session = octavus.agentSessions.attach(
+  const session = octavus.sessions.attach(
     octavusSessionId,
     tools ? { tools } : undefined,
   );
@@ -420,7 +420,7 @@ app.post('/api/assistant/session', async (req, res) => {
     // Create outside the write lock, then persist on the latest record.
     const { config } = await getScenario();
     const input = buildAgentSessionInput(config);
-    const octavusSessionId = await octavus.agentSessions.create(AGENT_ID, input);
+    const { id: octavusSessionId } = await octavus.sessions.create(AGENT_ID, input);
 
     const record = await updateSessionById(sessionId, (fresh) => {
       if (!fresh.octavus_session_id) fresh.octavus_session_id = octavusSessionId;
@@ -447,7 +447,8 @@ app.post('/api/assistant/clear', async (req, res) => {
     if (AGENT_ID) {
       const { config } = await getScenario();
       const input = buildAgentSessionInput(config);
-      octavusSessionId = await octavus.agentSessions.create(AGENT_ID, input);
+      const session = await octavus.sessions.create(AGENT_ID, input);
+      octavusSessionId = session.id;
     }
 
     const record = await updateSessionById(sessionId, (fresh) => {
@@ -506,9 +507,9 @@ async function runQuickAction({
   if (config.generation?.model === undefined) input.MODEL = QUICK_ACTION_MODEL;
   if (config.generation?.temperature === undefined) input.TEMPERATURE = 0.3;
 
-  const ephemeralId = await octavus.agentSessions.create(AGENT_ID, input);
+  const { id: ephemeralId } = await octavus.sessions.create(AGENT_ID, input);
   try {
-    const session = octavus.agentSessions.attach(ephemeralId, {
+    const session = octavus.sessions.attach(ephemeralId, {
       tools: buildAssistantTools(capture),
     });
     // Server SDK uses execute() with the same trigger payload the client sends.
@@ -527,7 +528,7 @@ async function runQuickAction({
     }
   } finally {
     try {
-      await octavus.agentSessions.clear(ephemeralId);
+      await octavus.sessions.clear(ephemeralId);
     } catch (err) {
       console.warn('[assistant/quick-action] clear failed:', err?.message || err);
     }
@@ -751,7 +752,7 @@ app.post('/api/character/session', async (req, res) => {
       return res.json({ characterOctavusSessionId: prior });
     }
 
-    const id = await octavus.agentSessions.create(
+    const { id } = await octavus.sessions.create(
       CHARACTER_AGENT_ID,
       buildCharacterSessionInput(config, character),
     );
