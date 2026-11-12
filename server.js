@@ -642,7 +642,7 @@ app.post('/api/upload-urls', async (req, res) => {
     if (!files.every((f) => uploadAllowed(config, f?.filename))) {
       return res.status(400).json({ error: 'File type not allowed' });
     }
-    const result = await octavus.files.getUploadUrls(sessionId, files);
+    const result = await octavus.files.create(files, { sessionId });
     res.json(result);
   } catch (err) {
     console.error('[upload-urls] Error:', err);
