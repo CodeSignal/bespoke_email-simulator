@@ -47,12 +47,12 @@ Octavus platform (agent orchestration, model exec, tools) → LLM
 - Helpful `EADDRINUSE` message tells you to free the port or use `PORT=3001`.
 
 ### 2. Uses the Octavus SDK for all agentic work
-- Dependencies: `@octavus/server-sdk` and `@octavus/client-sdk` (both `^3.2.0`),
+- Dependencies: `@octavus/server-sdk` and `@octavus/client-sdk` (both `^7.2.0`),
   plus `@octavus/cli` as a dev dependency.
 - Server side: `new OctavusClient({ baseUrl: OCTAVUS_API_URL, apiKey: OCTAVUS_API_KEY })`.
-  - `octavus.agentSessions.create(AGENT_ID, input)` — create a session.
-  - `octavus.agentSessions.attach(sessionId).execute(payload)` — run a turn.
-  - `octavus.files.getUploadUrls(sessionId, files)` — presigned S3 upload URLs.
+  - `octavus.sessions.create(AGENT_ID, input)` — create a session (returns the session; its id is `.id`).
+  - `octavus.sessions.attach(sessionId).execute(payload)` — run a turn.
+  - `octavus.files.create(files, { sessionId })` — presigned S3 upload URLs.
   - `toSSEStream(events)` converts the event stream to SSE for the browser.
 - Client side: `OctavusChat` + `createHttpTransport` posts turns to `/api/trigger`
   and consumes the SSE stream for real-time token streaming.
